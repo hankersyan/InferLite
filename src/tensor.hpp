@@ -2,6 +2,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -98,5 +99,88 @@ struct Tensor {
     // Raw byte payload (host memory, little-endian native layout).
     std::vector<uint8_t> data;
 };
+
+// Write a single scalar value (from a double) into a tensor's little-endian
+// binary layout, per the declared DataType. Used to serialize JSON number
+// arrays and golden-test inputs. dst must point to a buffer >= dataTypeSize(dt).
+inline void writeTensorScalar(uint8_t* dst, DataType dt, double v) {
+    auto putInt = [&](int64_t x) {
+        uint64_t uv = static_cast<uint64_t>(x);
+        for (size_t b = 0; b < dataTypeSize(dt); ++b) {
+            dst[b] = static_cast<uint8_t>((uv >> (8 * b)) & 0xFF);
+        }
+    };
+    switch (dt) {
+        case DataType::kInt8:
+        case DataType::kUint8:
+        case DataType::kInt16:
+        case DataType::kUint16:
+        case DataType::kInt32:
+        case DataType::kUint32:
+        case DataType::kInt64:
+        case DataType::kUint64:
+            putInt(static_cast<int64_t>(v));
+            break;
+        case DataType::kFloat16: {
+            float fv = static_cast<float>(v);
+            uint32_t fbits;
+            std::memcpy(&fbits, &fv, sizeof(fbits));
+            uint16_t h = static_cast<uint16_t>((fbits + 0x1000) >> 13);
+            dst[0] = static_cast<uint8_t>(h & 0xFF);
+            dst[1] = static_cast<uint8_t>((h >> 8) & 0xFF);
+            break;
+        }
+        case DataType::kFloat32: {
+            float fv = static_cast<float>(v);
+            uint32_t bits;
+            std::memcpy(&bits, &fv, sizeof(bits));
+            dst[0] = static_cast<uint8_t>(bits & 0xFF);
+            dst[1] = static_cast<uint8_t>((bits >> 8) & 0xFF);
+            dst[2] = static_cast<uint8_t>((bits >> 16) & 0xFF);
+            dst[3] = static_cast<uint8_t>((bits >> 24) & 0xFF);
+            break;
+        }
+        case DataType::kFloat64: {
+            uint64_t bits;
+            std::memcpy(&bits, &v, sizeof(bits));
+            for (size_t b = 0; b < 8; ++b) {
+                dst[b] = static_cast<uint8_t>((bits >> (8 * b)) & 0xFF);
+            }
+            break;
+        }
+        case DataType::kBool:
+            dst[0] = v != 0.0 ? 1 : 0;
+            break;
+        default:
+            break;
+    }
+}
+
+// Structured, stable error codes returned to clients (ISO 14971 risk control,
+// no silent failures). Every failure mode maps to exactly one code.
+enum class ErrorCode : int {
+    kNone = 0,
+    kInvalidInput,           // 400 input name/type/shape/size invalid
+    kOutputValidationFailed, // 500 output failed NaN/Inf/range/shape checks
+    kResourceExhausted,      // 503 queue at capacity
+    kTimeout,                // 504 request exceeded allowed time
+    kInternalError,          // 500 any other backend/plugin/runtime failure
+    kModelNotFound,          // 404 unknown model
+    kSelfTestFailed,         // 503 startup self-test did not pass
+};
+
+inline const char* errorCodeToString(ErrorCode c) {
+    switch (c) {
+        case ErrorCode::kNone: return "";
+        case ErrorCode::kInvalidInput: return "INVALID_INPUT";
+        case ErrorCode::kOutputValidationFailed: return "OUTPUT_VALIDATION_FAILED";
+        case ErrorCode::kResourceExhausted: return "RESOURCE_EXHAUSTED";
+        case ErrorCode::kTimeout: return "TIMEOUT";
+        case ErrorCode::kInternalError: return "INTERNAL_ERROR";
+        case ErrorCode::kModelNotFound: return "MODEL_NOT_FOUND";
+        case ErrorCode::kSelfTestFailed: return "SELF_TEST_FAILED";
+        default: return "UNKNOWN";
+    }
+}
 
 }  // namespace inferlite

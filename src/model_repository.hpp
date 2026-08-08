@@ -23,6 +23,7 @@ struct LoadedModel {
     std::shared_ptr<ModelConfig> config;
     std::string version_path;  // absolute path to the selected version folder
     int64_t version = -1;
+    std::string config_hash;   // SHA-256 hex of the config.pbtxt text
 };
 
 // Thrown on repository scanning/validation errors (fail-fast).

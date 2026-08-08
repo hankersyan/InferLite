@@ -1,12 +1,18 @@
 # build.ps1 - Build InferLite with MSVC (VS2022) + CMake + Ninja.
+# Auto-detects the Visual Studio installation via vswhere.
 $ErrorActionPreference = "Stop"
 
-$vcvars = "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvars64.bat"
+$vswhere = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
+if (-not (Test-Path $vswhere)) { throw "vswhere.exe not found: $vswhere" }
+
+$vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+if (-not $vs) { throw "No Visual Studio with VC tools found." }
+
+$vcvars = Join-Path $vs "VC\Auxiliary\Build\vcvars64.bat"
+$cmake = Join-Path $vs "Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
+$ninja = Join-Path $vs "Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe"
+
 if (-not (Test-Path $vcvars)) { throw "vcvars64.bat not found: $vcvars" }
-
-$cmake = "C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
-$ninja = "C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe"
-
 if (-not (Test-Path $cmake)) { throw "cmake not found: $cmake" }
 if (-not (Test-Path $ninja)) { throw "ninja not found: $ninja" }
 

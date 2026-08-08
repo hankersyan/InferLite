@@ -2,18 +2,27 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
 #include <csignal>
 #include <cstring>
+#include <filesystem>
 #include <map>
 #include <mutex>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <thread>
 
+#include "openvino/openvino.hpp"
+
+#include "ensemble_executor.hpp"
 #include "json.hpp"
 #include "model_repository.hpp"
 #include "openvino_backend.hpp"
 #include "pbtxt.hpp"
+#include "plugin_backend.hpp"
+#include "sha256.hpp"
+#include "validation.hpp"
 
 namespace inferlite {
 
@@ -35,7 +44,7 @@ std::vector<uint8_t> base64Decode(const std::string& in) {
     for (unsigned char c : in) {
         if (c == '=') break;
         int v = base64Val(c);
-        if (v < 0) continue;  // ignore whitespace / invalid chars
+        if (v < 0) continue;
         val = (val << 6) | v;
         bits += 6;
         if (bits >= 0) {
@@ -84,57 +93,32 @@ bool extractModelName(const std::string& path, std::string& name) {
     return !name.empty();
 }
 
-// Write a single scalar value (from a JSON double) into the tensor's
-// little-endian binary layout, per the declared DataType.
-void writeScalar(uint8_t* dst, DataType dt, double v) {
-    auto putInt = [&](int64_t x) {
-        uint64_t uv = static_cast<uint64_t>(x);
-        for (size_t b = 0; b < dataTypeSize(dt); ++b) {
-            dst[b] = static_cast<uint8_t>((uv >> (8 * b)) & 0xFF);
-        }
-    };
-    switch (dt) {
-        case DataType::kInt8: putInt(static_cast<int64_t>(v)); break;
-        case DataType::kUint8: putInt(static_cast<int64_t>(v)); break;
-        case DataType::kInt16: putInt(static_cast<int64_t>(v)); break;
-        case DataType::kUint16: putInt(static_cast<int64_t>(v)); break;
-        case DataType::kInt32: putInt(static_cast<int64_t>(v)); break;
-        case DataType::kUint32: putInt(static_cast<int64_t>(v)); break;
-        case DataType::kInt64: putInt(static_cast<int64_t>(v)); break;
-        case DataType::kUint64: putInt(static_cast<int64_t>(v)); break;
-        case DataType::kFloat16: {
-            // Convert double -> half (round-to-nearest via float).
-            float fv = static_cast<float>(v);
-            uint32_t fbits;
-            std::memcpy(&fbits, &fv, sizeof(fbits));
-            uint16_t h = static_cast<uint16_t>((fbits + 0x1000) >> 13);
-            dst[0] = static_cast<uint8_t>(h & 0xFF);
-            dst[1] = static_cast<uint8_t>((h >> 8) & 0xFF);
-            break;
-        }
-        case DataType::kFloat32: {
-            float fv = static_cast<float>(v);
-            uint32_t bits;
-            std::memcpy(&bits, &fv, sizeof(bits));
-            dst[0] = static_cast<uint8_t>(bits & 0xFF);
-            dst[1] = static_cast<uint8_t>((bits >> 8) & 0xFF);
-            dst[2] = static_cast<uint8_t>((bits >> 16) & 0xFF);
-            dst[3] = static_cast<uint8_t>((bits >> 24) & 0xFF);
-            break;
-        }
-        case DataType::kFloat64: {
-            uint64_t bits;
-            std::memcpy(&bits, &v, sizeof(bits));
-            for (size_t b = 0; b < 8; ++b) {
-                dst[b] = static_cast<uint8_t>((bits >> (8 * b)) & 0xFF);
-            }
-            break;
-        }
-        case DataType::kBool:
-            dst[0] = v != 0.0 ? 1 : 0;
-            break;
-        default:
-            break;
+// Generate a UUID v4-ish trace id (RFC 4122) for audit trail correlation.
+std::string generateTraceId() {
+    static std::mt19937_64 rng{std::random_device{}()};
+    std::ostringstream os;
+    os << std::hex;
+    uint64_t a = rng(), b = rng();
+    char buf[64];
+    std::snprintf(buf, sizeof(buf), "%08x-%04x-4%03x-%04x-%012llx",
+                  static_cast<unsigned>(a >> 32),
+                  static_cast<unsigned>((a >> 16) & 0xFFFF),
+                  static_cast<unsigned>(a & 0x0FFF),
+                  static_cast<unsigned>((b >> 48) & 0xFFFF),
+                  static_cast<unsigned long long>(b & 0xFFFFFFFFFFFFULL));
+    os << buf;
+    return os.str();
+}
+
+// Map an ErrorCode to an HTTP status.
+int errorCodeToStatus(ErrorCode c) {
+    switch (c) {
+        case ErrorCode::kInvalidInput: return 400;
+        case ErrorCode::kModelNotFound: return 404;
+        case ErrorCode::kResourceExhausted: return 503;
+        case ErrorCode::kTimeout: return 504;
+        case ErrorCode::kSelfTestFailed: return 503;
+        default: return 500;
     }
 }
 
@@ -142,32 +126,190 @@ void writeScalar(uint8_t* dst, DataType dt, double v) {
 
 InferLite::InferLite(const ServerOptions& opts) : opts_(opts) {
     memory_ = std::make_shared<MemoryManager>();
+    diag_ = std::make_unique<Diagnostics>(opts_.diagnostic_log_path);
+    audit_ = std::make_unique<AuditLog>(opts_.audit_log_path);
+
+    limits_.max_input_size_bytes = opts_.max_input_size_bytes;
+    limits_.max_output_size_bytes = opts_.max_output_size_bytes;
+    limits_.max_inference_time_ms = opts_.max_inference_time_ms;
+    limits_.max_queue_depth = opts_.max_queue_size;
+
+    config_store_ = std::make_unique<ConfigStore>(opts_.model_repository,
+                                                  opts_.validated_mode);
+    config_store_->setSoftwareVersion(opts_.software_version);
+    try {
+        ov::Version v = ov::get_openvino_version();
+        config_store_->setOpenvinoVersion(std::string(v.buildNumber));
+    } catch (...) {
+        config_store_->setOpenvinoVersion("unknown");
+    }
+    config_store_->load();
+    diag_->info("manifest loaded (enabled=" +
+                std::string(config_store_->manifestEnabled() ? "true" : "false") + ")");
+    if (opts_.validated_mode && opts_.tls_cert_file.empty()) {
+        diag_->warn("validated-mode is enabled without TLS; deployments MUST front this "
+                    "server with a TLS 1.2+ reverse proxy (FDA Cybersecurity 2026).");
+    }
 
     // Scan the repository (fail-fast on any error).
     std::vector<LoadedModel> loaded = scanRepository(opts_.model_repository);
+
+    // Pass 1: instantiate non-ensemble backends (openvino, plugin). Ensembles
+    // are built in pass 2 after all referenced backends exist.
+    std::map<std::string, BackendPtr> backend_by_name;
+    std::vector<ModelEntry> entries;
 
     for (auto& lm : loaded) {
         ModelEntry entry;
         entry.name = lm.config->name;
         entry.config = lm.config;
+        entry.version_path = lm.version_path;
 
-        auto backend = std::make_shared<OpenVinoBackend>();
-        backend->load(*lm.config, lm.version_path);
+        // Register config hash and verify model file integrity against the
+        // manifest (if enabled). Ensembles/plugins have no IR files to verify.
+        config_store_->registerConfigHash(entry.name, lm.config_hash);
+        if (lm.config->backend == "openvino") {
+            config_store_->registerModelFiles(entry.name, lm.version_path);
+        }
 
-        entry.backend = backend;
+        if (lm.config->backend == "ensemble") {
+            // Defer; resolved in pass 2.
+            entries.push_back(std::move(entry));
+            continue;
+        }
 
-        size_t instance_count =
-            static_cast<size_t>(std::max<int>(1, lm.config->instance_group.count));
-        auto scheduler = std::make_shared<Scheduler>(backend, lm.config, instance_count,
-                                                     opts_.max_queue_size,
-                                                     opts_.request_timeout_ms, memory_);
-        entry.scheduler = scheduler;
-        models_.push_back(std::move(entry));
+        entry.backend = makeBackend(lm);
+        backend_by_name[entry.name] = entry.backend;
+        entries.push_back(std::move(entry));
     }
+
+    // Pass 2: build ensemble executors (provider resolves referenced backends).
+    for (size_t i = 0; i < entries.size(); ++i) {
+        if (entries[i].config->backend == "ensemble") {
+            auto provider = [&backend_by_name](const std::string& name) -> BackendPtr {
+                auto it = backend_by_name.find(name);
+                return it == backend_by_name.end() ? nullptr : it->second;
+            };
+            entries[i].backend =
+                std::make_shared<EnsembleExecutor>(entries[i].config, provider);
+            backend_by_name[entries[i].name] = entries[i].backend;
+        }
+    }
+
+    // Create schedulers for every model.
+    for (auto& e : entries) {
+        size_t instance_count =
+            static_cast<size_t>(std::max<int>(1, e.config->instance_group.count));
+        int64_t per_req_timeout = opts_.request_timeout_ms;
+        if (e.config->max_inference_time_ms > 0) {
+            per_req_timeout = e.config->max_inference_time_ms;
+        }
+        e.scheduler = std::make_shared<Scheduler>(e.backend, e.config, instance_count,
+                                                  opts_.max_queue_size, per_req_timeout,
+                                                  limits_.max_inference_time_ms, memory_);
+        models_.push_back(std::move(e));
+    }
+
+    // Run the startup functional self-test for each model with a golden input.
+    runStartupSelfTest();
 }
 
 InferLite::~InferLite() {
     stop();
+}
+
+BackendPtr InferLite::makeBackend(const LoadedModel& lm) {
+    const auto& cfg = *lm.config;
+
+    if (cfg.backend == "plugin") {
+        // Resolve the plugin library path: relative to the model's repository
+        // directory, or absolute.
+        std::filesystem::path lib = cfg.plugin_library;
+        if (!lib.is_absolute()) {
+            lib = std::filesystem::path(cfg.model_path) / cfg.plugin_library;
+        }
+        // Verify the plugin library hash against the manifest (if enabled).
+        if (config_store_->manifestEnabled()) {
+            const std::string& expected = config_store_->manifestHash(cfg.name);
+            if (!expected.empty()) {
+                std::string actual = sha256FileHex(lib.string());
+                if (actual != expected) {
+                    throw std::runtime_error("plugin library '" + cfg.name +
+                                             "' hash mismatch: expected " + expected +
+                                             " got " + actual);
+                }
+            }
+        }
+        auto plugin_backend = std::make_shared<PluginBackend>();
+        plugin_backend->load(cfg, lib.string());
+        struct PluginWrapper : IBackend {
+            std::shared_ptr<PluginBackend> pb;
+            explicit PluginWrapper(std::shared_ptr<PluginBackend> p) : pb(std::move(p)) {}
+            BackendResult execute(const std::vector<Tensor>& inputs) override {
+                BackendResult r;
+                try {
+                    std::vector<Tensor> outputs;
+                    pb->execute(inputs, outputs);
+                    r.ok = true;
+                    r.outputs = std::move(outputs);
+                } catch (const std::exception& e) {
+                    r.ok = false;
+                    r.error_code = ErrorCode::kInternalError;
+                    r.error = e.what();
+                }
+                return r;
+            }
+        };
+        return std::make_shared<PluginWrapper>(plugin_backend);
+    }
+
+    if (cfg.backend == "ensemble") {
+        throw std::runtime_error("ensemble '" + cfg.name +
+                                 "' must be built in the ensemble pass");
+    }
+
+    // openvino backend.
+    auto backend = std::make_shared<OpenVinoBackend>();
+    backend->setResourceLimits(&limits_);
+    backend->load(cfg, lm.version_path);
+    return backend;
+}
+
+void InferLite::runStartupSelfTest() {
+    std::vector<std::shared_ptr<const ModelConfig>> configs;
+    for (const auto& e : models_) configs.push_back(e.config);
+
+    auto exec = [this](const std::shared_ptr<const ModelConfig>& cfg,
+                       const std::vector<Tensor>& in,
+                       std::vector<Tensor>& out) -> bool {
+        for (auto& e : models_) {
+            if (e.name == cfg->name) {
+                auto req = std::make_shared<InferenceRequest>();
+                req->inputs = in;
+                req->timeout_ms = opts_.request_timeout_ms;
+                auto res = e.scheduler->submit(req);
+                if (res && res->ok) {
+                    out = res->outputs;
+                    return true;
+                }
+                return false;
+            }
+        }
+        return false;
+    };
+
+    auto results = config_store_->runSelfTest(configs, exec);
+    bool all_passed = true;
+    for (const auto& r : results) {
+        if (!r.passed) all_passed = false;
+        diag_->info("self-test model '" + r.model_id + "' passed=" +
+                    std::string(r.passed ? "true" : "false") +
+                    (r.detail.empty() ? "" : " detail=" + r.detail));
+    }
+    self_test_passed_ = all_passed;
+    if (!all_passed) {
+        diag_->error("startup self-test FAILED; server will report NOT READY");
+    }
 }
 
 void InferLite::start() {
@@ -184,26 +326,22 @@ void InferLite::stop() {
         http_.reset();
     }
     running_ = false;
-    // Schedulers are stopped by their destructors when models_ is destroyed.
 }
 
 void InferLite::waitForShutdown() {
-    // Simple blocking loop; interrupted by Ctrl+C via the console handler.
-    // We just sleep; on Windows the process is terminated on Ctrl+C anyway.
     while (running_) {
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
 }
 
 HttpResponse InferLite::handleRequest(const HttpRequest& req) {
-    // Health endpoint.
-    if (req.path == "/v2/health/ready") return handleHealthReady();
-    if (req.path == "/v2/health/live") return handleHealthReady();
-
-    // Metrics endpoint.
+    if (req.path == "/v2/health/ready" || req.path == "/v2/health/live") {
+        return handleHealthReady();
+    }
+    if (req.path == "/v2/health/detailed") return handleHealthDetailed();
     if (req.path == "/v2/metrics") return handleMetrics();
+    if (req.path == "/v2/versions") return handleVersions();
 
-    // Config endpoint: /v2/models/<name>/config
     {
         std::string name;
         if (req.path.rfind("/config") == req.path.size() - 7 &&
@@ -212,7 +350,6 @@ HttpResponse InferLite::handleRequest(const HttpRequest& req) {
         }
     }
 
-    // Inference endpoint: POST /v2/models/<name>/infer
     if (req.method == "POST") {
         std::string name;
         if (req.path.rfind("/infer") == req.path.size() - 6 &&
@@ -229,8 +366,57 @@ HttpResponse InferLite::handleRequest(const HttpRequest& req) {
 
 HttpResponse InferLite::handleHealthReady() {
     HttpResponse resp;
-    resp.status = running_ && !models_.empty() ? 200 : 503;
-    resp.body = "{}";
+    resp.status = ready() ? 200 : 503;
+    json::Value o = json::Value::Object();
+    o.asObject()["status"] = json::Value(ready() ? "READY" : "NOT_READY");
+    resp.body = o.dump();
+    return resp;
+}
+
+HttpResponse InferLite::handleHealthDetailed() {
+    HttpResponse resp;
+    resp.status = 200;
+    json::Value o = json::Value::Object();
+    o.asObject()["overall_status"] =
+        json::Value(self_test_passed_.load() ? "READY" : "DEGRADED");
+    o.asObject()["software_version"] = json::Value(config_store_->softwareVersion());
+    o.asObject()["openvino_version"] = json::Value(config_store_->openvinoVersion());
+    o.asObject()["manifest_enabled"] = json::Value(config_store_->manifestEnabled());
+    json::Value models = json::Value(json::Value::Array());
+    for (const auto& e : models_) {
+        json::Value m = json::Value::Object();
+        m.asObject()["name"] = json::Value(e.name);
+        m.asObject()["backend"] = json::Value(e.config->backend);
+        m.asObject()["model_hash"] = json::Value(config_store_->modelHash(e.name));
+        m.asObject()["config_hash"] = json::Value(config_store_->configHash(e.name));
+        m.asObject()["status"] = json::Value("READY");
+        models.asArray().push_back(std::move(m));
+    }
+    o.asObject()["models"] = std::move(models);
+    resp.body = o.dump();
+    return resp;
+}
+
+HttpResponse InferLite::handleVersions() {
+    HttpResponse resp;
+    resp.status = 200;
+    json::Value o = json::Value::Object();
+    o.asObject()["software_version"] = json::Value(config_store_->softwareVersion());
+    o.asObject()["openvino_version"] = json::Value(config_store_->openvinoVersion());
+    o.asObject()["manifest_hash"] = json::Value(
+        config_store_->manifestEnabled() ? std::string("present") : std::string("absent"));
+    json::Value models = json::Value(json::Value::Array());
+    for (const auto& e : models_) {
+        json::Value m = json::Value::Object();
+        m.asObject()["name"] = json::Value(e.name);
+        m.asObject()["version"] = json::Value(e.config->metadata.version.empty()
+                                                  ? std::string("unknown")
+                                                  : e.config->metadata.version);
+        m.asObject()["model_hash"] = json::Value(config_store_->modelHash(e.name));
+        models.asArray().push_back(std::move(m));
+    }
+    o.asObject()["models"] = std::move(models);
+    resp.body = o.dump();
     return resp;
 }
 
@@ -260,23 +446,32 @@ HttpResponse InferLite::handleConfig(const std::string& name) {
         };
         for (const auto& in : c->inputs) addSpec(obj.asObject()["inputs"], in);
         for (const auto& out : c->outputs) addSpec(obj.asObject()["outputs"], out);
+        if (!c->plugin_library.empty()) {
+            obj.asObject()["plugin_library"] = json::Value(c->plugin_library);
+        }
+        if (c->backend == "ensemble") {
+            json::Value steps = json::Value(json::Value::Array());
+            for (const auto& st : c->ensemble_steps) {
+                json::Value s = json::Value::Object();
+                s.asObject()["model_name"] = json::Value(st.model_name);
+                steps.asArray().push_back(std::move(s));
+            }
+            obj.asObject()["ensemble_steps"] = std::move(steps);
+        }
+        obj.asObject()["config_hash"] = json::Value(config_store_->configHash(name));
+        obj.asObject()["model_hash"] = json::Value(config_store_->modelHash(name));
         resp.status = 200;
         resp.body = obj.dump();
         return resp;
     }
     resp.status = 404;
-    resp.body = "{\"error\":\"model not found\"}";
+    resp.body = "{\"error\":\"MODEL_NOT_FOUND\"}";
     return resp;
 }
 
 HttpResponse InferLite::handleMetrics() {
     HttpResponse resp;
     json::Value obj = json::Value::Object();
-    obj.asObject()["requests_completed"] = json::Value(int64_t(0));
-    obj.asObject()["requests_failed"] = json::Value(int64_t(0));
-    obj.asObject()["requests_timed_out"] = json::Value(int64_t(0));
-    obj.asObject()["average_inference_latency_us"] = json::Value(int64_t(0));
-    obj.asObject()["queue_depth"] = json::Value(int64_t(0));
     json::Value models_arr = json::Value(json::Value::Array());
     uint64_t total_completed = 0, total_failed = 0, total_timeout = 0, total_us = 0;
     size_t total_queue = 0;
@@ -287,6 +482,15 @@ HttpResponse InferLite::handleMetrics() {
         total_timeout += st.requests_timed_out.load();
         total_us += st.total_exec_us.load();
         total_queue += m.scheduler->queueDepth();
+
+        json::Value mm = json::Value::Object();
+        mm.asObject()["model_name"] = json::Value(m.name);
+        mm.asObject()["requests_completed"] = json::Value(static_cast<int64_t>(st.requests_completed.load()));
+        mm.asObject()["requests_failed"] = json::Value(static_cast<int64_t>(st.requests_failed.load()));
+        mm.asObject()["requests_timed_out"] = json::Value(static_cast<int64_t>(st.requests_timed_out.load()));
+        mm.asObject()["average_latency_us"] = json::Value(m.scheduler->averageLatencyUs());
+        mm.asObject()["queue_depth"] = json::Value(static_cast<int64_t>(m.scheduler->queueDepth()));
+        models_arr.asArray().push_back(std::move(mm));
     }
     double avg_us = total_completed > 0
                         ? static_cast<double>(total_us) / static_cast<double>(total_completed)
@@ -296,6 +500,8 @@ HttpResponse InferLite::handleMetrics() {
     obj.asObject()["requests_timed_out"] = json::Value(static_cast<int64_t>(total_timeout));
     obj.asObject()["average_inference_latency_us"] = json::Value(avg_us);
     obj.asObject()["queue_depth"] = json::Value(static_cast<int64_t>(total_queue));
+    obj.asObject()["config_hash"] = json::Value(config_store_->configStoreHash());
+    obj.asObject()["models"] = std::move(models_arr);
     resp.status = 200;
     resp.body = obj.dump();
     return resp;
@@ -315,52 +521,50 @@ HttpResponse InferLite::handleInfer(const HttpRequest& req, const std::string& m
     }
     if (!entry) {
         resp.status = 404;
-        resp.body = "{\"error\":\"model not found\"}";
+        resp.body = "{\"error\":\"MODEL_NOT_FOUND\"}";
         return resp;
     }
+
+    auto makeError = [&](ErrorCode code, const std::string& msg) -> HttpResponse {
+        HttpResponse r;
+        r.status = errorCodeToStatus(code);
+        r.body = std::string("{\"error\":\"") + errorCodeToString(code) +
+                 "\",\"message\":\"" + msg + "\"}";
+        return r;
+    };
 
     // Parse JSON body.
     json::Value doc;
     try {
         doc = json::parse(req.body);
     } catch (const std::exception& e) {
-        resp.status = 400;
-        resp.body = std::string("{\"error\":\"invalid JSON: ") + e.what() + "\"}";
-        return resp;
+        return makeError(ErrorCode::kInvalidInput, std::string("invalid JSON: ") + e.what());
     }
 
-    auto makeError = [&](const std::string& msg) -> HttpResponse {
-        HttpResponse r;
-        r.status = 400;
-        r.body = "{\"error\":\"" + msg + "\"}";
-        return r;
-    };
-
-    // Parse "inputs": array of {name, shape, datatype, data}
     const json::Value* inputs_node = doc.find("inputs");
     if (!inputs_node || !inputs_node->isArray() || inputs_node->asArray().empty()) {
-        return makeError("missing or empty 'inputs' array");
+        return makeError(ErrorCode::kInvalidInput, "missing or empty 'inputs' array");
     }
 
     std::vector<Tensor> input_tensors;
     input_tensors.reserve(inputs_node->asArray().size());
     for (const auto& in : inputs_node->asArray()) {
-        if (!in.isObject()) return makeError("each input must be an object");
-        const std::string* iname = nullptr;
-        const json::Value* shape_node = in.find("shape");
-        const json::Value* dtype_node = in.find("datatype");
-        const json::Value* data_node = in.find("data");
+        if (!in.isObject()) return makeError(ErrorCode::kInvalidInput, "each input must be an object");
         auto name_it = in.asObject().find("name");
         if (name_it == in.asObject().end() || !name_it->second.isString()) {
-            return makeError("input missing 'name'");
+            return makeError(ErrorCode::kInvalidInput, "input missing 'name'");
         }
-        iname = &name_it->second.asString();
-        if (!dtype_node || !dtype_node->isString()) return makeError("input missing 'datatype'");
+        const std::string& iname = name_it->second.asString();
+        const json::Value* dtype_node = in.find("datatype");
+        if (!dtype_node || !dtype_node->isString()) {
+            return makeError(ErrorCode::kInvalidInput, "input '" + iname + "' missing 'datatype'");
+        }
         DataType dt = dataTypeFromString(dtype_node->asString());
         if (dt == DataType::kInvalid) {
-            return makeError("unsupported datatype: " + dtype_node->asString());
+            return makeError(ErrorCode::kInvalidInput, "unsupported datatype: " + dtype_node->asString());
         }
         std::vector<int64_t> shape;
+        const json::Value* shape_node = in.find("shape");
         if (shape_node) {
             if (shape_node->isArray()) {
                 for (const auto& d : shape_node->asArray()) {
@@ -369,54 +573,109 @@ HttpResponse InferLite::handleInfer(const HttpRequest& req, const std::string& m
             } else if (shape_node->isNumber()) {
                 shape.push_back(static_cast<int64_t>(shape_node->asDouble()));
             } else {
-                return makeError("invalid shape");
+                return makeError(ErrorCode::kInvalidInput, "invalid shape for '" + iname + "'");
             }
         }
-        // Data may be a base64 string or a JSON array of numbers.
         std::vector<uint8_t> payload;
+        const json::Value* data_node = in.find("data");
         if (data_node && data_node->isString()) {
             payload = base64Decode(data_node->asString());
         } else if (data_node && data_node->isArray()) {
-            // Serialize each JSON number into the tensor's binary layout
-            // (little-endian), respecting the declared datatype.
             size_t elem = dataTypeSize(dt);
-            if (elem == 0) return makeError("invalid datatype for array data");
+            if (elem == 0) return makeError(ErrorCode::kInvalidInput, "invalid datatype for array data");
             const auto& vals = data_node->asArray();
             payload.resize(vals.size() * elem);
             uint8_t* out = payload.data();
             for (size_t i = 0; i < vals.size(); ++i) {
-                double dv = vals[i].asDouble();
-                writeScalar(out + i * elem, dt, dv);
+                writeTensorScalar(out + i * elem, dt, vals[i].asDouble());
             }
         } else {
-            return makeError("input missing 'data'");
+            return makeError(ErrorCode::kInvalidInput, "input '" + iname + "' missing 'data'");
         }
         Tensor t;
-        t.name = *iname;
+        t.name = iname;
         t.type = dt;
         t.shape = shape;
         t.data = std::move(payload);
         input_tensors.push_back(std::move(t));
     }
 
-    // Enqueue and wait.
+    // Structured input validation against the model spec (shape/type/size).
+    ErrorCode vc = ErrorCode::kNone;
+    std::string vm;
+    if (!validateInputs(*entry->config, input_tensors, limits_.max_input_size_bytes, vc, vm)) {
+        return makeError(vc, vm);
+    }
+
+    // Create the audit entry (trace_id + model + config hashes).
+    std::string trace_id = generateTraceId();
+    std::string input_shape_str;
+    {
+        std::ostringstream ss;
+        ss << '[';
+        for (size_t i = 0; i < input_tensors.size(); ++i) {
+            if (i) ss << ',';
+            for (size_t d = 0; d < input_tensors[i].shape.size(); ++d) {
+                if (d) ss << ',';
+                ss << input_tensors[i].shape[d];
+            }
+        }
+        ss << ']';
+        input_shape_str = ss.str();
+    }
+
     auto ireq = std::make_shared<InferenceRequest>();
     ireq->inputs = std::move(input_tensors);
     ireq->timeout_ms = opts_.request_timeout_ms;
 
+    auto start = std::chrono::steady_clock::now();
     std::shared_ptr<InferenceResult> result;
     try {
         result = entry->scheduler->submit(ireq);
     } catch (const std::exception& e) {
-        resp.status = 503;
-        resp.body = "{\"error\":\"" + std::string(e.what()) + "\"}";
-        return resp;
+        result = std::make_shared<InferenceResult>();
+        result->ok = false;
+        result->error_code = ErrorCode::kInternalError;
+        result->error = e.what();
+    }
+    auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                           std::chrono::steady_clock::now() - start)
+                           .count();
+
+    // Finalize the audit entry.
+    if (audit_) {
+        AuditEntry ae;
+        ae.trace_id = trace_id;
+        ae.model_id = entry->name;
+        ae.model_version = entry->config->metadata.version;
+        ae.model_hash = config_store_->modelHash(entry->name);
+        ae.software_version = config_store_->softwareVersion();
+        ae.config_hash = config_store_->configHash(entry->name);
+        ae.duration_ms = duration_ms;
+        ae.device = "CPU";
+        // input_shape is serialized by the audit helper; pass a parsed shape.
+        try {
+            json::Value parsed_shape = json::parse(input_shape_str);
+            if (parsed_shape.isArray()) {
+                for (const auto& d : parsed_shape.asArray()) {
+                    ae.input_shape.push_back(static_cast<int64_t>(d.asDouble()));
+                }
+            }
+        } catch (...) {
+        }
+        ae.inference_status = result->ok ? "SUCCESS" : "FAILURE";
+        ae.error_code = result->ok ? "" : std::string(errorCodeToString(result->error_code));
+        try {
+            audit_->write(ae);
+        } catch (const std::exception& e) {
+            diag_->error(std::string("audit log write failed: ") + e.what());
+        }
     }
 
     if (!result->ok) {
-        resp.status = 500;
-        resp.body = "{\"error\":\"" + result->error + "\"}";
-        return resp;
+        // Map result error code to a structured error response.
+        ErrorCode code = result->error_code;
+        return makeError(code, result->error);
     }
 
     // Build response: outputs with name/shape/datatype/data (base64).
@@ -433,6 +692,7 @@ HttpResponse InferLite::handleInfer(const HttpRequest& req, const std::string& m
         outputs_arr.asArray().push_back(std::move(o));
     }
     resp_obj.asObject()["model_name"] = json::Value(model_name);
+    resp_obj.asObject()["trace_id"] = json::Value(trace_id);
     resp_obj.asObject()["outputs"] = std::move(outputs_arr);
     resp.status = 200;
     resp.body = resp_obj.dump();

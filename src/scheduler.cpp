@@ -4,7 +4,6 @@
 #include <chrono>
 #include <stdexcept>
 
-#include "openvino_backend.hpp"
 #include "pbtxt.hpp"
 
 namespace inferlite {
@@ -13,16 +12,16 @@ namespace {
 using clock = std::chrono::steady_clock;
 }
 
-Scheduler::Scheduler(std::shared_ptr<OpenVinoBackend> backend,
-                     std::shared_ptr<const ModelConfig> config,
+Scheduler::Scheduler(BackendPtr backend, std::shared_ptr<const ModelConfig> config,
                      size_t instance_count, size_t max_queue_size,
-                     int64_t default_timeout_ms,
+                     int64_t default_timeout_ms, int64_t max_inference_time_ms,
                      std::shared_ptr<MemoryManager> memory)
     : backend_(std::move(backend)),
       config_(std::move(config)),
       memory_(std::move(memory)),
       max_queue_size_(max_queue_size),
-      default_timeout_ms_(default_timeout_ms) {
+      default_timeout_ms_(default_timeout_ms),
+      max_inference_time_ms_(max_inference_time_ms > 0 ? max_inference_time_ms : 5000) {
     // Spawn one worker thread per CPU instance.
     for (size_t i = 0; i < instance_count; ++i) {
         workers_.emplace_back([this, i]() { workerLoop(i); });
@@ -53,8 +52,12 @@ std::shared_ptr<InferenceResult> Scheduler::submit(std::shared_ptr<InferenceRequ
         std::lock_guard<std::mutex> ilock(inflight_mu_);
         size_t pending = queue_.size() + inflight_;
         if (max_queue_size_ > 0 && pending >= max_queue_size_) {
-            throw std::runtime_error("request queue is full (max_queue_size=" +
-                                     std::to_string(max_queue_size_) + ")");
+            auto res = std::make_shared<InferenceResult>();
+            res->ok = false;
+            res->error_code = ErrorCode::kResourceExhausted;
+            res->error = "request queue is full (max_queue_size=" +
+                         std::to_string(max_queue_size_) + ")";
+            return res;
         }
         queue_.push_back(req);
     }
@@ -65,13 +68,11 @@ std::shared_ptr<InferenceResult> Scheduler::submit(std::shared_ptr<InferenceRequ
     if (!req->cv.wait_for(lock, std::chrono::milliseconds(req->timeout_ms),
                           [&]() { return req->done; })) {
         // Timeout while waiting for execution. Mark the request as failed.
-        // The worker may still be processing it; it will observe the flag.
         req->result.ok = false;
+        req->result.error_code = ErrorCode::kTimeout;
         req->result.error = "request timed out after " +
                             std::to_string(req->timeout_ms) + "ms";
         req->done = true;
-        // NOTE: the worker may concurrently write req->result; the mutex is
-        // held here so we are safe to touch the fields.
         req->cv.notify_all();
         stats_.requests_timed_out.fetch_add(1, std::memory_order_relaxed);
         return std::make_shared<InferenceResult>(req->result);
@@ -112,25 +113,45 @@ void Scheduler::processOne(std::shared_ptr<InferenceRequest> req) {
 
     auto start = clock::now();
     try {
-        std::vector<Tensor> outputs;
-        backend_->execute(req->inputs, outputs);
-        std::lock_guard<std::mutex> lock(req->m);
+        // Backends are CPU-bound and block synchronously. We record the elapsed
+        // time and, if it exceeds the per-request inference limit, report a
+        // TIMEOUT. Backend calls are fault-contained (return BackendResult), so
+        // no exception escapes. (True thread cancellation is unsafe on CPU.)
+        BackendResult bres = backend_->execute(req->inputs);
+
+        auto us = std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - start).count();
+
+        std::lock_guard<std::mutex> rlock(req->m);
         if (req->done) return;  // client already gave up
-        req->result.ok = true;
-        req->result.outputs = std::move(outputs);
-        req->result.error.clear();
+        req->result.inference_us = us;
+
+        if (us > max_inference_time_ms_ * 1000) {
+            req->result.ok = false;
+            req->result.error_code = ErrorCode::kTimeout;
+            req->result.error = "inference exceeded time limit (" +
+                                std::to_string(max_inference_time_ms_) + "ms)";
+        } else {
+            req->result.ok = bres.ok;
+            req->result.error_code = bres.error_code;
+            req->result.error = bres.error;
+            req->result.outputs = std::move(bres.outputs);
+        }
         req->done = true;
     } catch (const std::exception& e) {
         std::lock_guard<std::mutex> lock(req->m);
         if (req->done) return;
         req->result.ok = false;
+        req->result.error_code = ErrorCode::kInternalError;
         req->result.error = e.what();
         req->done = true;
     }
+
     auto us = std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - start).count();
     if (req->result.ok) {
         stats_.requests_completed.fetch_add(1, std::memory_order_relaxed);
         stats_.total_exec_us.fetch_add(static_cast<uint64_t>(us), std::memory_order_relaxed);
+    } else if (req->result.error_code == ErrorCode::kTimeout) {
+        stats_.requests_timed_out.fetch_add(1, std::memory_order_relaxed);
     } else {
         stats_.requests_failed.fetch_add(1, std::memory_order_relaxed);
     }

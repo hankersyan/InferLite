@@ -7,6 +7,7 @@
 
 #include "openvino/openvino.hpp"
 #include "pbtxt.hpp"
+#include "validation.hpp"
 
 namespace inferlite {
 
@@ -41,6 +42,8 @@ OpenVinoBackend::~OpenVinoBackend() {
 void OpenVinoBackend::load(const ModelConfig& config, const std::string& model_path) {
     if (core_ == nullptr) core_ = std::make_shared<ov::Core>();
 
+    config_ = std::make_shared<ModelConfig>(config);
+
     // Strictly CPU plugin. We pass an explicit device "CPU" so any accidental
     // GPU fallback is impossible.
     ov::AnyMap props;
@@ -62,10 +65,6 @@ void OpenVinoBackend::load(const ModelConfig& config, const std::string& model_p
         throw std::runtime_error(std::string("OpenVINO failed to compile model '") +
                                  config.name + "': " + e.what());
     }
-
-    // Optional: reshape dynamic dims to the config dims so the shape matches
-    // what the scheduler/memory-manager expects. We leave this as a no-op for
-    // phase 1 static models; input validation in execute() enforces the shapes.
 }
 
 size_t OpenVinoBackend::streams() const {
@@ -73,45 +72,86 @@ size_t OpenVinoBackend::streams() const {
     return compiled_->get_property("OPTIMAL_NUMBER_OF_INFER_REQUESTS").as<size_t>();
 }
 
-void OpenVinoBackend::execute(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs) {
+BackendResult OpenVinoBackend::execute(const std::vector<Tensor>& inputs) {
+    BackendResult result;
+
     if (!compiled_) {
-        throw std::runtime_error("OpenVinoBackend::execute called before load()");
-    }
-    ov::InferRequest req = compiled_->create_infer_request();
-
-    // Set input tensors.
-    for (const auto& in : inputs) {
-        ov::Shape ov_shape(in.shape.begin(), in.shape.end());
-        void* host_ptr = const_cast<uint8_t*>(in.data.data());
-        ov::Tensor t(toOvType(in.type), ov_shape, host_ptr);
-        req.set_tensor(in.name, t);
+        result.ok = false;
+        result.error_code = ErrorCode::kInternalError;
+        result.error = "OpenVinoBackend::execute called before load()";
+        return result;
     }
 
-    // Run inference.
-    req.infer();
-
-    // Fetch output tensors.
-    const auto& outs = compiled_->outputs();
-    outputs.clear();
-    outputs.reserve(outs.size());
-    for (const auto& out : outs) {
-        ov::Tensor t = req.get_tensor(out);
-        Tensor r;
-        r.name = out.get_names().empty() ? out.get_any_name() : *out.get_names().begin();
-        auto shape = t.get_shape();
-        r.shape.assign(shape.begin(), shape.end());
-        r.type = mapToDataType(t.get_element_type());
-        // Use the non-templated data() (void*) so we don't trigger the
-        // element-type/pointer-type check; the tensor is host memory.
-        void* raw = t.data();
-        size_t nbytes = tensorByteSize(r.shape, r.type);
-        r.data.assign(static_cast<uint8_t*>(raw), static_cast<uint8_t*>(raw) + nbytes);
-        outputs.push_back(std::move(r));
+    // Input validation against the model spec (shape/type/size).
+    size_t max_input = limits_ ? limits_->max_input_size_bytes : (50u * 1024u * 1024u);
+    ErrorCode ec = ErrorCode::kNone;
+    std::string em;
+    if (!validateInputs(*config_, inputs, max_input, ec, em)) {
+        result.ok = false;
+        result.error_code = ec;
+        result.error = em;
+        return result;
     }
+
+    try {
+        ov::InferRequest req = compiled_->create_infer_request();
+
+        for (const auto& in : inputs) {
+            ov::Shape ov_shape(in.shape.begin(), in.shape.end());
+            void* host_ptr = const_cast<uint8_t*>(in.data.data());
+            ov::Tensor t(toOvType(in.type), ov_shape, host_ptr);
+            req.set_tensor(in.name, t);
+        }
+
+        req.infer();
+
+        const auto& outs = compiled_->outputs();
+        result.outputs.clear();
+        result.outputs.reserve(outs.size());
+        for (size_t oi = 0; oi < outs.size(); ++oi) {
+            const auto& out = outs[oi];
+            ov::Tensor t = req.get_tensor(out);
+            Tensor r;
+            // Name the output per the config's declared output spec (by
+            // position) so ensemble mapping and responses are deterministic and
+            // match the declared names, regardless of the IR result name.
+            r.name = (oi < config_->outputs.size()) ? config_->outputs[oi].name
+                                                    : (out.get_names().empty()
+                                                           ? out.get_any_name()
+                                                           : *out.get_names().begin());
+            auto shape = t.get_shape();
+            r.shape.assign(shape.begin(), shape.end());
+            r.type = mapToDataType(t.get_element_type());
+            void* raw = t.data();
+            size_t nbytes = tensorByteSize(r.shape, r.type);
+            r.data.assign(static_cast<uint8_t*>(raw), static_cast<uint8_t*>(raw) + nbytes);
+            result.outputs.push_back(std::move(r));
+        }
+    } catch (const std::exception& e) {
+        result.ok = false;
+        result.error_code = ErrorCode::kInternalError;
+        result.error = std::string("OpenVINO inference failed: ") + e.what();
+        return result;
+    }
+
+    // Output validation against the model spec (shape, NaN/Inf, range, size).
+    size_t max_output = limits_ ? limits_->max_output_size_bytes : (50u * 1024u * 1024u);
+    if (!validateOutputs(*config_, result.outputs, max_output, ec, em)) {
+        result.ok = false;
+        result.error_code = ec;
+        result.error = em;
+        result.outputs.clear();
+        return result;
+    }
+
+    result.ok = true;
+    result.error_code = ErrorCode::kNone;
+    return result;
 }
 
 void OpenVinoBackend::unload() {
     compiled_.reset();
+    config_.reset();
 }
 
 DataType OpenVinoBackend::mapToDataType(const ov::element::Type& t) const {

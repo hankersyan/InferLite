@@ -58,6 +58,18 @@ instance_group {
     with open(os.path.join(args.out, "config.pbtxt"), "w") as f:
         f.write(cfg)
 
+    # Write metadata.json (FDA model metadata) so version reporting works.
+    meta = {
+        "model_id": "sample_model",
+        "version": "1.0.0",
+        "intended_use": "Test OpenVINO CPU model: y = 2x + 1",
+        "training_dataset_id": "N/A",
+        "approval_status": "approved",
+    }
+    import json
+    with open(os.path.join(args.out, "metadata.json"), "w") as f:
+        json.dump(meta, f, indent=2)
+
     print("Sample model written to", os.path.abspath(args.out))
     print("  version dir :", os.path.abspath(version_dir))
 

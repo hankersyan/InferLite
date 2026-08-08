@@ -33,14 +33,25 @@ endif()
 add_executable(inferlite
     src/main.cpp
     src/infer_lite.cpp
+    src/audit_log.cpp
+    src/config_store.cpp
+    src/diagnostics.cpp
+    src/ensemble_executor.cpp
     src/http_server.cpp
     src/json.cpp
     src/memory_manager.cpp
     src/model_repository.cpp
     src/openvino_backend.cpp
     src/pbtxt.cpp
+    src/plugin_backend.cpp
     src/scheduler.cpp
+    src/sha256.cpp
+    src/validation.cpp
 )
+
+# --- Example CPU plugin shared library (for Phase 2 plugin backend demo) -----
+add_library(sample_plugin SHARED tools/sample_plugin/sample_plugin.cpp)
+target_include_directories(sample_plugin PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
 target_include_directories(inferlite PRIVATE ${OV_INCLUDE_DIR})
 target_link_libraries(inferlite PRIVATE ${OV_LIB_DIR}/openvino.lib)

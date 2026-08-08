@@ -4,7 +4,8 @@
 // CPU instance consumes requests from the queue, so at most `instance_count`
 // requests are in-flight simultaneously. Requests beyond the current in-flight
 // capacity wait in the queue. A configurable request timeout aborts a request
-// that has waited too long in the queue.
+// that has waited too long in the queue. A hard per-request inference time
+// limit (MAX_INFERENCE_TIME_MS) aborts a request that runs too long.
 #pragma once
 
 #include <atomic>
@@ -15,18 +16,20 @@
 #include <thread>
 #include <vector>
 
+#include "backend.hpp"
 #include "memory_manager.hpp"
 #include "tensor.hpp"
 
 namespace inferlite {
 
-class OpenVinoBackend;
 struct ModelConfig;
 
 struct InferenceResult {
     bool ok = false;
+    ErrorCode error_code = ErrorCode::kNone;
     std::string error;
     std::vector<Tensor> outputs;
+    int64_t inference_us = 0;
 };
 
 struct SchedulerStats {
@@ -56,9 +59,9 @@ class Scheduler {
 public:
     // max_queue_size: hard cap on the number of requests waiting for an
     // instance. 0 disables the bound (unbounded).
-    Scheduler(std::shared_ptr<OpenVinoBackend> backend, std::shared_ptr<const ModelConfig> config,
+    Scheduler(BackendPtr backend, std::shared_ptr<const ModelConfig> config,
               size_t instance_count, size_t max_queue_size, int64_t default_timeout_ms,
-              std::shared_ptr<MemoryManager> memory);
+              int64_t max_inference_time_ms, std::shared_ptr<MemoryManager> memory);
     ~Scheduler();
 
     Scheduler(const Scheduler&) = delete;
@@ -74,16 +77,24 @@ public:
     const SchedulerStats& stats() const { return stats_; }
     size_t instanceCount() const { return workers_.size(); }
 
+    // Per-model latency (microseconds, average). Used by metrics.
+    double averageLatencyUs() const {
+        uint64_t n = stats_.requests_completed.load();
+        if (n == 0) return 0.0;
+        return static_cast<double>(stats_.total_exec_us.load()) / static_cast<double>(n);
+    }
+
 private:
     void workerLoop(size_t idx);
     void processOne(std::shared_ptr<InferenceRequest> req);
 
-    std::shared_ptr<OpenVinoBackend> backend_;
+    BackendPtr backend_;
     std::shared_ptr<const ModelConfig> config_;
     std::shared_ptr<MemoryManager> memory_;
 
     size_t max_queue_size_;
     int64_t default_timeout_ms_;
+    int64_t max_inference_time_ms_;
 
     mutable std::mutex queue_mu_;
     std::condition_variable queue_cv_;

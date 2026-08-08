@@ -2,7 +2,7 @@
 //
 // Wraps ov::CompiledModel using the CPU plugin. Implements the backend API:
 //   load(config, model_path)
-//   execute(inputs, outputs)   (1:1, synchronous)
+//   execute(inputs) -> BackendResult (1:1, synchronous, fault-contained)
 //   unload()
 #pragma once
 
@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "backend.hpp"
 #include "tensor.hpp"
 
 namespace ov {
@@ -23,11 +24,12 @@ class Type;
 namespace inferlite {
 
 struct ModelConfig;
+struct ResourceLimits;
 
-class OpenVinoBackend {
+class OpenVinoBackend : public IBackend {
 public:
     OpenVinoBackend();
-    ~OpenVinoBackend();
+    ~OpenVinoBackend() override;
 
     OpenVinoBackend(const OpenVinoBackend&) = delete;
     OpenVinoBackend& operator=(const OpenVinoBackend&) = delete;
@@ -37,10 +39,8 @@ public:
     // failure. Must be called before execute.
     void load(const ModelConfig& config, const std::string& model_path);
 
-    // Run synchronous CPU inference. `inputs` must match the model's expected
-    // input tensors (name/type/shape). Populates `outputs`. This is a 1:1
-    // request->response path; no batching.
-    void execute(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs);
+    // Run synchronous CPU inference and return a fault-contained result.
+    BackendResult execute(const std::vector<Tensor>& inputs) override;
 
     // Release the compiled model and plugin resources.
     void unload();
@@ -50,11 +50,16 @@ public:
     // Number of CPU streams configured on this instance's compiled model.
     size_t streams() const;
 
+    // Attach resource limits used for output-size checks. Called at load.
+    void setResourceLimits(const ResourceLimits* limits) { limits_ = limits; }
+
 private:
     DataType mapToDataType(const ov::element::Type& t) const;
 
     std::shared_ptr<ov::Core> core_;
     std::shared_ptr<ov::CompiledModel> compiled_;
+    std::shared_ptr<const ModelConfig> config_;
+    const ResourceLimits* limits_ = nullptr;
 };
 
 }  // namespace inferlite

@@ -1,10 +1,14 @@
-// main.cpp - InferLite Phase 1 entry point.
+// main.cpp - InferLite entry point.
 //
 // Usage:
 //   inferlite --model-repository=/path/to/models --http-port=8000 \
 //             --max-queue-size=100 [--host=0.0.0.0] [--request-timeout-ms=30000]
+//             [--validated-mode] [--audit-log=path] [--diagnostic-log=path]
+//             [--max-input-size-bytes=N] [--max-output-size-bytes=N]
+//             [--max-inference-time-ms=N] [--tls-cert=path] [--tls-key=path]
 //
-// Fail-fast: any repository/config/backend error aborts startup immediately.
+// Fail-fast: any repository/config/backend/integrity error aborts startup.
+#include <algorithm>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -15,15 +19,24 @@ namespace {
 
 void printUsage(const char* prog) {
     std::cerr
-        << "InferLite - OpenVINO CPU-only HTTP inference server (Phase 1)\n\n"
+        << "InferLite - FDA-compliant CPU inference server (Phase 2)\n\n"
         << "Usage: " << prog << " [options]\n\n"
         << "Options:\n"
         << "  --model-repository=<path>   Path to the model repository (required)\n"
         << "  --host=<addr>               Listen host (default: 0.0.0.0)\n"
         << "  --http-port=<port>          HTTP port (default: 8000)\n"
         << "  --max-queue-size=<n>        Max queued requests (default: 100, 0=unbounded)\n"
-        << "  --request-timeout-ms=<n>    Per-request timeout in ms (default: 30000)\n"
+        << "  --request-timeout-ms=<n>    Per-request queue timeout in ms (default: 30000)\n"
         << "  --http-threads=<n>          HTTP worker threads (default: 4)\n"
+        << "  --validated-mode            Require manifest.json + report readiness via self-test\n"
+        << "  --audit-log=<path>          Tamper-evident audit log file (recommended in validated mode)\n"
+        << "  --diagnostic-log=<path>     Engineer-facing diagnostic log file\n"
+        << "  --max-input-size-bytes=<n>  Input size limit (default: 52428800)\n"
+        << "  --max-output-size-bytes=<n> Output size limit (default: 52428800)\n"
+        << "  --max-inference-time-ms=<n> Per-request inference time limit (default: 5000)\n"
+        << "  --tls-cert=<path>           TLS certificate file (PEM) for validated mode\n"
+        << "  --tls-key=<path>            TLS private key file (PEM)\n"
+        << "  --software-version=<s>      Software version reported (default: InferLite 2.0.0)\n"
         << "  --help                      Show this help\n";
 }
 
@@ -59,6 +72,26 @@ inferlite::ServerOptions parseArgs(int argc, char** argv) {
         } else if (arg.rfind("--http-threads=", 0) == 0) {
             opts.http_threads = static_cast<size_t>(
                 std::max(1, std::stoi(requireValue(arg, "--http-threads"))));
+        } else if (arg == "--validated-mode") {
+            opts.validated_mode = true;
+        } else if (arg.rfind("--audit-log=", 0) == 0) {
+            opts.audit_log_path = requireValue(arg, "--audit-log");
+        } else if (arg.rfind("--diagnostic-log=", 0) == 0) {
+            opts.diagnostic_log_path = requireValue(arg, "--diagnostic-log");
+        } else if (arg.rfind("--max-input-size-bytes=", 0) == 0) {
+            opts.max_input_size_bytes = static_cast<size_t>(
+                std::stoll(requireValue(arg, "--max-input-size-bytes")));
+        } else if (arg.rfind("--max-output-size-bytes=", 0) == 0) {
+            opts.max_output_size_bytes = static_cast<size_t>(
+                std::stoll(requireValue(arg, "--max-output-size-bytes")));
+        } else if (arg.rfind("--max-inference-time-ms=", 0) == 0) {
+            opts.max_inference_time_ms = std::stoll(requireValue(arg, "--max-inference-time-ms"));
+        } else if (arg.rfind("--tls-cert=", 0) == 0) {
+            opts.tls_cert_file = requireValue(arg, "--tls-cert");
+        } else if (arg.rfind("--tls-key=", 0) == 0) {
+            opts.tls_key_file = requireValue(arg, "--tls-key");
+        } else if (arg.rfind("--software-version=", 0) == 0) {
+            opts.software_version = requireValue(arg, "--software-version");
         } else {
             throw std::runtime_error("unknown option: " + arg);
         }
@@ -83,8 +116,6 @@ int main(int argc, char** argv) {
     }
 
     try {
-        // Fail-fast startup: repository scan + model load happen here and any
-        // error aborts the server immediately.
         std::cerr << "[boot] constructing server...\n" << std::flush;
         inferlite::InferLite server(opts);
         std::cerr << "[boot] server constructed\n" << std::flush;

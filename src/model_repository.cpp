@@ -6,6 +6,8 @@
 #include <fstream>
 #include <sstream>
 
+#include "sha256.hpp"
+
 namespace inferlite {
 
 namespace fs = std::filesystem;
@@ -52,12 +54,13 @@ bool highestVersionDir(const fs::path& model_dir, fs::path& out, int64_t& versio
     return found;
 }
 
-// Validate the phase-1 subset of a config. Throws RepositoryError on any
-// violation (fail-fast startup).
+// Validate a config. Throws RepositoryError on any violation (fail-fast
+// startup). Supports openvino, plugin, and ensemble backends (all CPU-only).
 void validateConfig(const ModelConfig& cfg, const fs::path& model_dir) {
-    if (cfg.backend != "openvino") {
+    if (cfg.backend != "openvino" && cfg.backend != "plugin" && cfg.backend != "ensemble") {
         throw RepositoryError("model '" + cfg.name + "' uses unsupported backend '" +
-                              cfg.backend + "' (only 'openvino' is supported)");
+                              cfg.backend +
+                              "' (only 'openvino', 'plugin', 'ensemble' are supported)");
     }
     if (cfg.max_batch_size != 0) {
         throw RepositoryError("model '" + cfg.name +
@@ -72,7 +75,29 @@ void validateConfig(const ModelConfig& cfg, const fs::path& model_dir) {
         throw RepositoryError("model '" + cfg.name + "' has invalid instance_group count " +
                               std::to_string(cfg.instance_group.count));
     }
-    // The version directory must contain model.xml and model.bin.
+
+    if (cfg.backend == "plugin") {
+        if (cfg.plugin_library.empty()) {
+            throw RepositoryError("plugin model '" + cfg.name +
+                                  "' must set 'plugin_library'");
+        }
+        if (cfg.inputs.empty() || cfg.outputs.empty()) {
+            throw RepositoryError("plugin model '" + cfg.name +
+                                  "' must declare inputs and outputs");
+        }
+        return;
+    }
+
+    if (cfg.backend == "ensemble") {
+        if (cfg.ensemble_steps.empty()) {
+            throw RepositoryError("ensemble model '" + cfg.name +
+                                  "' must define 'ensemble_scheduling' steps");
+        }
+        return;
+    }
+
+    // openvino backend: the version directory must contain model.xml and
+    // model.bin.
     fs::path version_dir;
     int64_t version = -1;
     if (!highestVersionDir(model_dir, version_dir, version)) {
@@ -120,10 +145,20 @@ std::vector<LoadedModel> scanRepository(const std::string& root) {
         int64_t version = -1;
         highestVersionDir(model_dir, version_dir, version);
 
+        // Load optional metadata.json (FDA model metadata) if present.
+        fs::path meta_file = model_dir / "metadata.json";
+        if (fs::exists(meta_file)) {
+            cfg.metadata = parseMetadataJson(readTextFile(meta_file));
+        }
+
+        // Store the model's repository directory path.
+        cfg.model_path = model_dir.string();
+
         LoadedModel lm;
         lm.config = std::make_shared<ModelConfig>(std::move(cfg));
         lm.version_path = version_dir.string();
         lm.version = version;
+        lm.config_hash = hexEncode(sha256(text));
         models.push_back(std::move(lm));
     }
 

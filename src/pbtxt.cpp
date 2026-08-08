@@ -1,7 +1,11 @@
 #include "pbtxt.hpp"
 
 #include <cctype>
+#include <cstdint>
 #include <sstream>
+#include <stdexcept>
+
+#include "json.hpp"
 
 namespace inferlite {
 
@@ -146,6 +150,109 @@ std::string stripTypePrefix(const std::string& v) {
     return v;
 }
 
+// Read the next token and require it to equal `expected`.
+void requireToken(Lexer& lex, const std::string& expected, const std::string& what) {
+    std::string tok = lex.next();
+    if (tok != expected) {
+        throw PbtxtError("expected '" + expected + "' for " + what + ", got '" + tok + "'");
+    }
+}
+
+// Parse a repeated scalar string list, e.g. `names: [ "a", "b" ]` or the
+// single-name form `name: "a"`. Returns the list of tokens.
+std::vector<std::string> parseStringList(Lexer& lex) {
+    std::vector<std::string> out;
+    std::string tok = lex.next();
+    if (tok == "[") {
+        while (true) {
+            std::string t = lex.next();
+            if (t == "]") break;
+            if (t == ",") continue;
+            out.push_back(t);
+        }
+    } else {
+        out.push_back(tok);
+    }
+    return out;
+}
+
+// Parse a `self_test` golden-input tensor block:
+//   self_test {
+//     input {
+//       name: "input"
+//       data_type: TYPE_FP32
+//       dims: [ 1, 4 ]
+//       data: [ 1.0, 2.0, 3.0, 4.0 ]   # JSON array of numbers
+//     }
+//     expected_output { ... }           # optional
+//     epsilon: 0.0001                   # optional
+//   }
+Tensor parseSelfTestTensor(Lexer& lex, const char* what) {
+    requireToken(lex, "{", std::string(what) + " block");
+    TensorSpec spec;
+    std::vector<double> data_vals;
+    bool has_data = false;
+    while (true) {
+        std::string f = lex.next();
+        if (f == "}") break;
+        if (f.empty()) throw PbtxtError("unexpected EOF in " + std::string(what));
+        if (f == "name") {
+            requireToken(lex, ":", "name");
+            spec.name = lex.next();
+        } else if (f == "data_type") {
+            requireToken(lex, ":", "data_type");
+            std::string v = stripTypePrefix(lex.next());
+            spec.data_type = dataTypeFromString(v);
+            if (spec.data_type == DataType::kInvalid) {
+                throw PbtxtError("unsupported data_type in " + std::string(what) + ": " + v);
+            }
+        } else if (f == "dims") {
+            requireToken(lex, ":", "dims");
+            spec.dims = parseDims(lex);
+        } else if (f == "data") {
+            requireToken(lex, ":", "data");
+            // data is a JSON array of numbers.
+            std::string t = lex.next();
+            if (t != "[") throw PbtxtError("expected '[' for data in " + std::string(what));
+            while (true) {
+                std::string n = lex.next();
+                if (n == "]") break;
+                if (n == ",") continue;
+                data_vals.push_back(std::stod(n));
+            }
+            has_data = true;
+        } else {
+            std::string t = lex.next();
+            if (t == "{") {
+                int depth = 1;
+                while (depth > 0) {
+                    std::string inner = lex.next();
+                    if (inner == "{") ++depth;
+                    else if (inner == "}") --depth;
+                    else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                }
+            }
+        }
+    }
+    if (spec.name.empty()) throw PbtxtError(std::string(what) + " missing 'name'");
+    if (spec.data_type == DataType::kInvalid) {
+        throw PbtxtError(std::string(what) + " missing valid 'data_type'");
+    }
+    Tensor t;
+    t.name = spec.name;
+    t.type = spec.data_type;
+    t.shape = spec.dims;
+    if (has_data) {
+        size_t elem = dataTypeSize(spec.data_type);
+        t.data.resize(data_vals.size() * elem);
+        uint8_t* out = t.data.data();
+        for (size_t i = 0; i < data_vals.size(); ++i) {
+            writeTensorScalar(out + i * elem, spec.data_type, data_vals[i]);
+        }
+    }
+    return t;
+}
+
 }  // namespace
 
 ModelConfig parseConfigPbtxt(const std::string& text) {
@@ -266,6 +373,186 @@ ModelConfig parseConfigPbtxt(const std::string& text) {
                     }
                 }
             }
+        } else if (field == "plugin_library") {
+            require(":", "plugin_library");
+            cfg.plugin_library = lex.next();
+        } else if (field == "ensemble_scheduling") {
+            require("{", "ensemble_scheduling");
+            while (true) {
+                std::string f = lex.next();
+                if (f == "}") break;
+                if (f.empty()) throw PbtxtError("unexpected EOF in ensemble_scheduling{}");
+                if (f == "step") {
+                    require("{", "step");
+                    EnsembleStep st;
+                    while (true) {
+                        std::string sf = lex.next();
+                        if (sf == "}") break;
+                        if (sf.empty()) throw PbtxtError("unexpected EOF in step{}");
+                        if (sf == "model_name") {
+                            require(":", "step.model_name");
+                            st.model_name = lex.next();
+                        } else if (sf == "input_map") {
+                            require("{", "step.input_map");
+                            while (true) {
+                                std::string k = lex.next();
+                                if (k == "}") break;
+                                require(":", "input_map key");
+                                st.input_map_to.push_back(k);
+                                st.input_map_from.push_back(lex.next());
+                            }
+                        } else if (sf == "output_map") {
+                            require("{", "step.output_map");
+                            while (true) {
+                                std::string k = lex.next();
+                                if (k == "}") break;
+                                require(":", "output_map key");
+                                // key = step output name (from), value = parent
+                                // scope name (to).
+                                st.output_map_from.push_back(k);
+                                st.output_map_to.push_back(lex.next());
+                            }
+                        } else {
+                            std::string t = lex.next();
+                            if (t == "{") {
+                                int depth = 1;
+                                while (depth > 0) {
+                                    std::string inner = lex.next();
+                                    if (inner == "{") ++depth;
+                                    else if (inner == "}") --depth;
+                                    else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                                }
+                            }
+                        }
+                    }
+                    if (st.model_name.empty()) {
+                        throw PbtxtError("ensemble step missing 'model_name'");
+                    }
+                    cfg.ensemble_steps.push_back(std::move(st));
+                } else {
+                    std::string t = lex.next();
+                    if (t == "{") {
+                        int depth = 1;
+                        while (depth > 0) {
+                            std::string inner = lex.next();
+                            if (inner == "{") ++depth;
+                            else if (inner == "}") --depth;
+                            else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                        }
+                    }
+                }
+            }
+        } else if (field == "metadata") {
+            require("{", "metadata");
+            while (true) {
+                std::string f = lex.next();
+                if (f == "}") break;
+                if (f.empty()) throw PbtxtError("unexpected EOF in metadata{}");
+                if (f == "model_id") {
+                    require(":", "metadata.model_id");
+                    cfg.metadata.model_id = lex.next();
+                } else if (f == "version") {
+                    require(":", "metadata.version");
+                    cfg.metadata.version = lex.next();
+                } else if (f == "intended_use") {
+                    require(":", "metadata.intended_use");
+                    cfg.metadata.intended_use = lex.next();
+                } else if (f == "training_dataset_id") {
+                    require(":", "metadata.training_dataset_id");
+                    cfg.metadata.training_dataset_id = lex.next();
+                } else if (f == "approval_status") {
+                    require(":", "metadata.approval_status");
+                    cfg.metadata.approval_status = lex.next();
+                } else {
+                    std::string t = lex.next();
+                    if (t == "{") {
+                        int depth = 1;
+                        while (depth > 0) {
+                            std::string inner = lex.next();
+                            if (inner == "{") ++depth;
+                            else if (inner == "}") --depth;
+                            else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                        }
+                    }
+                }
+            }
+        } else if (field == "output_validation" || field == "validate") {
+            require("{", "output_validation");
+            while (true) {
+                std::string f = lex.next();
+                if (f == "}") break;
+                if (f.empty()) throw PbtxtError("unexpected EOF in output_validation{}");
+                if (f == "detect_nan_inf") {
+                    require(":", "detect_nan_inf");
+                    cfg.output_validation.detect_nan_inf = parseInteger(lex.next()) != 0;
+                } else if (f == "check_range") {
+                    require(":", "check_range");
+                    cfg.output_validation.check_range = parseInteger(lex.next()) != 0;
+                } else if (f == "min_value") {
+                    require(":", "min_value");
+                    cfg.output_validation.min_value = std::stod(lex.next());
+                } else if (f == "max_value") {
+                    require(":", "max_value");
+                    cfg.output_validation.max_value = std::stod(lex.next());
+                } else if (f == "check_shape") {
+                    require(":", "check_shape");
+                    cfg.output_validation.check_shape = parseInteger(lex.next()) != 0;
+                } else if (f == "confidence_threshold") {
+                    require(":", "confidence_threshold");
+                    cfg.output_validation.confidence_threshold = parseInteger(lex.next()) != 0;
+                } else if (f == "min_confidence") {
+                    require(":", "min_confidence");
+                    cfg.output_validation.min_confidence = std::stod(lex.next());
+                } else {
+                    std::string t = lex.next();
+                    if (t == "{") {
+                        int depth = 1;
+                        while (depth > 0) {
+                            std::string inner = lex.next();
+                            if (inner == "{") ++depth;
+                            else if (inner == "}") --depth;
+                            else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                        }
+                    }
+                }
+            }
+        } else if (field == "self_test") {
+            require("{", "self_test");
+            while (true) {
+                std::string f = lex.next();
+                if (f == "}") break;
+                if (f.empty()) throw PbtxtError("unexpected EOF in self_test{}");
+                if (f == "input") {
+                    cfg.self_test.enabled = true;
+                    cfg.self_test.input.push_back(parseSelfTestTensor(lex, "self_test.input"));
+                } else if (f == "expected_output") {
+                    cfg.self_test.expected_output.push_back(
+                        parseSelfTestTensor(lex, "self_test.expected_output"));
+                } else if (f == "epsilon") {
+                    require(":", "epsilon");
+                    cfg.self_test.epsilon = std::stod(lex.next());
+                } else {
+                    std::string t = lex.next();
+                    if (t == "{") {
+                        int depth = 1;
+                        while (depth > 0) {
+                            std::string inner = lex.next();
+                            if (inner == "{") ++depth;
+                            else if (inner == "}") --depth;
+                            else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                        }
+                    }
+                }
+            }
+        } else if (field == "max_inference_time_ms") {
+            require(":", "max_inference_time_ms");
+            cfg.max_inference_time_ms = parseInteger(lex.next());
+        } else if (field == "max_input_size_bytes") {
+            require(":", "max_input_size_bytes");
+            cfg.max_input_size_bytes = static_cast<size_t>(parseInteger(lex.next()));
+        } else if (field == "max_output_size_bytes") {
+            require(":", "max_output_size_bytes");
+            cfg.max_output_size_bytes = static_cast<size_t>(parseInteger(lex.next()));
         } else {
             // Unknown top-level field: skip scalar or message.
             std::string t = lex.next();
@@ -282,9 +569,22 @@ ModelConfig parseConfigPbtxt(const std::string& text) {
     }
 
     if (cfg.name.empty()) throw PbtxtError("config missing required field 'name'");
-    if (cfg.inputs.empty()) throw PbtxtError("config for '" + cfg.name + "' has no inputs");
-    if (cfg.outputs.empty()) throw PbtxtError("config for '" + cfg.name + "' has no outputs");
     return cfg;
+}
+
+ModelMetadata parseMetadataJson(const std::string& text) {
+    json::Value doc = json::parse(text);
+    ModelMetadata md;
+    auto get = [&](const char* key, std::string& out) {
+        const json::Value* v = doc.find(key);
+        if (v && v->isString()) out = v->asString();
+    };
+    get("model_id", md.model_id);
+    get("version", md.version);
+    get("intended_use", md.intended_use);
+    get("training_dataset_id", md.training_dataset_id);
+    get("approval_status", md.approval_status);
+    return md;
 }
 
 }  // namespace inferlite
