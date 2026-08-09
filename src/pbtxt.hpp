@@ -20,7 +20,8 @@ struct TensorSpec {
 
 struct InstanceGroup {
     int count = 1;
-    // Kind must be KIND_CPU. KIND_GPU is rejected during validation.
+    // "KIND_CPU" (OpenVINO, plugins) or "KIND_GPU" (TensorRT, Phase 3).
+    // KIND_GPU is only valid for TensorRT backends on a single GPU (device 0).
     std::string kind = "KIND_CPU";
 };
 

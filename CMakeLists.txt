@@ -30,6 +30,25 @@ if(NOT EXISTS ${OV_INCLUDE_DIR}/openvino/openvino.hpp)
         "Set OPENVINO_ROOT to your OpenVINO toolkit install.")
 endif()
 
+# ---------------------------------------------------------------------------
+# TensorRT (Phase 3, GPU). Opt-in: the GPU backend is compiled only when a
+# TensorRT SDK is available. Locate it via -DTENSORRT_ROOT=<dir> (the directory
+# containing include/ and lib/) or the env var TENSORRT_ROOT. When absent, the
+# server builds and runs CPU-only with no regression.
+# ---------------------------------------------------------------------------
+set(INFERLITE_ENABLE_GPU OFF)
+if(DEFINED TENSORRT_ROOT)
+    set(TRT_ROOT ${TENSORRT_ROOT})
+elseif(DEFINED ENV{TENSORRT_ROOT})
+    set(TRT_ROOT $ENV{TENSORRT_ROOT})
+endif()
+if(TRT_ROOT AND EXISTS ${TRT_ROOT}/include/NvInfer.h)
+    set(INFERLITE_ENABLE_GPU ON)
+    message(STATUS "TensorRT SDK found at ${TRT_ROOT}; GPU backend enabled.")
+else()
+    message(STATUS "TensorRT SDK not found; building CPU-only (set TENSORRT_ROOT to enable GPU).")
+endif()
+
 add_executable(inferlite
     src/main.cpp
     src/infer_lite.cpp
@@ -47,6 +66,8 @@ add_executable(inferlite
     src/scheduler.cpp
     src/sha256.cpp
     src/validation.cpp
+    src/tensorrt_backend.cpp
+    src/gpu_memory_manager.cpp
 )
 
 # --- Example CPU plugin shared library (for Phase 2 plugin backend demo) -----
@@ -55,6 +76,39 @@ target_include_directories(sample_plugin PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
 target_include_directories(inferlite PRIVATE ${OV_INCLUDE_DIR})
 target_link_libraries(inferlite PRIVATE ${OV_LIB_DIR}/openvino.lib)
+
+# --- Phase 3: TensorRT / CUDA when GPU is enabled ---------------------------
+if(INFERLITE_ENABLE_GPU)
+    target_compile_definitions(inferlite PRIVATE INFERLITE_ENABLE_GPU=1)
+    target_include_directories(inferlite PRIVATE ${TRT_ROOT}/include)
+    # CUDA toolkit (find the CUDA runtime for linking).
+    find_package(CUDAToolkit QUIET)
+    if(CUDAToolkit_FOUND)
+        target_include_directories(inferlite PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
+        target_link_libraries(inferlite PRIVATE CUDA::cudart)
+    else()
+        message(WARNING "CUDA toolkit not found; using default CUDA include path.")
+        target_include_directories(inferlite PRIVATE
+            "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.6/include")
+        target_link_libraries(inferlite PRIVATE
+            "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.6/lib/x64/cudart.lib")
+    endif()
+    # TensorRT libraries (nvinfer, nvinfer_plugin).
+    set(TRT_LIB_DIR ${TRT_ROOT}/lib)
+    find_library(TRT_NVINFER nvinfer PATHS ${TRT_LIB_DIR} NO_DEFAULT_PATH)
+    find_library(TRT_NVINFER_PLUGIN nvinfer_plugin PATHS ${TRT_LIB_DIR} NO_DEFAULT_PATH)
+    if(NOT TRT_NVINFER)
+        find_library(TRT_NVINFER nvinfer PATHS ${TRT_ROOT}/lib ${TRT_ROOT}/targets/x86_64-linux-gnu/lib)
+    endif()
+    if(TRT_NVINFER)
+        target_link_libraries(inferlite PRIVATE ${TRT_NVINFER})
+    else()
+        # fallback: rely on the import library next to the headers
+        file(GLOB TRT_LIBS ${TRT_LIB_DIR}/*.lib)
+        target_link_libraries(inferlite PRIVATE ${TRT_LIBS})
+    endif()
+    message(STATUS "GPU enabled: includes=${TRT_ROOT}/include libs=${TRT_LIB_DIR}")
+endif()
 
 # Copy OpenVINO DLLs next to the executable so it can run without setting PATH.
 # This includes the runtime plugins plus third-party libs (TBB, etc.).

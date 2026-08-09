@@ -9,7 +9,8 @@
 namespace inferlite {
 
 // Minimal supported set of tensor data types (mirrors a subset of Triton's
-// data_type enum). All are host CPU types; no device memory in phase 1.
+// data_type enum). All are host CPU types in Phase 1/2; Phase 3 adds device
+// tensors for the TensorRT GPU backend.
 enum class DataType : int {
     kInt8 = 0,
     kUint8,
@@ -92,12 +93,32 @@ inline size_t tensorByteSize(const std::vector<int64_t>& shape, DataType type) {
     return static_cast<size_t>(n) * dataTypeSize(type);
 }
 
+// Where a tensor's payload lives. CPU tensors hold bytes in `data` (host
+// memory). GPU tensors hold a pointer to CUDA device memory in `device_ptr`
+// (Phase 3 TensorRT backend); `data` is empty for device tensors unless a
+// host copy has been materialized.
+enum class DeviceKind : int { kCpu = 0, kGpu };
+
+inline const char* deviceKindToString(DeviceKind d) {
+    return d == DeviceKind::kGpu ? "GPU" : "CPU";
+}
+
 struct Tensor {
     std::string name;
     DataType type = DataType::kInvalid;
     std::vector<int64_t> shape;
-    // Raw byte payload (host memory, little-endian native layout).
+    // Raw byte payload (host memory, little-endian native layout). For GPU
+    // tensors this is empty (the data lives on the device).
     std::vector<uint8_t> data;
+    // Device placement. kCpu: `data` is authoritative. kGpu: `device_ptr` is
+    // the CUDA device pointer and `device_bytes` is the byte length.
+    DeviceKind device = DeviceKind::kCpu;
+    void* device_ptr = nullptr;   // CUDA device memory (GPU tensors only)
+    size_t device_bytes = 0;      // byte length of the device buffer
+    // Byte length of the logical tensor payload (== data.size() for CPU).
+    size_t byteLength() const {
+        return device == DeviceKind::kGpu ? device_bytes : data.size();
+    }
 };
 
 // Write a single scalar value (from a double) into a tensor's little-endian

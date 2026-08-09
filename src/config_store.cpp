@@ -26,11 +26,13 @@ std::string readTextFile(const fs::path& p) {
     return ss.str();
 }
 
-// Compute the SHA-256 of a model's IR files (model.xml + model.bin), if present.
+// Compute the SHA-256 of a model's artifact files. OpenVINO uses model.xml +
+// model.bin; TensorRT uses model.plan (Phase 3). Present files are hashed in a
+// fixed, deterministic order and combined into a single stable model hash.
 std::string hashModelFiles(const std::string& version_dir) {
     fs::path dir(version_dir);
     std::vector<std::string> parts;
-    for (const char* f : {"model.xml", "model.bin"}) {
+    for (const char* f : {"model.xml", "model.bin", "model.plan"}) {
         fs::path fp = dir / f;
         if (fs::exists(fp)) {
             parts.push_back(sha256FileHex(fp.string()));

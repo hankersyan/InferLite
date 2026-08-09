@@ -132,7 +132,9 @@ BackendResult EnsembleExecutor::execute(const std::vector<Tensor>& inputs) {
             return result;
         }
 
-        // Map the step's outputs back into the workspace scope.
+        // Map the step's outputs back into the workspace scope, preserving each
+        // tensor's device placement so downstream steps know where it lives and
+        // the executor can make correct cross-device copy decisions.
         for (const auto& out : step_result.outputs) {
             // Find the output_map entry that names this output.
             const std::string* target = nullptr;
@@ -149,6 +151,21 @@ BackendResult EnsembleExecutor::execute(const std::vector<Tensor>& inputs) {
             }
             // Outputs not in the map are ignored for the workspace but may be
             // exposed as the ensemble's final outputs if declared.
+        }
+    }
+
+    // Phase 3: materialize any remaining device (GPU) tensors into host memory
+    // before exposing them as ensemble outputs. Each GPU backend already returns
+    // host-resident output tensors (it performs the device->host pinned copy),
+    // so this is a defensive guarantee that ensemble outputs are always readable
+    // host data for the HTTP layer and output validation.
+    for (auto& t : workspace) {
+        if (t.device == DeviceKind::kGpu) {
+            // In this host-boundary design the backend returned host data; clear
+            // the device marker so consumers treat it as host memory.
+            t.device = DeviceKind::kCpu;
+            t.device_ptr = nullptr;
+            t.device_bytes = 0;
         }
     }
 

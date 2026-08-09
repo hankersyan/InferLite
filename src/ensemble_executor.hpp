@@ -1,10 +1,12 @@
-// ensemble_executor.hpp - CPU-only ensemble DAG executor.
+// ensemble_executor.hpp - Device-aware ensemble DAG executor (CPU + GPU).
 //
 // Builds a static directed acyclic graph from the ensemble's steps at startup
-// and executes it per request. Intermediate tensors stay in host memory and are
-// passed by reference (zero-copy between adjacent CPU steps). A failure in any
-// step cancels the whole ensemble with a structured error code and releases all
-// resources. Steps are dispatched to the shared CPU thread pool.
+// and executes it per request. Steps may run on CPU (OpenVINO, plugins) or GPU
+// (TensorRT). Intermediate tensors are passed between steps; a TensorRT step
+// transitions host<->device internally (a pinned-memory copy), so cross-device
+// edges are explicit and correctness (identical outputs to a sequential
+// pipeline with explicit copies) is preserved. A failure in any step cancels the
+// whole ensemble with a structured error code and releases all resources.
 #pragma once
 
 #include <functional>

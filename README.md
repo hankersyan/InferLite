@@ -6,9 +6,15 @@ a production serving framework — model repository, backend abstraction, bounde
 scheduling, and reusable memory — while dropping all cloud-scale, multi-tenant,
 and dynamic operations that add unnecessary complexity on the factory floor.
 
-This repository implements **Phase 1** (see `docs/PRD-phase-01.md`) and
-**Phase 2** (see `docs/PRD-phase-02.md`); `docs/PRD-all.md` describes the full
-product direction.
+This repository implements **Phase 1** (see `docs/PRD-phase-01.md`),
+**Phase 2** (see `docs/PRD-phase-02.md`), and **Phase 3** (see
+`docs/PRD-phase-03.md`); `docs/PRD-all.md` describes the full product direction.
+
+Phase 3 adds an opt-in **TensorRT GPU backend** on top of the validated CPU
+runtime. GPU support is compiled only when a TensorRT SDK is available at CMake
+configure time (`-DTENSORRT_ROOT=...`); without it the server builds and runs
+CPU-only with no regression. OpenVINO models, plugins, and ensembles remain
+CPU-only.
 
 ## Motivations
 - Nvidia phased out the triton inference server's windows support.
@@ -174,9 +180,32 @@ deferred to Phase 3):
 - **Metrics** — expanded with queue depth, per-model latency, and a configuration
   hash.
 
-### Deferred to later phases (not in Phase 1/2)
+### Phase 3 — TensorRT GPU Acceleration (Opt-in)
 
-GPU backends, GPU ensembles, batching, live model updates, and a profiling tool.
+Adds a validated, deterministic TensorRT GPU backend under the same FDA safety
+boundary as the CPU runtime:
+
+- **TensorRT backend** — deserializes approved `model.plan` engine files; each
+  instance owns a CUDA stream; `execute()` enqueues on the stream and
+  synchronizes via a CUDA event.
+- **GPU memory manager** — a reusable CUDA device buffer pool plus a pinned host
+  pool for efficient host↔device transfers.
+- **Instance groups** — `kind: KIND_GPU` with a `count` for TensorRT models;
+  multiple GPU instances run concurrently on separate streams and alongside CPU
+  models.
+- **Unified scheduler** — manages both CPU and GPU instances with busy/free
+  tracking and quarantine of a CUDA-faulted instance (fault isolation).
+- **GPU-aware ensembles** — DAGs may mix CPU and TensorRT nodes; cross-device
+  edges use explicit pinned copies, and a step failure cancels the ensemble.
+- **FDA controls extended to GPU** — `.plan` files are SHA-256 hashed and listed
+  in the manifest, outputs are validated after the device→host copy, the audit
+  log records `device: "GPU"`, and `MAX_GPU_MEMORY_MB` /
+  `MAX_INFERENCE_TIME_MS` bound GPU execution.
+
+### Deferred to later phases (not in Phase 1/2/3)
+
+OpenVINO GPU plugin, dynamic/static batching, live model updates, a profiling
+tool, multi-GPU, and gRPC/streaming.
 
 ## Layout
 
@@ -223,9 +252,18 @@ Prerequisites:
 - CMake + Ninja (shipped with VS)
 - OpenVINO 2025.3 Windows C++ runtime (extracted under `c:\tools\openvino`, or
   point CMake at it with `-DOPENVINO_ROOT=...`)
+- (Optional, for the GPU backend) NVIDIA TensorRT SDK + CUDA; set `TENSORRT_ROOT`
+  to the TensorRT install directory at CMake configure time.
 
 ```
 powershell -ExecutionPolicy Bypass -File build.ps1
+```
+
+CPU-only by default. To enable the GPU backend:
+
+```
+cmake -S . -B build-gpu -DOPENVINO_ROOT=c:\tools\openvino -DTENSORRT_ROOT=C:\TensorRT
+cmake --build build-gpu --config Release
 ```
 
 The build also produces `build\sample_plugin.dll` (example plugin). To use the
@@ -270,6 +308,9 @@ Options:
 | `--max-inference-time-ms=<n>` | `5000` | Per-request inference time limit |
 | `--tls-cert=<path>` / `--tls-key=<path>` | – | TLS cert/key (validated deployments front the server with a TLS 1.2+ reverse proxy) |
 | `--software-version=<s>` | `InferLite 2.0.0` | Reported software version |
+| `--max-gpu-memory-mb=<n>` | `2048` | Per-model GPU memory cap (TensorRT) |
+| `--max-concurrent-gpu-instances=<n>` | `4` | Max concurrent GPU instances |
+| `--gpu-device=<n>` | `0` | CUDA device index (single GPU only) |
 
 ## Interface
 

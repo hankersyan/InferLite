@@ -4,6 +4,7 @@
 #pragma once
 
 #include <atomic>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -18,10 +19,15 @@
 #include "scheduler.hpp"
 #include "validation.hpp"
 
+#ifdef INFERLITE_ENABLE_GPU
+#include "gpu_memory_manager.hpp"
+#endif
+
 namespace inferlite {
 
 class OpenVinoBackend;
 class PluginBackend;
+class TensorRtBackend;
 
 struct ServerOptions {
     std::string model_repository;
@@ -41,6 +47,15 @@ struct ServerOptions {
     std::string tls_cert_file;          // validated mode certificate (PEM)
     std::string tls_key_file;           // validated mode key (PEM)
     std::string software_version = "InferLite 2.0.0";
+
+    // --- Phase 3 (GPU / TensorRT) options ---
+    // Per-model cap on GPU device memory (bytes). Enforced by the TensorRT
+    // backend; allocation failure returns RESOURCE_EXHAUSTED.
+    size_t max_gpu_memory_mb = 2048;
+    // Maximum number of concurrent GPU instances (across all TensorRT models).
+    size_t max_concurrent_gpu_instances = 4;
+    // Optional absolute path to a TensorRT engine directory for GPU models.
+    std::string gpu_device = "0";  // only device 0 supported (single GPU)
 };
 
 class InferLite {
@@ -80,6 +95,9 @@ private:
 
     ServerOptions opts_;
     std::shared_ptr<MemoryManager> memory_;
+#ifdef INFERLITE_ENABLE_GPU
+    std::shared_ptr<GpuMemoryManager> gpu_memory_;
+#endif
     std::unique_ptr<ConfigStore> config_store_;
     std::unique_ptr<AuditLog> audit_;
     std::unique_ptr<Diagnostics> diag_;
@@ -91,8 +109,12 @@ private:
         BackendPtr backend;
         std::shared_ptr<Scheduler> scheduler;
         std::string version_path;
+        std::string device_kind = "CPU";  // "CPU" or "GPU" (TensorRT)
     };
     std::vector<ModelEntry> models_;
+
+    // Per-model GPU resource accounting (Phase 3): model name -> bound bytes.
+    std::map<std::string, std::atomic<uint64_t>> gpu_usage_bytes_;
 
     std::unique_ptr<HttpServer> http_;
     std::atomic<bool> running_{false};

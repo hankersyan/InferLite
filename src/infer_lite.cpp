@@ -22,7 +22,12 @@
 #include "pbtxt.hpp"
 #include "plugin_backend.hpp"
 #include "sha256.hpp"
+#include "tensorrt_backend.hpp"
 #include "validation.hpp"
+
+#ifdef INFERLITE_ENABLE_GPU
+#include "gpu_memory_manager.hpp"
+#endif
 
 namespace inferlite {
 
@@ -126,6 +131,9 @@ int errorCodeToStatus(ErrorCode c) {
 
 InferLite::InferLite(const ServerOptions& opts) : opts_(opts) {
     memory_ = std::make_shared<MemoryManager>();
+#ifdef INFERLITE_ENABLE_GPU
+    gpu_memory_ = std::make_shared<GpuMemoryManager>();
+#endif
     diag_ = std::make_unique<Diagnostics>(opts_.diagnostic_log_path);
     audit_ = std::make_unique<AuditLog>(opts_.audit_log_path);
 
@@ -166,11 +174,16 @@ InferLite::InferLite(const ServerOptions& opts) : opts_(opts) {
         entry.version_path = lm.version_path;
 
         // Register config hash and verify model file integrity against the
-        // manifest (if enabled). Ensembles/plugins have no IR files to verify.
+        // manifest (if enabled). Ensembles/plugins have no artifact files to
+        // verify; OpenVINO (model.xml/.bin) and TensorRT (model.plan) do.
         config_store_->registerConfigHash(entry.name, lm.config_hash);
-        if (lm.config->backend == "openvino") {
+        if (lm.config->backend == "openvino" || lm.config->backend == "tensorrt") {
             config_store_->registerModelFiles(entry.name, lm.version_path);
         }
+        entry.device_kind = (lm.config->backend == "tensorrt" &&
+                             lm.config->instance_group.kind == "KIND_GPU")
+                                ? "GPU"
+                                : "CPU";
 
         if (lm.config->backend == "ensemble") {
             // Defer; resolved in pass 2.
@@ -206,7 +219,11 @@ InferLite::InferLite(const ServerOptions& opts) : opts_(opts) {
         }
         e.scheduler = std::make_shared<Scheduler>(e.backend, e.config, instance_count,
                                                   opts_.max_queue_size, per_req_timeout,
-                                                  limits_.max_inference_time_ms, memory_);
+                                                  limits_.max_inference_time_ms, memory_,
+                                                  e.device_kind);
+        if (e.device_kind == "GPU") {
+            gpu_usage_bytes_[e.name].store(0, std::memory_order_relaxed);
+        }
         models_.push_back(std::move(e));
     }
 
@@ -266,6 +283,27 @@ BackendPtr InferLite::makeBackend(const LoadedModel& lm) {
     if (cfg.backend == "ensemble") {
         throw std::runtime_error("ensemble '" + cfg.name +
                                  "' must be built in the ensemble pass");
+    }
+
+    if (cfg.backend == "tensorrt") {
+#ifdef INFERLITE_ENABLE_GPU
+        if (!gpu_memory_) {
+            throw std::runtime_error("TensorRT backend '" + cfg.name +
+                                     "' requested but GPU memory manager is unavailable");
+        }
+        std::string plan_path = lm.version_path;
+        if (!plan_path.empty() && plan_path.back() != '/' && plan_path.back() != '\\') {
+            plan_path += "/";
+        }
+        plan_path += "model.plan";
+        auto trt = std::make_shared<TensorRtBackend>(gpu_memory_);
+        trt->load(cfg, plan_path, opts_.max_gpu_memory_mb);
+        return trt;
+#else
+        throw std::runtime_error("TensorRT backend '" + cfg.name +
+                                 "' requested but GPU support is not compiled in "
+                                 "(rebuild with a TensorRT SDK / TENSORRT_ROOT)");
+#endif
     }
 
     // openvino backend.
@@ -382,6 +420,23 @@ HttpResponse InferLite::handleHealthDetailed() {
     o.asObject()["software_version"] = json::Value(config_store_->softwareVersion());
     o.asObject()["openvino_version"] = json::Value(config_store_->openvinoVersion());
     o.asObject()["manifest_enabled"] = json::Value(config_store_->manifestEnabled());
+#ifdef INFERLITE_ENABLE_GPU
+    o.asObject()["gpu"] = json::Value(json::Value::Object());
+    {
+        json::Value& g = o.asObject()["gpu"];
+        g.asObject()["enabled"] = json::Value(true);
+        g.asObject()["device"] = json::Value(opts_.gpu_device);
+        g.asObject()["max_gpu_memory_mb"] = json::Value(static_cast<int64_t>(opts_.max_gpu_memory_mb));
+        g.asObject()["max_concurrent_gpu_instances"] =
+            json::Value(static_cast<int64_t>(opts_.max_concurrent_gpu_instances));
+        g.asObject()["device_pool_bytes"] = json::Value(static_cast<int64_t>(gpu_memory_->devicePoolBytes()));
+        g.asObject()["pinned_pool_bytes"] = json::Value(static_cast<int64_t>(gpu_memory_->pinnedPoolBytes()));
+    }
+#else
+    o.asObject()["gpu"] = json::Value(json::Value::Object());
+    o.asObject()["gpu"].asObject()["enabled"] = json::Value(false);
+    o.asObject()["gpu"].asObject()["reason"] = json::Value("not compiled in (no TensorRT SDK)");
+#endif
     json::Value models = json::Value(json::Value::Array());
     for (const auto& e : models_) {
         json::Value m = json::Value::Object();
@@ -389,6 +444,7 @@ HttpResponse InferLite::handleHealthDetailed() {
         m.asObject()["backend"] = json::Value(e.config->backend);
         m.asObject()["model_hash"] = json::Value(config_store_->modelHash(e.name));
         m.asObject()["config_hash"] = json::Value(config_store_->configHash(e.name));
+        m.asObject()["device"] = json::Value(e.device_kind);
         m.asObject()["status"] = json::Value("READY");
         models.asArray().push_back(std::move(m));
     }
@@ -485,11 +541,17 @@ HttpResponse InferLite::handleMetrics() {
 
         json::Value mm = json::Value::Object();
         mm.asObject()["model_name"] = json::Value(m.name);
+        mm.asObject()["device"] = json::Value(m.device_kind);
         mm.asObject()["requests_completed"] = json::Value(static_cast<int64_t>(st.requests_completed.load()));
         mm.asObject()["requests_failed"] = json::Value(static_cast<int64_t>(st.requests_failed.load()));
         mm.asObject()["requests_timed_out"] = json::Value(static_cast<int64_t>(st.requests_timed_out.load()));
         mm.asObject()["average_latency_us"] = json::Value(m.scheduler->averageLatencyUs());
         mm.asObject()["queue_depth"] = json::Value(static_cast<int64_t>(m.scheduler->queueDepth()));
+        if (m.device_kind == "GPU") {
+            auto it = gpu_usage_bytes_.find(m.name);
+            mm.asObject()["gpu_memory_bytes"] = json::Value(static_cast<int64_t>(
+                it != gpu_usage_bytes_.end() ? it->second.load(std::memory_order_relaxed) : 0));
+        }
         models_arr.asArray().push_back(std::move(mm));
     }
     double avg_us = total_completed > 0
@@ -502,6 +564,14 @@ HttpResponse InferLite::handleMetrics() {
     obj.asObject()["queue_depth"] = json::Value(static_cast<int64_t>(total_queue));
     obj.asObject()["config_hash"] = json::Value(config_store_->configStoreHash());
     obj.asObject()["models"] = std::move(models_arr);
+#ifdef INFERLITE_ENABLE_GPU
+    obj.asObject()["gpu_memory"] = json::Value(json::Value::Object());
+    {
+        json::Value& g = obj.asObject()["gpu_memory"];
+        g.asObject()["device_pool_bytes"] = json::Value(static_cast<int64_t>(gpu_memory_->devicePoolBytes()));
+        g.asObject()["pinned_pool_bytes"] = json::Value(static_cast<int64_t>(gpu_memory_->pinnedPoolBytes()));
+    }
+#endif
     resp.status = 200;
     resp.body = obj.dump();
     return resp;
@@ -652,7 +722,8 @@ HttpResponse InferLite::handleInfer(const HttpRequest& req, const std::string& m
         ae.software_version = config_store_->softwareVersion();
         ae.config_hash = config_store_->configHash(entry->name);
         ae.duration_ms = duration_ms;
-        ae.device = "CPU";
+        // Phase 3: report the actual execution device (CPU or GPU).
+        ae.device = entry->device_kind;  // "CPU" or "GPU"
         // input_shape is serialized by the audit helper; pass a parsed shape.
         try {
             json::Value parsed_shape = json::parse(input_shape_str);

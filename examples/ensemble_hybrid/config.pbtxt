@@ -1,0 +1,50 @@
+# Example hybrid CPU+GPU ensemble (Phase 3).
+#
+# This DAG mixes a CPU plugin (preprocessing), a TensorRT GPU model (encoder),
+# and a CPU plugin (postprocessing). The TensorRT step transitions host->device
+# on entry and device->host on exit via pinned-memory copies (the cross-device
+# edges are explicit). A failure in any step cancels the whole ensemble.
+#
+# Place the referenced models (preprocess_plugin, sample_trt_model,
+# postprocess_plugin) in the active repository for this to load.
+name: "ensemble_hybrid"
+backend: "ensemble"
+max_batch_size: 0
+input {
+  name: "raw"
+  data_type: TYPE_FP32
+  dims: [ 1, 4 ]
+}
+output {
+  name: "result"
+  data_type: TYPE_FP32
+  dims: [ 1, 4 ]
+}
+instance_group {
+  count: 1
+  kind: KIND_CPU
+}
+ensemble_scheduling {
+  step {
+    model_name: "preprocess_plugin"
+    input_map { raw: "raw" }
+    output_map { normalized: "normalized" }
+  }
+  step {
+    model_name: "sample_trt_model"
+    input_map { input: "normalized" }
+    output_map { output: "encoded" }
+  }
+  step {
+    model_name: "postprocess_plugin"
+    input_map { processed: "encoded" }
+    output_map { result: "result" }
+  }
+}
+metadata {
+  model_id: "ensemble_hybrid"
+  version: "1.0.0"
+  intended_use: "Example hybrid CPU+GPU ensemble for phase-03 validation"
+  training_dataset_id: "N/A"
+  approval_status: "approved"
+}
