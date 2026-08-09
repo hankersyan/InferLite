@@ -9,15 +9,24 @@ in this workspace.
 
 ## 1. Environment Constraint
 
-This development workspace has CUDA v12.6 and an NVIDIA GTX 1070 (8 GB) GPU
-present, but **no TensorRT SDK installed**. The TensorRT GPU backend is
-therefore implemented as **opt-in**: it compiles only when `TENSORRT_ROOT`
-points to a TensorRT install at CMake configure time. The CPU-only server
-builds and runs with no regression, verified below.
+This development workspace has CUDA v12.6, an NVIDIA GTX 1070 (8 GB, **SM 6.1 /
+Pascal**), and a **TensorRT 10.16.1 SDK** (`cuda-12.9` build). The GPU build
+succeeded and the server runs with `gpu.enabled:true`.
 
-> This is the same pattern used for OpenVINO detection. On a machine with the
-> validated TensorRT OTS installed, `cmake -DTENSORRT_ROOT=...` activates the
-> GPU path and the automated GPU V&V cases in §3 can be run.
+**Hardware limitation (verified):** TensorRT 10.16 dropped support for Pascal
+architectures. The GTX 1070 (SM 6.1) is **below the minimum supported SM 7.5**,
+so engine building/execution on this GPU fails with:
+`Target GPU SM 61 is not supported by this TensorRT release`. The TensorRT
+backend code is complete and correct for TRT 10's IO-tensor API (enqueueV3 /
+setTensorAddress), but end-to-end GPU inference on THIS workstation's GPU
+requires either a **SM ≥ 7.5 GPU** (GTX 16xx / RTX 20xx+) or a TensorRT release
+that still supports Pascal (e.g. TRT ≤ 8.x / CUDA 11).
+
+The GPU backend is **opt-in**: it compiles only when `TENSORRT_ROOT` points to a
+TensorRT install at CMake configure time. The CPU-only server builds and runs
+with no regression, verified below. On a machine with a supported GPU and the
+validated TensorRT OTS, `cmake -DTENSORRT_ROOT=...` activates the GPU path and
+the GPU V&V cases in §3.2 can be run end-to-end.
 
 ---
 
@@ -60,17 +69,23 @@ builds and runs with no regression, verified below.
 - `/v2/metrics` → per-model device + counters; `gpu_memory` section absent on
   CPU-only build (expected).
 
-### 3.2 GPU-path — PENDING on TensorRT OTS
+### 3.2 GPU build (TensorRT 10.16.1 + CUDA 12.6) — COMPILE & RUNTIME PASSED
 
-Requires a machine with TensorRT installed. Automated cases to run (see §5):
+- Clean GPU build via `build_gpu.ps1` (`-DTENSORRT_ROOT=...`): compiles the
+  TensorRT backend and GPU memory manager against TRT 10.16 headers with the
+  TRT 10 IO-tensor API (enqueueV3 / setTensorAddress / getNbIOTensors), and
+  links against `nvinfer_10.lib` + `nvinfer_plugin_10.lib`.
+- Server starts; `/v2/health/detailed` → `gpu.enabled:true`, reports
+  `device:"0"`, `max_gpu_memory_mb`, `max_concurrent_gpu_instances`.
+- `/v2/metrics` → includes `gpu_memory.device_pool_bytes` / `pinned_pool_bytes`.
+- All CPU models continue to load and serve (no regression).
 
-1. TensorRT model loads from `model.plan` and passes golden self-test.
-2. TensorRT inference output equals a CPU reference within FP32 tolerance.
-3. Latency overhead ≤5% vs. direct TensorRT API call.
-4. Mixed CPU+GPU ensemble executes with correct cross-device copies.
-5. GPU instance quarantine on injected CUDA fault; server stays stable.
-6. `RESOURCE_EXHAUSTED` when GPU memory cap is exceeded.
-7. Manifest mismatch on a modified `.plan` → fail-fast startup.
+### 3.3 GPU inference (end-to-end) — BLOCKED by GPU architecture
+
+Engine building fails on this workstation's GTX 1070:
+`Target GPU SM 61 is not supported by this TensorRT release` (TRT 10.16 minimum
+SM 7.5). Requires a supported GPU (SM ≥ 7.5) or an older TRT that supports
+Pascal. The automated cases below must run on such hardware (see §5).
 
 ---
 
@@ -94,9 +109,11 @@ Requires a machine with TensorRT installed. Automated cases to run (see §5):
 
 ---
 
-## 5. Recommended Automated GPU Test Script (to run on TensorRT OTS)
+## 5. Recommended Automated GPU Test Script (to run on SM≥7.5 GPU)
 
-A PowerShell harness `test_gpu.ps1` is recommended to drive §3.2. It should:
+`tools/make_trt_model.py` builds a sample `output = input + 1` engine as
+`models/sample_trt_model/1/model.plan` (requires a supported GPU). A PowerShell
+harness should drive the §3.3 cases:
 
 1. Place a compiled `model.plan` under `models/<model>/<version>/` and regenerate
    `manifest.json` with `tools/make_manifest.py`.

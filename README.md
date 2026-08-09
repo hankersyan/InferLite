@@ -262,9 +262,22 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 CPU-only by default. To enable the GPU backend:
 
 ```
+powershell -ExecutionPolicy Bypass -File build_gpu.ps1
+```
+
+or manually:
+
+```
 cmake -S . -B build-gpu -DOPENVINO_ROOT=c:\tools\openvino -DTENSORRT_ROOT=C:\TensorRT
 cmake --build build-gpu --config Release
 ```
+
+> **GPU hardware note:** TensorRT 10.x requires a GPU with **SM ≥ 7.5**
+> (GTX 16xx / RTX 20xx or newer). Pascal-era GPUs such as the GTX 10xx (SM 6.1)
+> are not supported and engine build/execution fails with
+> `Target GPU SM 61 is not supported`. The GPU backend still compiles and runs
+> (reporting `gpu.enabled:true`), but end-to-end GPU inference needs a supported
+> card or a TensorRT release that still supports Pascal (e.g. TRT 8.x).
 
 The build also produces `build\sample_plugin.dll` (example plugin). To use the
 plugin/ensemble demo models, copy the DLL into each plugin model directory:

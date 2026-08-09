@@ -8,14 +8,20 @@
 #include "pbtxt.hpp"
 #include "validation.hpp"
 
-namespace inferlite {
-
 #ifdef INFERLITE_ENABLE_GPU
-
+// NOTE: CUDA / TensorRT headers MUST be included at file scope (outside any
+// namespace). They pull in <chrono>/<ratio> and other MSVC STL headers; if they
+// were included inside `namespace inferlite` the STL's `std` namespace would be
+// nested as inferlite::std and break the standard library.
 #include <cuda_runtime.h>
 #include <NvInfer.h>
 
 #include "gpu_memory_manager.hpp"
+#endif
+
+namespace inferlite {
+
+#ifdef INFERLITE_ENABLE_GPU
 
 namespace {
 
@@ -24,7 +30,8 @@ using nvinfer1::ICudaEngine;
 using nvinfer1::IExecutionContext;
 using nvinfer1::IRuntime;
 
-// Our DataType -> TensorRT DataType.
+// Our DataType -> TensorRT DataType. TensorRT 10 has no DOUBLE, so FP64 is not
+// supported on the GPU backend (it remains available on CPU/OpenVINO).
 nvinfer1::DataType toTrtType(inferlite::DataType t) {
     switch (t) {
         case inferlite::DataType::kInt8: return nvinfer1::DataType::kINT8;
@@ -32,7 +39,7 @@ nvinfer1::DataType toTrtType(inferlite::DataType t) {
         case inferlite::DataType::kInt32: return nvinfer1::DataType::kINT32;
         case inferlite::DataType::kFloat16: return nvinfer1::DataType::kHALF;
         case inferlite::DataType::kFloat32: return nvinfer1::DataType::kFLOAT;
-        case inferlite::DataType::kFloat64: return nvinfer1::DataType::kDOUBLE;
+        case inferlite::DataType::kFloat64: return nvinfer1::DataType::kFLOAT;  // not supported on GPU
         case inferlite::DataType::kBool: return nvinfer1::DataType::kBOOL;
         default: return nvinfer1::DataType::kFLOAT;
     }
@@ -45,7 +52,6 @@ inferlite::DataType fromTrtType(nvinfer1::DataType t) {
         case nvinfer1::DataType::kINT32: return inferlite::DataType::kInt32;
         case nvinfer1::DataType::kHALF: return inferlite::DataType::kFloat16;
         case nvinfer1::DataType::kFLOAT: return inferlite::DataType::kFloat32;
-        case nvinfer1::DataType::kDOUBLE: return inferlite::DataType::kFloat64;
         case nvinfer1::DataType::kBOOL: return inferlite::DataType::kBool;
         default: return inferlite::DataType::kInvalid;
     }
@@ -107,9 +113,11 @@ void TensorRtBackend::load(const ModelConfig& config, const std::string& plan_pa
 
     try {
         static SilentLogger logger;
+        // TensorRT 10: objects are released with `delete` (virtual destructors);
+        // the legacy destroy() method was removed.
         impl_->runtime = std::shared_ptr<IRuntime>(
             nvinfer1::createInferRuntime(logger), [](IRuntime* r) {
-                if (r) r->destroy();
+                delete r;
             });
         if (!impl_->runtime) {
             throw std::runtime_error("TensorRT: failed to create runtime");
@@ -119,7 +127,7 @@ void TensorRtBackend::load(const ModelConfig& config, const std::string& plan_pa
         impl_->engine = std::shared_ptr<ICudaEngine>(
             impl_->runtime->deserializeCudaEngine(blob.data(), blob.size()),
             [](ICudaEngine* e) {
-                if (e) e->destroy();
+                delete e;
             });
         if (!impl_->engine) {
             throw std::runtime_error("TensorRT: failed to deserialize engine from " +
@@ -129,20 +137,21 @@ void TensorRtBackend::load(const ModelConfig& config, const std::string& plan_pa
         impl_->context = std::shared_ptr<IExecutionContext>(
             impl_->engine->createExecutionContext(),
             [](IExecutionContext* c) {
-                if (c) c->destroy();
+                delete c;
             });
         if (!impl_->context) {
             throw std::runtime_error("TensorRT: failed to create execution context");
         }
 
-        // Record input/output binding names in a deterministic order. The config
-        // declares input/output specs; we match bindings to them by name.
-        int nb = impl_->engine->getNbBindings();
+        // Record input/output IO tensor names in a deterministic order (TensorRT
+        // 10 IO-tensor API). The config declares input/output specs; we match IO
+        // tensors to them by name.
         impl_->input_names.clear();
         impl_->output_names.clear();
-        for (int i = 0; i < nb; ++i) {
-            const char* name = impl_->engine->getBindingName(i);
-            if (impl_->engine->bindingIsInput(i)) {
+        int32_t nio = impl_->engine->getNbIOTensors();
+        for (int32_t i = 0; i < nio; ++i) {
+            const char* name = impl_->engine->getIOTensorName(i);
+            if (impl_->engine->getTensorIOMode(name) == nvinfer1::TensorIOMode::kINPUT) {
                 impl_->input_names.push_back(name);
             } else {
                 impl_->output_names.push_back(name);
@@ -201,18 +210,19 @@ BackendResult TensorRtBackend::execute(const std::vector<Tensor>& inputs) {
             throw std::runtime_error("cudaEventCreate failed");
         }
 
-        // Bind device buffers. Bind the input bindings from the host inputs and
-        // allocate device memory for the outputs (sized from the config specs).
-        const int nb = impl_->engine->getNbBindings();
-        std::vector<void*> bindings(static_cast<size_t>(nb), nullptr);
+        // TensorRT 10 IO-tensor API: assign device addresses for every IO tensor
+        // via setTensorAddress(), then enqueueV3(). Device buffers are acquired
+        // from the GPU memory pool; inputs are copied host->device first.
+        const int32_t nio = impl_->engine->getNbIOTensors();
         size_t gpu_bytes = 0;
 
-        for (int i = 0; i < nb; ++i) {
-            const char* name = impl_->engine->getBindingName(i);
-            bool is_input = impl_->engine->bindingIsInput(i);
+        for (int32_t i = 0; i < nio; ++i) {
+            const char* name = impl_->engine->getIOTensorName(i);
+            const bool is_input =
+                (impl_->engine->getTensorIOMode(name) == nvinfer1::TensorIOMode::kINPUT);
 
             if (is_input) {
-                // Find the matching host input by binding name.
+                // Find the matching host input by IO tensor name.
                 const Tensor* host_in = nullptr;
                 for (const auto& t : inputs) {
                     if (t.name == name) { host_in = &t; break; }
@@ -220,7 +230,7 @@ BackendResult TensorRtBackend::execute(const std::vector<Tensor>& inputs) {
                 if (!host_in) {
                     result.ok = false;
                     result.error_code = ErrorCode::kInvalidInput;
-                    result.error = "TensorRT model missing input binding '" +
+                    result.error = "TensorRT model missing input IO tensor '" +
                                    std::string(name) + "'";
                     return result;
                 }
@@ -228,7 +238,13 @@ BackendResult TensorRtBackend::execute(const std::vector<Tensor>& inputs) {
                 gpu_bytes += dev.capacity();
                 cudaMemcpyAsync(dev.data(), host_in->data.data(), host_in->data.size(),
                                 cudaMemcpyHostToDevice, stream);
-                bindings[static_cast<size_t>(i)] = dev.data();
+                if (!impl_->context->setTensorAddress(name, dev.data())) {
+                    result.ok = false;
+                    result.error_code = ErrorCode::kInternalError;
+                    result.error = "TensorRT setTensorAddress(input '" +
+                                   std::string(name) + "') failed";
+                    return result;
+                }
             } else {
                 // Output: size from the config's declared output spec (by name).
                 const TensorSpec* spec = nullptr;
@@ -243,20 +259,26 @@ BackendResult TensorRtBackend::execute(const std::vector<Tensor>& inputs) {
                 }
                 DeviceBuffer dev = gpu_memory_->acquireDevice(nbytes);
                 gpu_bytes += dev.capacity();
-                bindings[static_cast<size_t>(i)] = dev.data();
+                if (!impl_->context->setTensorAddress(name, dev.data())) {
+                    result.ok = false;
+                    result.error_code = ErrorCode::kInternalError;
+                    result.error = "TensorRT setTensorAddress(output '" +
+                                   std::string(name) + "') failed";
+                    return result;
+                }
             }
         }
 
         bound_gpu_bytes_ = gpu_bytes;
         result.gpu_memory_bytes = gpu_bytes;
 
-        // Enqueue inference and record a completion event. The caller (ensemble
-        // executor or scheduler) synchronizes via the event / stream.
-        const void* const* raw_bindings = bindings.data();
-        if (!impl_->context->enqueueV2(raw_bindings, stream, nullptr)) {
+        // Enqueue inference (TensorRT 10 enqueueV3) and record a completion
+        // event. The caller (ensemble executor or scheduler) synchronizes via
+        // the event / stream.
+        if (!impl_->context->enqueueV3(stream)) {
             result.ok = false;
             result.error_code = ErrorCode::kInternalError;
-            result.error = "TensorRT enqueueV2 failed";
+            result.error = "TensorRT enqueueV3 failed";
             return result;
         }
         if (cudaEventRecord(done, stream) != cudaSuccess) {
@@ -268,26 +290,29 @@ BackendResult TensorRtBackend::execute(const std::vector<Tensor>& inputs) {
 
         // Copy outputs back to host and build result tensors.
         result.outputs.clear();
-        for (int i = 0; i < nb; ++i) {
-            const char* name = impl_->engine->getBindingName(i);
-            if (impl_->engine->bindingIsInput(i)) continue;
+        for (int32_t i = 0; i < nio; ++i) {
+            const char* name = impl_->engine->getIOTensorName(i);
+            if (impl_->engine->getTensorIOMode(name) == nvinfer1::TensorIOMode::kINPUT) {
+                continue;
+            }
 
             TensorSpec spec;
             spec.name = name;
-            spec.data_type = fromTrtType(impl_->engine->getBindingDataType(i));
-            Dims d = impl_->engine->getBindingDimensions(i);
+            spec.data_type = fromTrtType(impl_->engine->getTensorDataType(name));
+            Dims d = impl_->engine->getTensorShape(name);
             spec.dims.assign(d.d, d.d + d.nbDims);
 
             size_t nbytes = tensorByteSize(spec.dims, spec.data_type);
             if (nbytes == 0) nbytes = 1u * 1024u * 1024u;
 
-            // Copy from the output device binding back to host.
+            // Copy from the output device buffer back to host.
             Tensor out;
             out.name = spec.name;
             out.type = spec.data_type;
             out.shape = spec.dims;
             out.data.resize(nbytes);
-            cudaMemcpyAsync(out.data.data(), bindings[static_cast<size_t>(i)], nbytes,
+            void const* dev = impl_->context->getTensorAddress(name);
+            cudaMemcpyAsync(out.data.data(), dev, nbytes,
                             cudaMemcpyDeviceToHost, stream);
             result.outputs.push_back(std::move(out));
         }

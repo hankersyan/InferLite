@@ -1,5 +1,6 @@
 # Build output
 build/
+build-gpu/
 cmake-build-*/
 *.o
 *.obj

@@ -4,11 +4,15 @@
 #include <algorithm>
 #include <string>
 
+#ifdef INFERLITE_ENABLE_GPU
+// CUDA headers MUST be included at file scope (outside any namespace) to avoid
+// nesting the MSVC STL's `std` namespace inside `inferlite`.
+#include "cuda_runtime.h"
+#endif
+
 namespace inferlite {
 
 #ifdef INFERLITE_ENABLE_GPU
-
-#include "cuda_runtime.h"
 
 namespace {
 

@@ -93,15 +93,22 @@ if(INFERLITE_ENABLE_GPU)
         target_link_libraries(inferlite PRIVATE
             "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.6/lib/x64/cudart.lib")
     endif()
-    # TensorRT libraries (nvinfer, nvinfer_plugin).
+    # TensorRT libraries. TensorRT 10+ uses versioned import libraries
+    # (nvinfer_10.lib, nvinfer_plugin_10.lib); older releases use nvinfer.lib.
     set(TRT_LIB_DIR ${TRT_ROOT}/lib)
-    find_library(TRT_NVINFER nvinfer PATHS ${TRT_LIB_DIR} NO_DEFAULT_PATH)
-    find_library(TRT_NVINFER_PLUGIN nvinfer_plugin PATHS ${TRT_LIB_DIR} NO_DEFAULT_PATH)
+    set(TRT_NAMES nvinfer_10 nvinfer)
+    set(TRT_PLUGIN_NAMES nvinfer_plugin_10 nvinfer_plugin)
+    find_library(TRT_NVINFER NAMES ${TRT_NAMES} PATHS ${TRT_LIB_DIR} NO_DEFAULT_PATH)
+    find_library(TRT_NVINFER_PLUGIN NAMES ${TRT_PLUGIN_NAMES} PATHS ${TRT_LIB_DIR} NO_DEFAULT_PATH)
     if(NOT TRT_NVINFER)
-        find_library(TRT_NVINFER nvinfer PATHS ${TRT_ROOT}/lib ${TRT_ROOT}/targets/x86_64-linux-gnu/lib)
+        find_library(TRT_NVINFER NAMES ${TRT_NAMES}
+            PATHS ${TRT_ROOT}/lib ${TRT_ROOT}/targets/x86_64-linux-gnu/lib)
     endif()
     if(TRT_NVINFER)
         target_link_libraries(inferlite PRIVATE ${TRT_NVINFER})
+        if(TRT_NVINFER_PLUGIN)
+            target_link_libraries(inferlite PRIVATE ${TRT_NVINFER_PLUGIN})
+        endif()
     else()
         # fallback: rely on the import library next to the headers
         file(GLOB TRT_LIBS ${TRT_LIB_DIR}/*.lib)
