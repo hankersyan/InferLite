@@ -1,0 +1,24 @@
+{
+  "version": "1",
+  "models": [
+    {
+      "model_id": "ensemble_pipeline",
+      "version": ""
+    },
+    {
+      "model_id": "postprocess_plugin",
+      "version": "",
+      "plugin_sha256": "e14aa9edb79005a5912d951cbce055b53ecefb5a057e1393f693f52241147436"
+    },
+    {
+      "model_id": "preprocess_plugin",
+      "version": "",
+      "plugin_sha256": "e14aa9edb79005a5912d951cbce055b53ecefb5a057e1393f693f52241147436"
+    },
+    {
+      "model_id": "sample_model",
+      "version": "1",
+      "sha256": "95b1412d665a783364f116832e6d35e82e97556f73f5cfd19778aec285aa3f92"
+    }
+  ]
+}
