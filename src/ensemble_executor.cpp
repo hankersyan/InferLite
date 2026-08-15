@@ -160,10 +160,10 @@ BackendResult EnsembleExecutor::execute(const std::vector<Tensor>& inputs) {
     // so this is a defensive guarantee that ensemble outputs are always readable
     // host data for the HTTP layer and output validation.
     for (auto& t : workspace) {
-        if (t.device == DeviceKind::kGpu) {
+        if (t.device == TensorDevice::kGpu) {
             // In this host-boundary design the backend returned host data; clear
             // the device marker so consumers treat it as host memory.
-            t.device = DeviceKind::kCpu;
+            t.device = TensorDevice::kCpu;
             t.device_ptr = nullptr;
             t.device_bytes = 0;
         }

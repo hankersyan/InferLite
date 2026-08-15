@@ -97,10 +97,10 @@ inline size_t tensorByteSize(const std::vector<int64_t>& shape, DataType type) {
 // memory). GPU tensors hold a pointer to CUDA device memory in `device_ptr`
 // (Phase 3 TensorRT backend); `data` is empty for device tensors unless a
 // host copy has been materialized.
-enum class DeviceKind : int { kCpu = 0, kGpu };
+enum class TensorDevice : int { kCpu = 0, kGpu };
 
-inline const char* deviceKindToString(DeviceKind d) {
-    return d == DeviceKind::kGpu ? "GPU" : "CPU";
+inline const char* tensorDeviceToString(TensorDevice d) {
+    return d == TensorDevice::kGpu ? "GPU" : "CPU";
 }
 
 struct Tensor {
@@ -112,12 +112,12 @@ struct Tensor {
     std::vector<uint8_t> data;
     // Device placement. kCpu: `data` is authoritative. kGpu: `device_ptr` is
     // the CUDA device pointer and `device_bytes` is the byte length.
-    DeviceKind device = DeviceKind::kCpu;
+    TensorDevice device = TensorDevice::kCpu;
     void* device_ptr = nullptr;   // CUDA device memory (GPU tensors only)
     size_t device_bytes = 0;      // byte length of the device buffer
     // Byte length of the logical tensor payload (== data.size() for CPU).
     size_t byteLength() const {
-        return device == DeviceKind::kGpu ? device_bytes : data.size();
+        return device == TensorDevice::kGpu ? device_bytes : data.size();
     }
 };
 

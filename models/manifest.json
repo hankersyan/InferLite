@@ -6,6 +6,21 @@
       "version": ""
     },
     {
+      "model_id": "intel_auto_model",
+      "version": "1",
+      "sha256": "aab7c715d3f51705105c2c11fdb17bf8bfa7bc1ee2e16c0100d46c85bc131ec0"
+    },
+    {
+      "model_id": "intel_cpu_model",
+      "version": "1",
+      "sha256": "d3a2eff5ce085734d7db13bfd380a16890123ac925bccd0492140c66dbe2f17a"
+    },
+    {
+      "model_id": "intel_npu_model",
+      "version": "1",
+      "sha256": "01079cde4373d6be39a2e7175f95ffe0b81cf2f713a06d758aeea639f9672b21"
+    },
+    {
       "model_id": "postprocess_plugin",
       "version": "",
       "plugin_sha256": "e14aa9edb79005a5912d951cbce055b53ecefb5a057e1393f693f52241147436"
@@ -18,7 +33,7 @@
     {
       "model_id": "sample_model",
       "version": "1",
-      "sha256": "95b1412d665a783364f116832e6d35e82e97556f73f5cfd19778aec285aa3f92"
+      "sha256": "d40e0eb67318d544af3771f07f7b05fbe44f8af71c6d1b1f9eeee48425ad9c9f"
     }
   ]
 }
