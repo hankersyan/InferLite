@@ -6,19 +6,16 @@ a production serving framework — model repository, backend abstraction, bounde
 scheduling, and reusable memory — while dropping all cloud-scale, multi-tenant,
 and dynamic operations that add unnecessary complexity on the factory floor.
 
-This repository implements **Phase 1** (see `docs/PRD-phase-01.md`),
-**Phase 2** (see `docs/PRD-phase-02.md`), **Phase 3** (see
-`docs/PRD-phase-03.md`, opt-in TensorRT GPU backend), and **Phase 4** (see
-`docs/PRD-phase-04.md`, Intel CPU / NPU / GPU / AUTO multi-device execution);
-`docs/PRD-all.md` describes the full product direction. See
+It ships with two backends — a CPU/runtime backend built on OpenVINO and an
+opt-in **TensorRT GPU backend** — and runs as a validated, deterministic
+component of a regulated medical device. See
 [`docs/COMPLIANCE.md`](docs/COMPLIANCE.md) for the FDA / medical-device
 compliance posture.
 
-Phase 3 adds an opt-in **TensorRT GPU backend** on top of the validated CPU
-runtime. GPU support is compiled only when a TensorRT SDK is available at CMake
+The GPU backend is compiled only when a TensorRT SDK is available at CMake
 configure time (`-DTENSORRT_ROOT=...`); without it the server builds and runs
-CPU-only with no regression. Phase 4 adds Intel CPU / NPU / Intel GPU / AUTO
-execution via the OpenVINO backend, selected through `instance_group.kind`
+CPU-only with no regression. Intel CPU / NPU / Intel GPU / AUTO execution is
+provided by the OpenVINO backend and selected through `instance_group.kind`
 (`KIND_CPU` / `KIND_NPU` / `KIND_GPU_INTEL` / `KIND_AUTO`).
 
 ## Motivations
@@ -51,7 +48,7 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
 
 ## Features
 
-### Completed
+### Features
 
 - **Model repository** — parses model configuration files, picks the highest
   numeric version directory for each model.
@@ -103,17 +100,13 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
   AUTO sample models, exporting precompiled blobs when the corresponding Intel
   hardware is present; reference configs live in `tools/examples/`.
 
-### Phase 3 — TensorRT GPU Acceleration (Opt-in)
-
-Adds a validated, deterministic TensorRT GPU backend under the same FDA safety
-boundary as the CPU runtime:
-
-- **TensorRT backend** — deserializes approved `model.plan` engine files; each
-  instance owns a CUDA stream; `execute()` enqueues on the stream and
-  synchronizes via a CUDA event.
+- **TensorRT GPU backend** (opt-in) — deserializes approved `model.plan` engine
+  files; each instance owns a CUDA stream; `execute()` enqueues on the stream
+  and synchronizes via a CUDA event. Runs under the same FDA safety boundary as
+  the CPU runtime.
 - **GPU memory manager** — a reusable CUDA device buffer pool plus a pinned host
   pool for efficient host↔device transfers.
-- **Instance groups** — `kind: KIND_GPU` with a `count` for TensorRT models;
+- **GPU instance groups** — `kind: KIND_GPU` with a `count` for TensorRT models;
   multiple GPU instances run concurrently on separate streams and alongside CPU
   models.
 - **Unified scheduler** — manages both CPU and GPU instances with busy/free
@@ -125,12 +118,12 @@ boundary as the CPU runtime:
   log records `device: "GPU"`, and `MAX_GPU_MEMORY_MB` /
   `MAX_INFERENCE_TIME_MS` bound GPU execution.
 
-### Deferred to later phases (not in Phase 1/2/3/4)
+### Not yet implemented
 
 OpenVINO multi-GPU, dynamic/static batching, live model updates, a profiling
 tool, and gRPC/streaming.
 
-### Todo
+### Planned
 
 - **Dynamic batching** — combining concurrent requests into a single inference.
 - **Live model updates** — reloading or hot-swapping models at runtime.
@@ -295,13 +288,13 @@ GET /v2/metrics    -> requests counts, average latency, queue depth, config hash
 ## Testing
 
 - `tools/make_sample_model.py` generates the sample OpenVINO model (`y = 2x + 1`).
-- `tools/make_device_models.py` generates the Phase 4 CPU/NPU/GPU/AUTO device
+- `tools/make_device_models.py` generates the CPU/NPU/GPU/AUTO device
   sample models (exporting precompiled blobs when the corresponding Intel
   hardware is present).
 - `tools/make_manifest.py` generates `models\manifest.json` with SHA-256 hashes.
 - `test_server_phase2.ps1` starts the server in validated mode and exercises
   integrity, validation, ensemble, plugin, audit log, and metrics.
-- `test_server_phase4.ps1` starts the server and exercises the Phase 4
+- `test_server_phase4.ps1` starts the server and exercises the
   multi-device models (CPU, NPU, AUTO), verifying device reporting, config
   `kind`, inference, and metrics.
 - `load_test.ps1 -Concurrency <n> -PerWorker <m>` runs a sustained concurrent
