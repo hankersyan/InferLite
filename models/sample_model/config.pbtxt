@@ -11,6 +11,7 @@ output {
   data_type: TYPE_FP32
   dims: [ 1, 4 ]
 }
+# Phase 4: Triton-style kind selects the execution device (Intel CPU).
 instance_group {
   count: 2
   kind: KIND_CPU

@@ -180,10 +180,10 @@ InferLite::InferLite(const ServerOptions& opts) : opts_(opts) {
         if (lm.config->backend == "openvino" || lm.config->backend == "tensorrt") {
             config_store_->registerModelFiles(entry.name, lm.version_path);
         }
-        entry.device_kind = (lm.config->backend == "tensorrt" &&
-                             lm.config->instance_group.kind == "KIND_GPU")
-                                ? "GPU"
-                                : "CPU";
+        entry.device_label = (lm.config->backend == "tensorrt" &&
+                              lm.config->instance_group.kind == "KIND_GPU")
+                                 ? "GPU"
+                                 : "CPU";
 
         if (lm.config->backend == "ensemble") {
             // Defer; resolved in pass 2.
@@ -192,6 +192,16 @@ InferLite::InferLite(const ServerOptions& opts) : opts_(opts) {
         }
 
         entry.backend = makeBackend(lm);
+        // Derive the execution device label for audit/health reporting. OpenVINO
+        // backends report their resolved device (CPU/NPU/INTEL_GPU/AUTO); the
+        // TensorRT backend reports "GPU"; everything else (plugin/ensemble) is CPU.
+        if (auto ovb = std::dynamic_pointer_cast<OpenVinoBackend>(entry.backend)) {
+            entry.device_label = ovb->deviceLabel();
+        } else if (entry.device_label == "GPU") {
+            entry.device_label = "GPU";
+        } else {
+            entry.device_label = "CPU";
+        }
         backend_by_name[entry.name] = entry.backend;
         entries.push_back(std::move(entry));
     }
@@ -220,8 +230,8 @@ InferLite::InferLite(const ServerOptions& opts) : opts_(opts) {
         e.scheduler = std::make_shared<Scheduler>(e.backend, e.config, instance_count,
                                                   opts_.max_queue_size, per_req_timeout,
                                                   limits_.max_inference_time_ms, memory_,
-                                                  e.device_kind);
-        if (e.device_kind == "GPU") {
+                                                  e.device_label);
+        if (e.device_label == "GPU") {
             gpu_usage_bytes_[e.name].store(0, std::memory_order_relaxed);
         }
         models_.push_back(std::move(e));
@@ -442,9 +452,9 @@ HttpResponse InferLite::handleHealthDetailed() {
         json::Value m = json::Value::Object();
         m.asObject()["name"] = json::Value(e.name);
         m.asObject()["backend"] = json::Value(e.config->backend);
+        m.asObject()["device"] = json::Value(e.device_label);
         m.asObject()["model_hash"] = json::Value(config_store_->modelHash(e.name));
         m.asObject()["config_hash"] = json::Value(config_store_->configHash(e.name));
-        m.asObject()["device"] = json::Value(e.device_kind);
         m.asObject()["status"] = json::Value("READY");
         models.asArray().push_back(std::move(m));
     }
@@ -541,13 +551,13 @@ HttpResponse InferLite::handleMetrics() {
 
         json::Value mm = json::Value::Object();
         mm.asObject()["model_name"] = json::Value(m.name);
-        mm.asObject()["device"] = json::Value(m.device_kind);
+        mm.asObject()["device"] = json::Value(m.device_label);
         mm.asObject()["requests_completed"] = json::Value(static_cast<int64_t>(st.requests_completed.load()));
         mm.asObject()["requests_failed"] = json::Value(static_cast<int64_t>(st.requests_failed.load()));
         mm.asObject()["requests_timed_out"] = json::Value(static_cast<int64_t>(st.requests_timed_out.load()));
         mm.asObject()["average_latency_us"] = json::Value(m.scheduler->averageLatencyUs());
         mm.asObject()["queue_depth"] = json::Value(static_cast<int64_t>(m.scheduler->queueDepth()));
-        if (m.device_kind == "GPU") {
+        if (m.device_label == "GPU") {
             auto it = gpu_usage_bytes_.find(m.name);
             mm.asObject()["gpu_memory_bytes"] = json::Value(static_cast<int64_t>(
                 it != gpu_usage_bytes_.end() ? it->second.load(std::memory_order_relaxed) : 0));
@@ -722,8 +732,9 @@ HttpResponse InferLite::handleInfer(const HttpRequest& req, const std::string& m
         ae.software_version = config_store_->softwareVersion();
         ae.config_hash = config_store_->configHash(entry->name);
         ae.duration_ms = duration_ms;
-        // Phase 3: report the actual execution device (CPU or GPU).
-        ae.device = entry->device_kind;  // "CPU" or "GPU"
+        // Report the resolved execution device (CPU / NPU / INTEL_GPU / GPU /
+        // AUTO), covering both Intel OpenVINO backends and NVIDIA TensorRT.
+        ae.device = entry->device_label;
         // input_shape is serialized by the audit helper; pass a parsed shape.
         try {
             json::Value parsed_shape = json::parse(input_shape_str);

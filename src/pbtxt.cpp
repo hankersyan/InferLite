@@ -150,6 +150,13 @@ std::string stripTypePrefix(const std::string& v) {
     return v;
 }
 
+// Upper-case a copy of a string.
+std::string toUpper(const std::string& s) {
+    std::string out = s;
+    for (char& c : out) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    return out;
+}
+
 // Read the next token and require it to equal `expected`.
 void requireToken(Lexer& lex, const std::string& expected, const std::string& what) {
     std::string tok = lex.next();
@@ -253,7 +260,22 @@ Tensor parseSelfTestTensor(Lexer& lex, const char* what) {
     return t;
 }
 
+// Resolve a DeviceKind from an instance_group's `kind` string.
+DeviceKind kindFromStringInternal(const std::string& s) {
+    std::string v = toUpper(s);
+    if (v == "CPU" || v == "KIND_CPU") return DeviceKind::kCpu;
+    if (v == "NPU" || v == "KIND_NPU") return DeviceKind::kNpu;
+    if (v == "GPUI" || v == "GPU_INTEL" || v == "KIND_GPU_INTEL") return DeviceKind::kGpuIntel;
+    if (v == "AUTO" || v == "KIND_AUTO") return DeviceKind::kAuto;
+    if (v == "CUDA" || v == "GPU" || v == "TENSORRT" || v == "KIND_GPU") return DeviceKind::kNvidiaGpu;
+    return DeviceKind::kInvalid;
+}
+
 }  // namespace
+
+DeviceKind deviceKindFromString(const std::string& s) {
+    return kindFromStringInternal(s);
+}
 
 ModelConfig parseConfigPbtxt(const std::string& text) {
     ModelConfig cfg;
@@ -569,6 +591,11 @@ ModelConfig parseConfigPbtxt(const std::string& text) {
     }
 
     if (cfg.name.empty()) throw PbtxtError("config missing required field 'name'");
+
+    // Phase 4: resolve the effective device kind from `kind`
+    // (KIND_CPU/KIND_NPU/KIND_GPU_INTEL/KIND_AUTO), Triton-style. Unknown values
+    // are left as kInvalid so validation can fail fast with a precise message.
+    cfg.instance_group.device_kind = deviceKindFromString(cfg.instance_group.kind);
     return cfg;
 }
 

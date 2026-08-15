@@ -4,8 +4,9 @@
 Computes SHA-256 hashes of each model's artifact files and each plugin library
 using the same rule as the server:
   model_hash = SHA256( concat( SHA256_hex(each artifact) ) )
-               where artifacts are model.xml + model.bin (OpenVINO) or
-               model.plan (TensorRT, Phase 3)
+               where artifacts are model.xml + model.bin (OpenVINO),
+               model.plan (TensorRT), and the precompiled blobs
+               model.npu_blob / model.gpu_blob (Intel NPU / GPU) if present.
   plugin_sha256 = SHA256_hex(plugin library file)
 
 Writes models/manifest.json. The manifest hash is reported by the server.
@@ -27,7 +28,9 @@ def sha256_file(path):
 def model_hash(version_dir):
     # Artifact files in a fixed, deterministic order (matches the server).
     parts = []
-    for name in ("model.xml", "model.bin", "model.plan"):
+    # Order must match the server's config_store.hashModelFiles().
+    for name in ("model.xml", "model.bin", "model.plan",
+                 "model.npu_blob", "model.gpu_blob"):
         p = os.path.join(version_dir, name)
         if os.path.exists(p):
             parts.append(sha256_file(p))

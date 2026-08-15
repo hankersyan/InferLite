@@ -7,14 +7,19 @@ scheduling, and reusable memory — while dropping all cloud-scale, multi-tenant
 and dynamic operations that add unnecessary complexity on the factory floor.
 
 This repository implements **Phase 1** (see `docs/PRD-phase-01.md`),
-**Phase 2** (see `docs/PRD-phase-02.md`), and **Phase 3** (see
-`docs/PRD-phase-03.md`); `docs/PRD-all.md` describes the full product direction.
+**Phase 2** (see `docs/PRD-phase-02.md`), **Phase 3** (see
+`docs/PRD-phase-03.md`, opt-in TensorRT GPU backend), and **Phase 4** (see
+`docs/PRD-phase-04.md`, Intel CPU / NPU / GPU / AUTO multi-device execution);
+`docs/PRD-all.md` describes the full product direction. See
+[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md) for the FDA / medical-device
+compliance posture.
 
 Phase 3 adds an opt-in **TensorRT GPU backend** on top of the validated CPU
 runtime. GPU support is compiled only when a TensorRT SDK is available at CMake
 configure time (`-DTENSORRT_ROOT=...`); without it the server builds and runs
-CPU-only with no regression. OpenVINO models, plugins, and ensembles remain
-CPU-only.
+CPU-only with no regression. Phase 4 adds Intel CPU / NPU / Intel GPU / AUTO
+execution via the OpenVINO backend, selected through `instance_group.kind`
+(`KIND_CPU` / `KIND_NPU` / `KIND_GPU_INTEL` / `KIND_AUTO`).
 
 ## Motivations
 - Nvidia phased out the triton inference server's windows support.
@@ -37,127 +42,30 @@ CPU-only.
 
 ## Medical Equipment Level & FDA Compliance
 
-InferLite is designed as a **software component of a regulated medical device**.
-It is architected to meet the FDA's software lifecycle and cybersecurity
-expectations, and can serve as the inference runtime layer for a medical AI
-product (e.g., a chest X-ray collimation or clinical image-analysis workflow).
+InferLite is architected as a **Class C software component of a regulated
+medical device** (IEC 62304), with model-integrity verification, deterministic
+execution, input/output validation, fault isolation, resource limits, and a
+tamper-evident audit trail. Full details — the regulatory framework, safety
+mechanisms, validated (locked) mode, required documentation package, and
+security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)**.
 
-> **Important:** InferLite is a *software-only runtime*. Achieving FDA clearance
-> (510(k) / De Novo / PMA) requires the full device context — including clinical
-> validation of the AI function, the hosting system, usability, and the
-> manufacturer's Quality System (QMS). This section documents the compliance
-> posture of the inference runtime itself, which is the prerequisite foundation.
+## Features
 
-### Regulatory Framework
-
-The runtime is built against the following frameworks and guidance:
-
-| Framework | Applicability |
-|-----------|---------------|
-| FDA 21 CFR Part 820 (QMSR / ISO 13485) | Design controls, traceability, records |
-| IEC 62304:2006 + AMD1:2015 | Software life-cycle (safety class C posture) |
-| ISO 14971:2019 | Risk management (hazard & risk controls) |
-| FDA Software Guidance (2023) | Premarket software documentation |
-| FDA Cybersecurity Guidance (2026) | Secure by design, trust boundaries |
-
-### Medical Equipment Level (Software Classification)
-
-InferLite is developed and intended for use as **Class C software** in the
-IEC 62304 sense — software whose failure could contribute to patient harm
-through a wrong inference output, a hung request, or resource exhaustion. To
-earn that classification the runtime implements the following **safety
-mechanisms** (traceable to risk controls):
-
-- **Deterministic execution** — static model set, no runtime model loading, no
-  dynamic batching; identical input + configuration yields identical output.
-- **Model integrity** — approved-model manifest with SHA-256 verification; a
-  tampered model file aborts startup (fail-fast), preventing a wrong-model
-  scenario.
-- **Input/output validation** — strict tensor shape/type/size checks and output
-  NaN/Inf/range detection prevent malformed or unsafe data from propagating.
-- **Fault isolation** — every backend/plugin call is exception-contained and
-  returns a structured `ErrorCode`; no silent failures, no corrupted outputs.
-- **Resource limits** — input/output size caps and per-request inference time
-  limits bound worst-case resource consumption (ISO 14971 risk control).
-- **Safe failure** — self-test failure or instance unavailability makes the
-  server report `NOT_READY` (503) rather than serving degraded results.
-
-### FDA Compliance Features (Implemented)
-
-Each Phase 2 feature maps to a regulatory requirement:
-
-| Compliance Objective | Implementation | Reference |
-|----------------------|----------------|-----------|
-| Model integrity & traceability | `manifest.json` SHA-256 hashes, `metadata.json`, config hashing | IEC 62304 §5.2, 5.8 |
-| Deterministic execution | Hard resource limits, per-request timeouts, validated-config mode | ISO 14971; IEC 62304 §5.3.4 |
-| Input/output validation | Shape/dtype/size checks; output NaN/Inf/range checks | ISO 14971; IEC 62304 §5.3.4 |
-| Fault isolation & safe failure | Exception containment, structured error codes, no silent failures | IEC 62304 §5.3.4 |
-| Audit trail | Tamper-evident, hash-chained inference audit log | 21 CFR 820.30 |
-| Health & self-test | Startup golden-input self-test; detailed health endpoint | IEC 62304 §5.6 |
-| Secure communication | Validated mode + TLS 1.2+ termination (reverse proxy) | FDA Cybersecurity (2026) |
-| Config & version management | Hashed config/manifest, locked runtime, version reporting | IEC 62304 §5.8 |
-| Software identification | Server + OpenVINO + model version reporting | FDA Software Guidance §4 |
-| CPU ensembles & plugins | DAG executor + C++ plugin backend with full isolation | IEC 62304 §5.3 |
-
-### Validated (Locked) Mode
-
-Run with `--validated-mode` to enforce the FDA baseline:
-
-- **Manifest required** — the server refuses to start unless `manifest.json` is
-  present and every model/plugin hash matches.
-- **Self-test gated readiness** — `/v2/health/ready` returns `200` only after
-  all models pass their golden-input self-tests.
-- **Audit trail** — every inference is recorded in a tamper-evident, hash-chained
-  log (enable with `--audit-log=<path>`).
-- **No admin APIs** — only inference and health endpoints are exposed.
-- **TLS** — validated deployments must front the server with a TLS 1.2+ reverse
-  proxy (see the TLS note below).
-
-### Required Documentation Package
-
-To use InferLite in a regulatory submission, the following artifacts (defined in
-`docs/PRD-phase-02.md` §7) must be produced and reviewed:
-
-- Software Development Plan (SDP)
-- Software Requirements Specification (SRS)
-- Architecture & Detailed Design
-- Risk Management File (ISO 14971)
-- Requirements Traceability Matrix (Requirement → Design → Risk → Test)
-- Verification & Validation Plan
-- OTS Software Validation Report (OpenVINO, HTTP lib, OS)
-- Cybersecurity Documentation (threat model, TLS, manifest verification)
-
-### Security & Privacy Notes
-
-- **No patient data is stored.** The audit log records tensor *shapes*, hashes,
-  and timing — never the tensor payloads.
-- **Minimal attack surface.** Only inference and health endpoints are exposed;
-  there is no admin or management API.
-- **Minimal privileges.** Deploy the server under a restricted OS account and
-  place it behind a network boundary.
-
-## What Is Implemented
-
-### Phase 1 — Foundation
+### Completed
 
 - **Model repository** — parses model configuration files, picks the highest
   numeric version directory for each model.
 - **Scheduler** — bounded FIFO request queue with configurable depth and request
   timeout; at most `instance_group.count` requests run concurrently per model.
-- **Memory management** — a pool of reusable host buffers recycled after each
-  response; no per-request allocations, no device memory.
-- **Backend** — a CPU backend wrapping the framework's compiled-model object.
+- **Memory management** — pool of reusable host buffers, pinned host buffers, and
+  OpenCL device-buffer bookkeeping for device data staging.
+- **CPU backend** — wraps the framework's compiled-model object.
 - **Interface** — inference, readiness health, model config, and JSON metrics.
 - **Fail-fast startup** — unsupported configurations abort the server.
-
-### Phase 2 — FDA-Compliant CPU Runtime
-
-Adds P0 FDA-critical controls on the CPU-only foundation (all GPU features
-deferred to Phase 3):
-
-- **Model integrity & traceability** — `manifest.json` with SHA-256 hashes;
-  verified at startup; mismatches cause fail-fast refusal to start. `metadata.json`
-  carries `model_id`, `version`, `intended_use`, `approval_status`.
+- **Model integrity & traceability** — `manifest.json` with SHA-256 hashes
+  (including precompiled NPU/GPU blobs); verified at startup; mismatches cause
+  fail-fast refusal to start. `metadata.json` carries `model_id`, `version`,
+  `intended_use`, `approval_status`.
 - **Deterministic resource limits** — input/output size caps (50 MB default),
   per-request inference time limit (5000 ms), bounded queue.
 - **Input/output validation** — strict tensor shape/type/size checks; output
@@ -177,8 +85,23 @@ deferred to Phase 3):
 - **C++ plugin backend** — shared libraries implementing the InferLite plugin
   ABI, loaded at startup, hash-verified against the manifest, and executed on
   the CPU thread pool.
-- **Metrics** — expanded with queue depth, per-model latency, and a configuration
-  hash.
+- **Metrics** — queue depth, per-model latency, and a configuration hash.
+- **Intel CPU execution** — compiles the IR (`model.xml`/`model.bin`) on the
+  OpenVINO CPU plugin; thread/stream tuning applied only where the plugin
+  accepts it.
+- **Intel NPU execution** — loads a precompiled `model.npu_blob` via
+  `ov::Core::import_model`.
+- **Intel GPU execution** — loads a precompiled `model.gpu_blob` via
+  `ov::Core::import_model`.
+- **Intel AUTO execution** — lets OpenVINO select the best available Intel device
+  (NPU > GPU > CPU); imports an existing blob for that device or compiles the IR.
+- **Triton-compatible device selection** — `instance_group.kind` chooses the
+  execution device: `KIND_CPU`, `KIND_NPU`, `KIND_GPU_INTEL`, or `KIND_AUTO`.
+- **Device reporting** — health/detailed, metrics, and audit logs report the
+  resolved execution device per model (`CPU`, `NPU`, `INTEL_GPU`, `AUTO`).
+- **Device model tooling** — `tools/make_device_models.py` generates CPU/NPU/GPU/
+  AUTO sample models, exporting precompiled blobs when the corresponding Intel
+  hardware is present; reference configs live in `tools/examples/`.
 
 ### Phase 3 — TensorRT GPU Acceleration (Opt-in)
 
@@ -202,10 +125,19 @@ boundary as the CPU runtime:
   log records `device: "GPU"`, and `MAX_GPU_MEMORY_MB` /
   `MAX_INFERENCE_TIME_MS` bound GPU execution.
 
-### Deferred to later phases (not in Phase 1/2/3)
+### Deferred to later phases (not in Phase 1/2/3/4)
 
-OpenVINO GPU plugin, dynamic/static batching, live model updates, a profiling
-tool, multi-GPU, and gRPC/streaming.
+OpenVINO multi-GPU, dynamic/static batching, live model updates, a profiling
+tool, and gRPC/streaming.
+
+### Todo
+
+- **Dynamic batching** — combining concurrent requests into a single inference.
+- **Live model updates** — reloading or hot-swapping models at runtime.
+- **Profiling tool** — latency and throughput profiling across devices.
+- **Batch API** — Triton-compatible `batching` and batch inference endpoints.
+- **gRPC interface** — Triton-compatible gRPC inference, health, and model
+  endpoints (currently HTTP only).
 
 ## Layout
 
@@ -226,12 +158,12 @@ src/
   pbtxt.*                  # model configuration parser
   model_repository.*       # repository scan + validation
   backend.hpp              # abstract backend interface (BackendResult)
-  openvino_backend.*       # OpenVINO CPU backend
+  openvino_backend.*       # OpenVINO backend (CPU / NPU / Intel GPU / AUTO)
   plugin_backend.*         # C++ plugin backend (shared-library ABI)
   plugin_api.hpp           # plugin ABI (inferlite_plugin_*)
   ensemble_executor.*      # CPU ensemble DAG executor (zero-copy host memory)
   scheduler.*              # bounded FIFO scheduler (with inference time limit)
-  memory_manager.*         # host memory pool
+  memory_manager.*         # host + pinned + device-buffer memory pools
   audit_log.*              # tamper-evident hash-chained audit log
   config_store.*           # manifest/metadata/self-test/hash management
   validation.*             # input/output validation + structured error codes
@@ -240,7 +172,9 @@ src/
   diagnostics.*            # engineer-facing diagnostic log
 tools/
   make_sample_model.py     # generates models/sample_model (IR + config + metadata)
+  make_device_models.py    # generates CPU/NPU/GPU/AUTO device sample models
   make_manifest.py         # generates models/manifest.json with SHA-256 hashes
+  examples/                # reference configs (kind: KIND_NPU / KIND_GPU_INTEL / KIND_AUTO)
   sample_plugin/           # example CPU plugin source (sample_plugin.dll)
 ```
 
@@ -361,9 +295,15 @@ GET /v2/metrics    -> requests counts, average latency, queue depth, config hash
 ## Testing
 
 - `tools/make_sample_model.py` generates the sample OpenVINO model (`y = 2x + 1`).
+- `tools/make_device_models.py` generates the Phase 4 CPU/NPU/GPU/AUTO device
+  sample models (exporting precompiled blobs when the corresponding Intel
+  hardware is present).
 - `tools/make_manifest.py` generates `models\manifest.json` with SHA-256 hashes.
 - `test_server_phase2.ps1` starts the server in validated mode and exercises
   integrity, validation, ensemble, plugin, audit log, and metrics.
+- `test_server_phase4.ps1` starts the server and exercises the Phase 4
+  multi-device models (CPU, NPU, AUTO), verifying device reporting, config
+  `kind`, inference, and metrics.
 - `load_test.ps1 -Concurrency <n> -PerWorker <m>` runs a sustained concurrent
   load test.
 

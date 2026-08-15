@@ -2,6 +2,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <fstream>
+#include <sstream>
 #include <stdexcept>
 #include <utility>
 
@@ -39,31 +41,107 @@ OpenVinoBackend::~OpenVinoBackend() {
     unload();
 }
 
+namespace {
+// Build a path helper: join `dir` with `file`.
+std::string joinPath(const std::string& dir, const std::string& file) {
+    std::string out = dir;
+    if (!out.empty() && out.back() != '/' && out.back() != '\\') out += "/";
+    out += file;
+    return out;
+}
+}  // namespace
+
 void OpenVinoBackend::load(const ModelConfig& config, const std::string& model_path) {
     if (core_ == nullptr) core_ = std::make_shared<ov::Core>();
 
     config_ = std::make_shared<ModelConfig>(config);
-
-    // Strictly CPU plugin. We pass an explicit device "CPU" so any accidental
-    // GPU fallback is impossible.
-    ov::AnyMap props;
-    props["INFERENCE_NUM_THREADS"] = 0;  // let OpenVINO pick based on CPU
-    props["NUM_STREAMS"] = 1;            // one instance => single stream
-
-    // model_path is a directory containing model.xml / model.bin. Build the
-    // explicit IR file path for compile_model.
-    std::string ir_file = model_path;
-    if (!ir_file.empty() && ir_file.back() != '/' && ir_file.back() != '\\') {
-        ir_file += "/";
+    device_kind_ = config.instance_group.device_kind;
+    if (device_kind_ == DeviceKind::kInvalid || device_kind_ == DeviceKind::kNvidiaGpu) {
+        // NVIDIA GPU (TensorRT) is not an OpenVINO device; default to CPU for a
+        // defensive fallback (validation rejects this earlier in practice).
+        device_kind_ = DeviceKind::kCpu;
     }
-    ir_file += "model.xml";
+    switch (device_kind_) {
+        case DeviceKind::kNpu: device_label_ = "NPU"; break;
+        case DeviceKind::kGpuIntel: device_label_ = "INTEL_GPU"; break;
+        case DeviceKind::kAuto: device_label_ = "AUTO"; break;
+        default: device_label_ = "CPU"; break;
+    }
+
+    const std::string ov_device = ovDeviceName(device_kind_);
+
+    ov::AnyMap props;
+    // Apply plugin-specific tuning only where the plugin accepts it. CPU accepts
+    // INFERENCE_NUM_THREADS and NUM_STREAMS. The GPU/NPU plugins reject the
+    // CPU-only INFERENCE_NUM_THREADS and interpret NUM_STREAMS with a streams
+    // enum; to keep deterministic one-instance behavior we rely on their
+    // defaults rather than passing a raw integer they may reject.
+    if (device_kind_ == DeviceKind::kCpu) {
+        props["INFERENCE_NUM_THREADS"] = 0;  // let OpenVINO pick based on CPU
+        props["NUM_STREAMS"] = 1;            // one instance => single stream
+    }
 
     try {
-        compiled_ = std::make_shared<ov::CompiledModel>(
-            core_->compile_model(ir_file, "CPU", props));
+        // Read a blob file fully into memory and import from an istringstream.
+        // This matches how the OpenVINO Python API consumes an in-memory stream
+        // and avoids the GPU/NPU plugins misreading a file-backed stream.
+        auto readBlob = [](const std::string& path) -> std::string {
+            std::ifstream in(path, std::ios::binary);
+            if (!in.good()) {
+                throw std::runtime_error(std::string("precompiled blob missing: ") + path);
+            }
+            std::ostringstream ss;
+            ss << in.rdbuf();
+            return ss.str();
+        };
+
+        if (device_kind_ == DeviceKind::kNpu || device_kind_ == DeviceKind::kGpuIntel) {
+            // Precompiled blobs are mandatory and verified by the manifest in
+            // validated mode. Load via import_model from the in-memory blob.
+            const std::string blob_file =
+                joinPath(model_path, device_kind_ == DeviceKind::kNpu ? "model.npu_blob"
+                                                                      : "model.gpu_blob");
+            std::istringstream blob_stream(readBlob(blob_file), std::ios::binary);
+            compiled_ = std::make_shared<ov::CompiledModel>(
+                core_->import_model(blob_stream, ov_device, props));
+        } else if (device_kind_ == DeviceKind::kAuto) {
+            // AUTO: prefer importing an existing blob for the best available
+            // device; otherwise fall back to compiling from IR on the device
+            // OpenVINO selects. In validated mode the manifest mandates the blob.
+            bool imported = false;
+            for (const char* blob : {"model.npu_blob", "model.gpu_blob", "model.blob"}) {
+                const std::string bf = joinPath(model_path, blob);
+                if (std::ifstream(bf, std::ios::binary).good()) {
+                    std::istringstream blob_stream(readBlob(bf), std::ios::binary);
+                    compiled_ = std::make_shared<ov::CompiledModel>(
+                        core_->import_model(blob_stream, ov_device, props));
+                    imported = true;
+                    break;
+                }
+            }
+            if (!imported) {
+                const std::string ir_file = joinPath(model_path, "model.xml");
+                compiled_ = std::make_shared<ov::CompiledModel>(
+                    core_->compile_model(ir_file, ov_device, props));
+            }
+        } else {
+            // CPU: compile from IR on the explicit CPU plugin (no fallback).
+            const std::string ir_file = joinPath(model_path, "model.xml");
+            compiled_ = std::make_shared<ov::CompiledModel>(
+                core_->compile_model(ir_file, ov_device, props));
+        }
     } catch (const std::exception& e) {
-        throw std::runtime_error(std::string("OpenVINO failed to compile model '") +
-                                 config.name + "': " + e.what());
+        throw std::runtime_error(std::string("OpenVINO failed to load model '") +
+                                 config.name + "' on device '" + ov_device + "': " + e.what());
+    }
+}
+
+std::string OpenVinoBackend::ovDeviceName(DeviceKind k) {
+    switch (k) {
+        case DeviceKind::kNpu: return "NPU";
+        case DeviceKind::kGpuIntel: return "GPU";
+        case DeviceKind::kAuto: return "AUTO";
+        default: return "CPU";
     }
 }
 
@@ -130,7 +208,8 @@ BackendResult OpenVinoBackend::execute(const std::vector<Tensor>& inputs) {
     } catch (const std::exception& e) {
         result.ok = false;
         result.error_code = ErrorCode::kInternalError;
-        result.error = std::string("OpenVINO inference failed: ") + e.what();
+        result.error = std::string("OpenVINO inference failed on device '") + device_label_ +
+                      "': " + e.what();
         return result;
     }
 
