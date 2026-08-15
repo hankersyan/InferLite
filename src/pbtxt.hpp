@@ -18,10 +18,42 @@ struct TensorSpec {
     std::vector<int64_t> dims;  // negative value == -1 means a dynamic dim
 };
 
+// Execution device kinds managed by the scheduler (Phase 4: multi-device).
+// NVIDIA GPU (TensorRT) is unchanged from Phase 3; Intel CPU/NPU/GPU and
+// Intel AUTO are OpenVINO device targets.
+enum class DeviceKind : int {
+    kCpu,        // OpenVINO CPU plugin
+    kNvidiaGpu,  // NVIDIA GPU (TensorRT / CUDA)
+    kNpu,        // OpenVINO NPU plugin
+    kGpuIntel,   // OpenVINO GPU plugin (Intel Arc / iGPU)
+    kAuto,       // OpenVINO AUTO device selection (CPU/NPU/GPU)
+    kInvalid,
+};
+
+// Map a `kind` string from instance_group (KIND_CPU / KIND_NPU /
+// KIND_GPU_INTEL / KIND_AUTO / KIND_GPU) to a DeviceKind. Returns kInvalid for
+// unknown values. NVIDIA GPU (KIND_GPU) is mapped to kNvidiaGpu for
+// completeness though it is not used by the OpenVINO backend.
+DeviceKind deviceKindFromString(const std::string& s);
+inline const char* deviceKindToString(DeviceKind k) {
+    switch (k) {
+        case DeviceKind::kCpu: return "cpu";
+        case DeviceKind::kNvidiaGpu: return "cuda";
+        case DeviceKind::kNpu: return "npu";
+        case DeviceKind::kGpuIntel: return "gpui";
+        case DeviceKind::kAuto: return "auto";
+        default: return "invalid";
+    }
+}
+
 struct InstanceGroup {
     int count = 1;
-    // Kind must be KIND_CPU. KIND_GPU is rejected during validation.
+    // Triton-style kind (KIND_CPU / KIND_GPU / KIND_NPU / KIND_GPU_INTEL /
+    // KIND_AUTO). For OpenVINO models this selects the execution device.
     std::string kind = "KIND_CPU";
+    // Resolved device kind used by the scheduler/backend. Derived from `kind`.
+    // Defaults to CPU for OpenVINO.
+    DeviceKind device_kind = DeviceKind::kCpu;
 };
 
 // One step of an ensemble (backend: "ensemble").

@@ -179,6 +179,13 @@ InferLite::InferLite(const ServerOptions& opts) : opts_(opts) {
         }
 
         entry.backend = makeBackend(lm);
+        // Phase 4: derive the execution device label for audit/health reporting.
+        if (auto ovb = std::dynamic_pointer_cast<OpenVinoBackend>(entry.backend)) {
+            entry.device_label = ovb->deviceLabel();
+        } else {
+            // Plugin / other backends run on CPU.
+            entry.device_label = "CPU";
+        }
         backend_by_name[entry.name] = entry.backend;
         entries.push_back(std::move(entry));
     }
@@ -387,6 +394,7 @@ HttpResponse InferLite::handleHealthDetailed() {
         json::Value m = json::Value::Object();
         m.asObject()["name"] = json::Value(e.name);
         m.asObject()["backend"] = json::Value(e.config->backend);
+        m.asObject()["device"] = json::Value(e.device_label);
         m.asObject()["model_hash"] = json::Value(config_store_->modelHash(e.name));
         m.asObject()["config_hash"] = json::Value(config_store_->configHash(e.name));
         m.asObject()["status"] = json::Value("READY");
@@ -485,6 +493,7 @@ HttpResponse InferLite::handleMetrics() {
 
         json::Value mm = json::Value::Object();
         mm.asObject()["model_name"] = json::Value(m.name);
+        mm.asObject()["device"] = json::Value(m.device_label);
         mm.asObject()["requests_completed"] = json::Value(static_cast<int64_t>(st.requests_completed.load()));
         mm.asObject()["requests_failed"] = json::Value(static_cast<int64_t>(st.requests_failed.load()));
         mm.asObject()["requests_timed_out"] = json::Value(static_cast<int64_t>(st.requests_timed_out.load()));
@@ -652,7 +661,8 @@ HttpResponse InferLite::handleInfer(const HttpRequest& req, const std::string& m
         ae.software_version = config_store_->softwareVersion();
         ae.config_hash = config_store_->configHash(entry->name);
         ae.duration_ms = duration_ms;
-        ae.device = "CPU";
+        // Phase 4: report the resolved execution device (CPU/NPU/INTEL_GPU/AUTO).
+        ae.device = entry->device_label;
         // input_shape is serialized by the audit helper; pass a parsed shape.
         try {
             json::Value parsed_shape = json::parse(input_shape_str);

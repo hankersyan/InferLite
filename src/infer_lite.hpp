@@ -91,6 +91,9 @@ private:
         BackendPtr backend;
         std::shared_ptr<Scheduler> scheduler;
         std::string version_path;
+        // Resolved device label for the model's backend, e.g. "CPU", "NPU",
+        // "INTEL_GPU", or "AUTO". Used for audit logging and health reporting.
+        std::string device_label = "CPU";
     };
     std::vector<ModelEntry> models_;
 

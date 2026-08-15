@@ -1,9 +1,12 @@
 #!/usr/bin/env python
 """Generate manifest.json for the InferLite model repository.
 
-Computes SHA-256 hashes of each OpenVINO model's IR files and each plugin
-library using the same rule as the server:
-  model_hash = SHA256( concat( SHA256_hex(model.xml), SHA256_hex(model.bin) ) )
+Computes SHA-256 hashes of each OpenVINO model's artifacts and each plugin
+library using the same rule as the server (Phase 4 adds the precompiled blobs):
+  model_hash = SHA256( concat( SHA256_hex(model.xml),
+                               SHA256_hex(model.bin),
+                               SHA256_hex(model.npu_blob),   # if present
+                               SHA256_hex(model.gpu_blob) ) )# if present
   plugin_sha256 = SHA256_hex(plugin library file)
 
 Writes models/manifest.json. The manifest hash is reported by the server.
@@ -24,7 +27,8 @@ def sha256_file(path):
 
 def model_hash(version_dir):
     parts = []
-    for name in ("model.xml", "model.bin"):
+    # Order must match the server's config_store.hashModelFiles().
+    for name in ("model.xml", "model.bin", "model.npu_blob", "model.gpu_blob"):
         p = os.path.join(version_dir, name)
         if os.path.exists(p):
             parts.append(sha256_file(p))

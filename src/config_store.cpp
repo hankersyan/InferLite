@@ -26,11 +26,13 @@ std::string readTextFile(const fs::path& p) {
     return ss.str();
 }
 
-// Compute the SHA-256 of a model's IR files (model.xml + model.bin), if present.
+// Compute the SHA-256 of a model's artifact files. Phase 4 includes the
+// precompiled blobs (.npu_blob / .gpu_blob) which carry the compiled model
+// weights for NPU / Intel GPU, alongside the IR files (model.xml / model.bin).
 std::string hashModelFiles(const std::string& version_dir) {
     fs::path dir(version_dir);
     std::vector<std::string> parts;
-    for (const char* f : {"model.xml", "model.bin"}) {
+    for (const char* f : {"model.xml", "model.bin", "model.npu_blob", "model.gpu_blob"}) {
         fs::path fp = dir / f;
         if (fs::exists(fp)) {
             parts.push_back(sha256FileHex(fp.string()));

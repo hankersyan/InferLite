@@ -67,13 +67,26 @@ void validateConfig(const ModelConfig& cfg, const fs::path& model_dir) {
                               "' has max_batch_size=" + std::to_string(cfg.max_batch_size) +
                               "; batching must be disabled (max_batch_size=0)");
     }
-    if (cfg.instance_group.kind != "KIND_CPU") {
-        throw RepositoryError("model '" + cfg.name + "' requests instance_group kind '" +
-                              cfg.instance_group.kind + "'; only KIND_CPU is supported");
-    }
     if (cfg.instance_group.count <= 0) {
         throw RepositoryError("model '" + cfg.name + "' has invalid instance_group count " +
                               std::to_string(cfg.instance_group.count));
+    }
+
+    // Phase 4: validate the resolved device kind. For OpenVINO models the
+    // accepted kinds are KIND_CPU / KIND_NPU / KIND_GPU_INTEL / KIND_AUTO.
+    // NVIDIA GPU (KIND_GPU) is handled by a separate backend and not OpenVINO.
+    const DeviceKind dk = cfg.instance_group.device_kind;
+    if (dk == DeviceKind::kInvalid) {
+        throw RepositoryError("model '" + cfg.name + "' has invalid instance_group kind '" +
+                              cfg.instance_group.kind +
+                              "'; expected KIND_CPU|KIND_NPU|KIND_GPU_INTEL|KIND_AUTO");
+    }
+    // KIND_GPU (NVIDIA) is not an OpenVINO target; it is only valid for the
+    // TensorRT backend which is outside Phase 4 scope.
+    if (dk == DeviceKind::kNvidiaGpu && cfg.backend == "openvino") {
+        throw RepositoryError("model '" + cfg.name +
+                              "' requests NVIDIA GPU (KIND_GPU) with the "
+                              "'openvino' backend; use the 'tensorrt' backend instead");
     }
 
     if (cfg.backend == "plugin") {
@@ -96,16 +109,32 @@ void validateConfig(const ModelConfig& cfg, const fs::path& model_dir) {
         return;
     }
 
-    // openvino backend: the version directory must contain model.xml and
-    // model.bin.
+    // openvino backend: the version directory must contain the model artifacts
+    // required for the configured device. CPU/AUTO need model.xml (AUTO may use
+    // a blob); NPU needs model.npu_blob; Intel GPU needs model.gpu_blob.
     fs::path version_dir;
     int64_t version = -1;
     if (!highestVersionDir(model_dir, version_dir, version)) {
         throw RepositoryError("model '" + cfg.name + "' has no numeric version directory");
     }
-    if (!fs::exists(version_dir / "model.xml")) {
-        throw RepositoryError("model '" + cfg.name + "' missing model.xml in version dir '" +
-                              version_dir.string() + "'");
+    if (dk == DeviceKind::kNpu) {
+        if (!fs::exists(version_dir / "model.npu_blob")) {
+            throw RepositoryError("NPU model '" + cfg.name +
+                                  "' missing model.npu_blob in version dir '" +
+                                  version_dir.string() + "'");
+        }
+    } else if (dk == DeviceKind::kGpuIntel) {
+        if (!fs::exists(version_dir / "model.gpu_blob")) {
+            throw RepositoryError("Intel GPU model '" + cfg.name +
+                                  "' missing model.gpu_blob in version dir '" +
+                                  version_dir.string() + "'");
+        }
+    } else {
+        // CPU / AUTO: require model.xml (compile-from-IR fallback).
+        if (!fs::exists(version_dir / "model.xml")) {
+            throw RepositoryError("model '" + cfg.name + "' missing model.xml in version dir '" +
+                                  version_dir.string() + "'");
+        }
     }
 }
 
