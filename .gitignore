@@ -2,6 +2,7 @@
 build/
 build-gpu/
 cmake-build-*/
+dists/
 *.o
 *.obj
 *.exe

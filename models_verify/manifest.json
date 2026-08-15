@@ -2,10 +2,6 @@
   "version": "1",
   "models": [
     {
-      "model_id": "ensemble_pipeline",
-      "version": ""
-    },
-    {
       "model_id": "intel_auto_model",
       "version": "1",
       "sha256": "1dc3e0544893d2ce62e7eee08483c25ea70168d250740fd8312454fe0c152058"
@@ -24,16 +20,6 @@
       "model_id": "intel_npu_model",
       "version": "1",
       "sha256": "04c3d92095580d46cc3e529eca0e17b9c6c5db0b5dfdfe428ca5df2a274f3a3c"
-    },
-    {
-      "model_id": "postprocess_plugin",
-      "version": "",
-      "plugin_sha256": "e14aa9edb79005a5912d951cbce055b53ecefb5a057e1393f693f52241147436"
-    },
-    {
-      "model_id": "preprocess_plugin",
-      "version": "",
-      "plugin_sha256": "e14aa9edb79005a5912d951cbce055b53ecefb5a057e1393f693f52241147436"
     },
     {
       "model_id": "sample_model",

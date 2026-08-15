@@ -1,0 +1,7 @@
+{
+  "model_id": "intel_cpu_model",
+  "version": "1.0.0",
+  "intended_use": "Phase 4 multi-device sample: y = 2x + 1",
+  "training_dataset_id": "N/A",
+  "approval_status": "approved"
+}

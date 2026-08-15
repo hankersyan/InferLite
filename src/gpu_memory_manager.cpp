@@ -55,16 +55,16 @@ DeviceBuffer& DeviceBuffer::operator=(DeviceBuffer&& other) noexcept {
     return *this;
 }
 
-PinnedBuffer::PinnedBuffer(void* ptr, size_t capacity, std::shared_ptr<void> mgr)
+CudaPinnedBuffer::CudaPinnedBuffer(void* ptr, size_t capacity, std::shared_ptr<void> mgr)
     : ptr_(ptr), capacity_(capacity), mgr_(std::move(mgr)) {}
 
-PinnedBuffer::~PinnedBuffer() {
+CudaPinnedBuffer::~CudaPinnedBuffer() {
     if (ptr_ && mgr_) {
         static_cast<GpuMemoryManager*>(mgr_.get())->releasePinned(ptr_, capacity_);
     }
 }
 
-PinnedBuffer::PinnedBuffer(PinnedBuffer&& other) noexcept {
+CudaPinnedBuffer::CudaPinnedBuffer(CudaPinnedBuffer&& other) noexcept {
     ptr_ = other.ptr_;
     capacity_ = other.capacity_;
     mgr_ = std::move(other.mgr_);
@@ -72,7 +72,7 @@ PinnedBuffer::PinnedBuffer(PinnedBuffer&& other) noexcept {
     other.capacity_ = 0;
 }
 
-PinnedBuffer& PinnedBuffer::operator=(PinnedBuffer&& other) noexcept {
+CudaPinnedBuffer& CudaPinnedBuffer::operator=(CudaPinnedBuffer&& other) noexcept {
     if (this != &other) {
         if (ptr_ && mgr_) {
             static_cast<GpuMemoryManager*>(mgr_.get())->releasePinned(ptr_, capacity_);
@@ -113,7 +113,7 @@ DeviceBuffer GpuMemoryManager::acquireDevice(size_t requested) {
     return DeviceBuffer(ptr, rounded, shared_from_this());
 }
 
-PinnedBuffer GpuMemoryManager::acquirePinned(size_t requested) {
+CudaPinnedBuffer GpuMemoryManager::acquirePinned(size_t requested) {
     size_t rounded = ((requested + min_granularity_ - 1) / min_granularity_) * min_granularity_;
     {
         std::lock_guard<std::mutex> lock(mu_);
@@ -122,7 +122,7 @@ PinnedBuffer GpuMemoryManager::acquirePinned(size_t requested) {
             void* ptr = it->second.back();
             it->second.pop_back();
             if (it->second.empty()) pinned_free_.erase(it);
-            return PinnedBuffer(ptr, rounded, shared_from_this());
+            return CudaPinnedBuffer(ptr, rounded, shared_from_this());
         }
     }
     void* ptr = nullptr;
@@ -134,7 +134,7 @@ PinnedBuffer GpuMemoryManager::acquirePinned(size_t requested) {
         std::lock_guard<std::mutex> lock(mu_);
         pinned_pool_bytes_ += rounded;
     }
-    return PinnedBuffer(ptr, rounded, shared_from_this());
+    return CudaPinnedBuffer(ptr, rounded, shared_from_this());
 }
 
 void GpuMemoryManager::releaseDevice(void* ptr, size_t capacity) {

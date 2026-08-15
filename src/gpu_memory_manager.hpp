@@ -44,15 +44,17 @@ private:
 };
 
 // A pinned host buffer acquired from the pool. Used for host<->device copies.
-class PinnedBuffer {
+// Named CudaPinnedBuffer to avoid colliding with the OpenCL/Intel-GPU
+// inferlite::PinnedBuffer defined in memory_manager.hpp.
+class CudaPinnedBuffer {
 public:
-    PinnedBuffer() = default;
-    PinnedBuffer(void* ptr, size_t capacity, std::shared_ptr<void> mgr);
-    ~PinnedBuffer();
-    PinnedBuffer(const PinnedBuffer&) = delete;
-    PinnedBuffer& operator=(const PinnedBuffer&) = delete;
-    PinnedBuffer(PinnedBuffer&& other) noexcept;
-    PinnedBuffer& operator=(PinnedBuffer&& other) noexcept;
+    CudaPinnedBuffer() = default;
+    CudaPinnedBuffer(void* ptr, size_t capacity, std::shared_ptr<void> mgr);
+    ~CudaPinnedBuffer();
+    CudaPinnedBuffer(const CudaPinnedBuffer&) = delete;
+    CudaPinnedBuffer& operator=(const CudaPinnedBuffer&) = delete;
+    CudaPinnedBuffer(CudaPinnedBuffer&& other) noexcept;
+    CudaPinnedBuffer& operator=(CudaPinnedBuffer&& other) noexcept;
 
     void* data() const { return ptr_; }
     size_t capacity() const { return capacity_; }
@@ -73,7 +75,7 @@ public:
     DeviceBuffer acquireDevice(size_t requested);
 
     // Acquire a pinned host buffer of at least `requested` bytes.
-    PinnedBuffer acquirePinned(size_t requested);
+    CudaPinnedBuffer acquirePinned(size_t requested);
 
     void releaseDevice(void* ptr, size_t capacity);
     void releasePinned(void* ptr, size_t capacity);
@@ -102,7 +104,7 @@ public:
     size_t capacity() const { return 0; }
 };
 
-class PinnedBuffer {
+class CudaPinnedBuffer {
 public:
     void* data() const { return nullptr; }
     size_t capacity() const { return 0; }
