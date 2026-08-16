@@ -1,0 +1,44 @@
+name: "preprocess_plugin_b"
+backend: "plugin"
+max_batch_size: 0
+plugin_library: "sample_plugin.dll"
+parameters {
+  key: "scale"
+  value { string_value: "0.25" }
+}
+input {
+  name: "raw"
+  data_type: TYPE_FP32
+  dims: [ 1, 4 ]
+}
+output {
+  name: "normalized"
+  data_type: TYPE_FP32
+  dims: [ 1, 4 ]
+}
+instance_group {
+  count: 1
+  kind: KIND_CPU
+}
+metadata {
+  model_id: "preprocess_plugin_b"
+  version: "1.0.0"
+  intended_use: "Test CPU plugin normalization (pipeline B owns scale=0.25)"
+  training_dataset_id: "N/A"
+  approval_status: "approved"
+}
+self_test {
+  input {
+    name: "raw"
+    data_type: TYPE_FP32
+    dims: [ 1, 4 ]
+    data: [ 2.0, 4.0, 6.0, 8.0 ]
+  }
+  expected_output {
+    name: "normalized"
+    data_type: TYPE_FP32
+    dims: [ 1, 4 ]
+    data: [ 0.5, 1.0, 1.5, 2.0 ]
+  }
+  epsilon: 0.0001
+}

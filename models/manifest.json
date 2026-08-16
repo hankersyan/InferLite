@@ -6,6 +6,10 @@
       "version": ""
     },
     {
+      "model_id": "ensemble_pipeline_b",
+      "version": ""
+    },
+    {
       "model_id": "intel_auto_model",
       "version": "1",
       "sha256": "1dc3e0544893d2ce62e7eee08483c25ea70168d250740fd8312454fe0c152058"
@@ -28,12 +32,22 @@
     {
       "model_id": "postprocess_plugin",
       "version": "",
-      "plugin_sha256": "e14aa9edb79005a5912d951cbce055b53ecefb5a057e1393f693f52241147436"
+      "plugin_sha256": "b9b555c0ffbb03afa4b8511c4d50f2d3fdc8e5991d7806af24ba9d14cc52a4b1"
+    },
+    {
+      "model_id": "postprocess_plugin_b",
+      "version": "",
+      "plugin_sha256": "b9b555c0ffbb03afa4b8511c4d50f2d3fdc8e5991d7806af24ba9d14cc52a4b1"
     },
     {
       "model_id": "preprocess_plugin",
       "version": "",
-      "plugin_sha256": "e14aa9edb79005a5912d951cbce055b53ecefb5a057e1393f693f52241147436"
+      "plugin_sha256": "b9b555c0ffbb03afa4b8511c4d50f2d3fdc8e5991d7806af24ba9d14cc52a4b1"
+    },
+    {
+      "model_id": "preprocess_plugin_b",
+      "version": "",
+      "plugin_sha256": "b9b555c0ffbb03afa4b8511c4d50f2d3fdc8e5991d7806af24ba9d14cc52a4b1"
     },
     {
       "model_id": "sample_model",
