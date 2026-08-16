@@ -135,6 +135,10 @@ tool, and gRPC/streaming.
 - **Batch API** — Triton-compatible `batching` and batch inference endpoints.
 - **gRPC interface** — Triton-compatible gRPC inference, health, and model
   endpoints (currently HTTP only).
+- **In-process API** — embed the engine as a shared library (Triton-style
+  `TRITONSERVER_Server` C API): expose a library target, factor inference out
+  of the HTTP layer, and add an `extern "C"` embedding interface for
+  C/C++/Python callers without network overhead.
 
 ## Layout
 
