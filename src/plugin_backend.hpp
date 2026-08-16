@@ -41,6 +41,12 @@ public:
 
 private:
     std::vector<TensorSpec> output_specs_;  // declared output specs (for sizing)
+    // Owns the per-model parameter strings passed to the plugin; the plugin
+    // reads them during create() only, but they must outlive the call.
+    std::vector<std::string> param_keys_;
+    std::vector<std::string> param_values_;
+    std::vector<const char*> param_key_ptrs_;
+    std::vector<const char*> param_value_ptrs_;
     void* handle_ = nullptr;
     void* node_ = nullptr;
 };

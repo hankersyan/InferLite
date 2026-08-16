@@ -67,6 +67,15 @@ struct EnsembleStep {
     std::vector<std::string> output_map_to;   // names in the parent scope
 };
 
+// A single key/value parameter from a Triton-style `parameters` block. The
+// value is kept in string form (Triton stores string_value / int64_value /
+// bool_value; the consumer converts as needed). Used by the plugin backend so
+// each pipeline can own its pre/post-processing behavior via config.pbtxt.
+struct PluginParameter {
+    std::string key;
+    std::string value;
+};
+
 // FDA model metadata (metadata.json or inline in config.pbtxt).
 struct ModelMetadata {
     std::string model_id;
@@ -109,6 +118,10 @@ struct ModelConfig {
     // --- Phase 2 additions ---
     // Plugin backend: shared library name (e.g. "libpreprocess_plugin.so").
     std::string plugin_library;
+    // Plugin backend: per-model key/value parameters (Triton `parameters`).
+    // Each pipeline's plugin model can carry its own scale/clamp/offset, so
+    // multiple pipelines each own their pre/post-processing behavior.
+    std::vector<PluginParameter> parameters;
     // Ensemble backend: ordered steps that form the DAG.
     std::vector<EnsembleStep> ensemble_steps;
     // FDA model metadata.

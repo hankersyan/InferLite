@@ -1,11 +1,21 @@
 // sample_plugin.cpp - Example CPU plugin implementing the InferLite plugin ABI.
 //
-// Two modes selected by the model name:
-//   - "preprocess_plugin":  scale input FP32 by 0.5 (normalization).
-//   - "postprocess_plugin": clamp input FP32 to [0, 100] and add 0.5.
+// Behavior is configured per model via the config.pbtxt `parameters` block, so
+// each pipeline owns its own pre/post-processing. Supported keys:
+//   mode:       "preprocess" | "postprocess" | "identity"
+//               (default: inferred from the model name substring)
+//   scale:      multiplier applied to every element (preprocess)
+//   offset:     value added after clamping (postprocess)
+//   clamp_min:  lower clamp bound (postprocess; disabled if absent)
+//   clamp_max:  upper clamp bound (postprocess; disabled if absent)
+//
+// Mode defaults (used when no parameters are given) preserve the Phase 2
+// behavior for the stock preprocess/postprocess plugin models:
+//   preprocess  -> scale 0.5
+//   postprocess -> clamp [0, 100], offset 0.5
 //
 // Compile as a shared library:
-//   cl /LD sample_plugin.cpp /Fe:libsample_plugin.dll
+//   cl /LD sample_plugin.cpp /Fe:sample_plugin.dll
 //
 // The plugin runs on host tensors only (CPU). It writes results in place into
 // the caller-provided output buffers, which are sized per the declared output
@@ -13,6 +23,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdint>
+#include <cstdlib>
 #include <string>
 
 #include "../../src/plugin_api.hpp"
@@ -20,10 +31,36 @@
 namespace {
 
 struct SampleNode {
-    const char* mode = "identity";
+    std::string mode = "identity";
+    double scale = 1.0;
+    double offset = 0.0;
+    bool clamp_min_set = false;
+    bool clamp_max_set = false;
+    double clamp_min = 0.0;
+    double clamp_max = 0.0;
     int32_t out_dtype = 0;
     int64_t out_elem_count = 0;
 };
+
+// Locate a parameter value by key (case-sensitive, Triton-style).
+const char* findParam(const PluginNodeInfo* info, const char* key) {
+    if (!info || !info->parameter_keys || !info->parameter_values) return nullptr;
+    for (int32_t i = 0; i < info->parameter_count; ++i) {
+        if (info->parameter_keys[i] && std::strcmp(info->parameter_keys[i], key) == 0) {
+            return info->parameter_values[i];
+        }
+    }
+    return nullptr;
+}
+
+bool parseDouble(const char* s, double& out) {
+    if (!s || !*s) return false;
+    char* end = nullptr;
+    double v = std::strtod(s, &end);
+    if (end == s) return false;
+    out = v;
+    return true;
+}
 
 // Write a float value into a tensor buffer of the given data type.
 void writeElement(uint8_t* dst, int32_t dtype, double v) {
@@ -64,11 +101,35 @@ extern "C" INFERLITE_PLUGIN_API PluginNodeHandle inferlite_plugin_create(
     const PluginNodeInfo* info, char* errbuf, size_t errbuf_size) {
     (void)errbuf_size;
     SampleNode* node = new SampleNode();
-    if (!info || info->model_name) {
-        std::string name = info && info->model_name ? info->model_name : "";
+    if (info && info->model_name) {
+        std::string name = info->model_name;
         if (name.find("preprocess") != std::string::npos) node->mode = "preprocess";
         else if (name.find("postprocess") != std::string::npos) node->mode = "postprocess";
     }
+
+    // Mode defaults (Phase 2 parity) before parameter overrides.
+    if (node->mode == "preprocess") {
+        node->scale = 0.5;
+    } else if (node->mode == "postprocess") {
+        node->clamp_min_set = true;
+        node->clamp_min = 0.0;
+        node->clamp_max_set = true;
+        node->clamp_max = 100.0;
+        node->offset = 0.5;
+    }
+
+    // Per-model parameters: each pipeline owns its pre/post behavior.
+    const char* v = nullptr;
+    if ((v = findParam(info, "mode")) && *v) node->mode = v;
+    if ((v = findParam(info, "scale")) && parseDouble(v, node->scale)) {}
+    if ((v = findParam(info, "offset")) && parseDouble(v, node->offset)) {}
+    if ((v = findParam(info, "clamp_min")) && parseDouble(v, node->clamp_min)) {
+        node->clamp_min_set = true;
+    }
+    if ((v = findParam(info, "clamp_max")) && parseDouble(v, node->clamp_max)) {
+        node->clamp_max_set = true;
+    }
+
     if (info && info->outputs && info->output_count > 0) {
         node->out_dtype = info->outputs[0].data_type;
         node->out_elem_count = 1;
@@ -80,7 +141,7 @@ extern "C" INFERLITE_PLUGIN_API PluginNodeHandle inferlite_plugin_create(
 }
 
 extern "C" INFERLITE_PLUGIN_API const char* inferlite_plugin_version() {
-    return "sample_plugin-1.0.0";
+    return "sample_plugin-1.1.0";
 }
 
 extern "C" INFERLITE_PLUGIN_API int inferlite_plugin_execute(
@@ -112,13 +173,13 @@ extern "C" INFERLITE_PLUGIN_API int inferlite_plugin_execute(
 
     for (int64_t i = 0; i < n; ++i) {
         double v = readElement(in.data + i * elem, in.data_type);
-        if (std::string(node->mode) == "preprocess") {
-            v = v * 0.5;
-        } else if (std::string(node->mode) == "postprocess") {
-            if (v < 0.0) v = 0.0;
-            if (v > 100.0) v = 100.0;
-            v = v + 0.5;
-        }
+        if (node->mode == "preprocess") {
+            v = v * node->scale;
+        } else if (node->mode == "postprocess") {
+            if (node->clamp_min_set && v < node->clamp_min) v = node->clamp_min;
+            if (node->clamp_max_set && v > node->clamp_max) v = node->clamp_max;
+            v = v + node->offset;
+        }  // "identity": pass through
         writeElement(out_data + i * elem, out.data_type, v);
     }
     return 0;

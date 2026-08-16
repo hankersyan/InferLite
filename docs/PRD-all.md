@@ -101,6 +101,7 @@ The server uses the same protobuf‑like text format as the reference server for
 - `input` / `output` tensor definitions (name, data type, dims)
 - `instance_group` – `count`, `kind` (KIND_GPU, KIND_CPU), and optionally `gpus` (only device 0)
 - `ensemble_scheduling` (for ensemble models): a `step` list with `model_name`, `input_map`, `output_map`
+- `parameters` (for plugin models): a Triton-style `parameters { key: "..." value { string_value: "..." } }` block, repeated per key. The key/value pairs are passed to the plugin's `inferlite_plugin_create`, so each pipeline owns its pre/post-processing behavior (e.g. a per-pipeline `scale`, `clamp_min`/`clamp_max`, `offset`) without code changes. See `tools/sample_plugin/sample_plugin.cpp` for the keys understood by the sample plugin.
 
 **Example: plugin backend model**
 ```
@@ -111,7 +112,13 @@ input [{ name: "raw_image", data_type: TYPE_UINT8, dims: [-1, -1, 3] }]
 output [{ name: "normalized_tensor", data_type: TYPE_FP32, dims: [3, 224, 224] }]
 instance_group [{ kind: KIND_CPU, count: 2 }]
 plugin_library: "libpreprocess_plugin.so"
+parameters {
+  key: "scale"
+  value { string_value: "0.5" }
+}
 ```
+
+Multiple pipelines can each reference their own plugin models (e.g. `preprocess_pipeline_a` / `preprocess_pipeline_b`) inside their `ensemble_scheduling`; each plugin model carries its own `parameters`, so each pipeline's preprocessing and postprocessing are owned and configured independently.
 
 #### 5.3 Inference Server Core
 

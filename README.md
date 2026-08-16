@@ -82,6 +82,10 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
 - **C++ plugin backend** — shared libraries implementing the InferLite plugin
   ABI, loaded at startup, hash-verified against the manifest, and executed on
   the CPU thread pool.
+- **Per-plugin parameters** — a Triton-style `parameters` block in
+  `config.pbtxt` passes key/value strings to each plugin node at creation, so
+  multiple pipelines can each own their own pre-/post-processing while sharing
+  the same plugin DLL.
 - **Metrics** — queue depth, per-model latency, and a configuration hash.
 - **Intel CPU execution** — compiles the IR (`model.xml`/`model.bin`) on the
   OpenVINO CPU plugin; thread/stream tuning applied only where the plugin
@@ -207,12 +211,18 @@ cmake --build build-gpu --config Release
 > card or a TensorRT release that still supports Pascal (e.g. TRT 8.x).
 
 The build also produces `build\sample_plugin.dll` (example plugin). To use the
-plugin/ensemble demo models, copy the DLL into each plugin model directory:
+plugin/ensemble demo models, copy the DLL into each plugin model directory
+(both pipelines — A and B — share the same DLL):
 
 ```
 Copy-Item build\sample_plugin.dll models\preprocess_plugin\
 Copy-Item build\sample_plugin.dll models\postprocess_plugin\
+Copy-Item build\sample_plugin.dll models\preprocess_plugin_b\
+Copy-Item build\sample_plugin.dll models\postprocess_plugin_b\
 ```
+
+Each plugin model's `config.pbtxt` may carry a `parameters` block that
+configures the node independently (see "Multiple pipeline testing" below).
 
 The build copies the required runtime libraries next to `build\inferlite.exe`.
 
@@ -300,9 +310,59 @@ GET /v2/metrics    -> requests counts, average latency, queue depth, config hash
 - `load_test.ps1 -Concurrency <n> -PerWorker <m>` runs a sustained concurrent
   load test.
 
-The demo ensemble (`ensemble_pipeline`) chains:
-preprocess (`×0.5`) → sample_model (`2x+1`) → postprocess (`+0.5`).
-For input `[1,2,3,4]` it returns `[2.5,3.5,4.5,5.5]`.
+### Multiple pipeline testing
+
+Two independent ensemble pipelines ship in `models\`; each owns its own
+pre-processing and post-processing plugin models, and both reuse the same
+`sample_plugin.dll` and the same `sample_model` (`y = 2x + 1`). Behavior
+differences come entirely from each plugin model's `parameters` block, so a
+pipeline change is a config-only change — no plugin recompile.
+
+| Pipeline | Preprocess | Postprocess | Input `[1,2,3,4]` → output |
+|----------|-----------|-------------|-----------------------------|
+| `ensemble_pipeline` | `preprocess_plugin` (×0.5, default) | `postprocess_plugin` (clamp [0,100] + 0.5, default) | `[2.5, 3.5, 4.5, 5.5]` |
+| `ensemble_pipeline_b` | `preprocess_plugin_b` (`scale=0.25`) | `postprocess_plugin_b` (clamp [0,50], `offset=1.0`) | `[2.5, 3.0, 3.5, 4.0]` |
+
+Both pipelines chain `preprocess → sample_model → postprocess`, e.g.
+`ensemble_pipeline_b`:
+
+```12:33:models/ensemble_pipeline_b/config.pbtxt
+ensemble_scheduling {
+  step { model_name: "preprocess_plugin_b" ... }   # ×0.25
+  step { model_name: "sample_model"          ... }   # 2x + 1
+  step { model_name: "postprocess_plugin_b"  ... }   # clamp[0,50] + 1.0
+}
+```
+
+The sample plugin supports these `parameters` keys (all optional; defaults
+preserve the stock pre/post behavior):
+
+| Key | Applies to | Effect |
+|-----|-----------|--------|
+| `mode` | both | `"preprocess"` \| `"postprocess"` \| `"identity"` (default: inferred from model name) |
+| `scale` | preprocess | multiplier applied to every element (default `0.5`) |
+| `clamp_min` / `clamp_max` | postprocess | clamp bounds (default `0` / `100`) |
+| `offset` | postprocess | value added after clamping (default `0.5`) |
+
+Example — pipeline B's postprocessor owns clamp `[0,50]` and offset `1.0`:
+
+```5:16:models/postprocess_plugin_b/config.pbtxt
+parameters { key: "clamp_min" value { string_value: "0" } }
+parameters { key: "clamp_max" value { string_value: "50" } }
+parameters { key: "offset"    value { string_value: "1.0" } }
+```
+
+Quick verification (server started in validated mode):
+
+```
+POST /v2/models/ensemble_pipeline/infer    -> [2.5, 3.5, 4.5, 5.5]
+POST /v2/models/ensemble_pipeline_b/infer  -> [2.5, 3.0, 3.5, 4.0]
+POST /v2/models/preprocess_plugin_b/infer  # [2,4,6,8] -> [0.5, 1.0, 1.5, 2.0]
+```
+
+Each plugin model carries its own `self_test`, so `--validated-mode` gates
+readiness on all of them; `GET /v2/health/detailed` reports each model's
+status independently.
 
 ## Acknowledgements
 - deepseek-v4-flash

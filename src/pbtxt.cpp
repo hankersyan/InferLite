@@ -398,6 +398,55 @@ ModelConfig parseConfigPbtxt(const std::string& text) {
         } else if (field == "plugin_library") {
             require(":", "plugin_library");
             cfg.plugin_library = lex.next();
+        } else if (field == "parameters") {
+            require("{", "parameters");
+            while (true) {
+                std::string f = lex.next();
+                if (f == "}") break;
+                if (f.empty()) throw PbtxtError("unexpected EOF in parameters{}");
+                if (f == "key") {
+                    require(":", "parameters.key");
+                    PluginParameter p;
+                    p.key = lex.next();
+                    // Triton-style value wrapper:
+                    //   value { string_value: "..." | int64_value: N | bool_value: B }
+                    std::string t = lex.next();
+                    if (t == "value") t = lex.next();
+                    if (t != "{") {
+                        throw PbtxtError("expected 'value { ... }' for parameters key '" +
+                                         p.key + "'");
+                    }
+                    int depth = 1;
+                    while (depth > 0) {
+                        std::string inner = lex.next();
+                        if (inner == "{") { ++depth; continue; }
+                        if (inner == "}") { --depth; continue; }
+                        if (inner.empty()) throw PbtxtError("unbalanced braces in parameters.value");
+                        if (inner == "string_value" || inner == "int64_value" ||
+                            inner == "bool_value" || inner == "uint64_value" ||
+                            inner == "double_value") {
+                            require(":", "parameters.value." + inner);
+                            p.value = lex.next();
+                        } else {
+                            // Unknown scalar inside value{}: consume ':' + value.
+                            require(":", "parameters.value field");
+                            lex.next();
+                        }
+                    }
+                    cfg.parameters.push_back(std::move(p));
+                } else {
+                    std::string t = lex.next();
+                    if (t == "{") {
+                        int depth = 1;
+                        while (depth > 0) {
+                            std::string inner = lex.next();
+                            if (inner == "{") ++depth;
+                            else if (inner == "}") --depth;
+                            else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                        }
+                    }
+                }
+            }
         } else if (field == "ensemble_scheduling") {
             require("{", "ensemble_scheduling");
             while (true) {

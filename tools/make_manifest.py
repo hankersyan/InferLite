@@ -15,6 +15,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 
 
 def sha256_file(path):
@@ -61,8 +62,18 @@ def main():
         entry = {"model_id": model_name, "version": version}
         if version:
             entry["sha256"] = model_hash(os.path.join(model_dir, version))
-        # Plugin library in the model dir.
-        plugin = os.path.join(model_dir, "sample_plugin.dll")
+        # Plugin library in the model dir. The filename is taken from the
+        # config.pbtxt `plugin_library` field (each plugin model may use its
+        # own library); fall back to sample_plugin.dll for backwards
+        # compatibility with repositories written before plugin_library.
+        plugin_name = None
+        with open(cfg, "r", encoding="utf-8", errors="replace") as f:
+            m = re.search(r'plugin_library\s*:\s*"([^"]+)"', f.read())
+            if m:
+                plugin_name = m.group(1)
+        if plugin_name is None:
+            plugin_name = "sample_plugin.dll"
+        plugin = os.path.join(model_dir, plugin_name)
         if os.path.exists(plugin):
             entry["plugin_sha256"] = sha256_file(plugin)
         models.append(entry)

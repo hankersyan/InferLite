@@ -108,6 +108,26 @@ void PluginBackend::load(const ModelConfig& config, const std::string& lib_path)
         info.outputs = out_specs.empty() ? nullptr : out_specs.data();
         info.output_count = static_cast<int32_t>(out_specs.size());
 
+        // Per-model parameters (Triton `parameters` block): each pipeline's
+        // plugin model carries its own pre/post-processing configuration.
+        param_keys_.clear();
+        param_values_.clear();
+        param_key_ptrs_.clear();
+        param_value_ptrs_.clear();
+        for (const auto& p : config.parameters) {
+            param_keys_.push_back(p.key);
+            param_values_.push_back(p.value);
+        }
+        param_key_ptrs_.reserve(param_keys_.size());
+        param_value_ptrs_.reserve(param_values_.size());
+        for (size_t i = 0; i < param_keys_.size(); ++i) {
+            param_key_ptrs_.push_back(param_keys_[i].c_str());
+            param_value_ptrs_.push_back(param_values_[i].c_str());
+        }
+        info.parameter_keys = param_key_ptrs_.empty() ? nullptr : param_key_ptrs_.data();
+        info.parameter_values = param_value_ptrs_.empty() ? nullptr : param_value_ptrs_.data();
+        info.parameter_count = static_cast<int32_t>(param_keys_.size());
+
         char errbuf[512] = {0};
         node_ = create(&info, errbuf, sizeof(errbuf));
         if (!node_) {
