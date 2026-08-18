@@ -9,7 +9,11 @@
 # tools. Prefer a source-built (vcpkg) gRPC built with the same MSVC toolchain;
 # a prebuilt DLL stack built with an older MSVC crashes on RPC dispatch (ABI
 # mismatch). GPU (TensorRT) is OFF by default; pass -Gpu to also enable it.
-param([switch]$Gpu, [string]$GrpcRoot = "C:\Test\vcpkg\vcpkg-2024.12.16\installed\x64-windows")
+param(
+    [switch]$Gpu,
+    [string]$GrpcRoot = "C:\Test\vcpkg\vcpkg-2024.12.16\installed\x64-windows",
+    [string]$BuildDirName = "build-grpc"
+)
 $ErrorActionPreference = "Stop"
 
 # Repo root is the parent of this scripts/ directory.
@@ -27,7 +31,7 @@ if (-not (Test-Path $vcvars)) { throw "vcvars64.bat not found: $vcvars" }
 
 # --- Deps ---
 $OpenVinoRoot = "c:\tools\openvino\openvino_toolkit_windows_2025.3.0.19807.44526285f24_x86_64"
-$BuildDir     = Join-Path $RepoRoot "build-grpc"
+$BuildDir     = Join-Path $RepoRoot $BuildDirName
 
 if (-not (Test-Path "$GrpcRoot\include\grpcpp\grpcpp.h")) {
     throw "gRPC headers not found at $GrpcRoot\include\grpcpp"

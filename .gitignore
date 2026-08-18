@@ -2,6 +2,8 @@
 build/
 build-gpu/
 build-grpc/
+build-grpc-cpu/
+build-grpc-gpu/
 build-map/
 build-minimal/
 cmake-build-*/
@@ -17,7 +19,9 @@ minimal_grpc/
 
 # Third-party dependency artifacts (regenerated / packaged, not sources)
 third_party/grpc/importlibs/
-third_party/dist/
+
+# Release packages (self-contained runtime bundles)
+dist/
 
 # Python virtual environment
 .venv/
