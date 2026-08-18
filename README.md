@@ -125,7 +125,19 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
 ### Not yet implemented
 
 OpenVINO multi-GPU, dynamic/static batching, live model updates, a profiling
-tool, and gRPC/streaming.
+tool, and gRPC streaming.
+
+### gRPC interface
+
+A Triton/KServe v2-compatible gRPC interface (`GRPCInferenceService`) is
+implemented (health, server/model metadata, model config, and `ModelInfer`) and
+shares the same inference core as HTTP. It is **opt-in** and disabled by
+default. Build it against a source-built gRPC (vcpkg) with
+`scripts/build_grpc.ps1`. The gRPC C++ runtime must be built with an MSVC
+toolchain whose STL/CRT ABI matches the compiler used here; a prebuilt gRPC DLL
+stack built with an older MSVC crashes on RPC dispatch due to an ABI mismatch.
+See `docs/GRPC.md` for details and `scripts/build_grpc.ps1` /
+`scripts/test_grpc_server.ps1` for build/test.
 
 ### Planned
 
@@ -133,12 +145,10 @@ tool, and gRPC/streaming.
 - **Live model updates** — reloading or hot-swapping models at runtime.
 - **Profiling tool** — latency and throughput profiling across devices.
 - **Batch API** — Triton-compatible `batching` and batch inference endpoints.
-- **gRPC interface** — Triton-compatible gRPC inference, health, and model
-  endpoints (currently HTTP only).
 - **In-process API** — embed the engine as a shared library (Triton-style
-  `TRITONSERVER_Server` C API): expose a library target, factor inference out
-  of the HTTP layer, and add an `extern "C"` embedding interface for
-  C/C++/Python callers without network overhead.
+  `TRITONSERVER_Server` C API): expose a library target, and add an
+  `extern "C"` embedding interface for C/C++/Python callers without network
+  overhead.
 
 ## Layout
 
@@ -155,6 +165,7 @@ src/
   main.cpp                 # CLI + fail-fast startup
   infer_lite.*             # app wiring + routing + audit/validation orchestration
   http_server.*            # HTTP/1.1 server (thread pool)
+  grpc_server.*            # gRPC GRPCInferenceService (opt-in, see docs/GRPC.md)
   json.*                   # minimal JSON parser/serializer
   pbtxt.*                  # model configuration parser
   model_repository.*       # repository scan + validation
@@ -171,6 +182,18 @@ src/
   sha256.*                 # SHA-256 hashing
   tensor.hpp               # tensor/data-type definitions
   diagnostics.*            # engineer-facing diagnostic log
+proto/
+  grpc_service.proto       # KServe/Triton v2 gRPC protocol (opt-in)
+generated/                 # protoc-generated C++/Python stubs from proto/
+scripts/
+  build.ps1 / build.bat    # HTTP-only build
+  build_gpu.ps1            # TensorRT/GPU build
+  build_grpc.ps1           # gRPC build (opt-in, requires gRPC SDK)
+  gen_grpc*.ps1            # regenerate protobuf/gRPC C++ & Python stubs
+  test_*.ps1               # HTTP / GPU / gRPC test suites
+third_party/
+  grpc/importlibs/         # regenerated gRPC DLL import libs (Anaconda stack only)
+  dist/                    # packaged distribution (runtime DLLs + models)
 tools/
   make_sample_model.py     # generates models/sample_model (IR + config + metadata)
   make_device_models.py    # generates CPU/NPU/GPU/AUTO device sample models
@@ -191,13 +214,13 @@ Prerequisites:
   to the TensorRT install directory at CMake configure time.
 
 ```
-powershell -ExecutionPolicy Bypass -File build.ps1
+powershell -ExecutionPolicy Bypass -File scripts\build.ps1
 ```
 
 CPU-only by default. To enable the GPU backend:
 
 ```
-powershell -ExecutionPolicy Bypass -File build_gpu.ps1
+powershell -ExecutionPolicy Bypass -File scripts\build_gpu.ps1
 ```
 
 or manually:
@@ -251,6 +274,7 @@ Options:
 | `--model-repository=<path>` | (required) | Model repository root |
 | `--host=<addr>` | `0.0.0.0` | Listen address |
 | `--http-port=<port>` | `8000` | HTTP port |
+| `--grpc-port=<port>` | `0` | gRPC port (`0` = disabled; requires gRPC build) |
 | `--max-queue-size=<n>` | `100` | Max queued requests (0 = unbounded) |
 | `--request-timeout-ms=<n>` | `30000` | Per-request queue timeout |
 | `--http-threads=<n>` | `4` | HTTP worker threads |

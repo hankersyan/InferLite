@@ -1,8 +1,11 @@
 # Build output
 build/
 build-gpu/
+build-grpc/
+build-map/
+build-minimal/
 cmake-build-*/
-dists/
+minimal_grpc/
 *.o
 *.obj
 *.exe
@@ -11,6 +14,10 @@ dists/
 *.exp
 *.pdb
 *.ilk
+
+# Third-party dependency artifacts (regenerated / packaged, not sources)
+third_party/grpc/importlibs/
+third_party/dist/
 
 # Python virtual environment
 .venv/
@@ -35,3 +42,5 @@ Thumbs.db
 # Logs / temp
 *.log
 *.tmp
+# Temporary gRPC diagnostics
+check_grpc*.ps1

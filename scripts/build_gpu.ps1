@@ -4,6 +4,9 @@
 # Adjust TENSORRT_ROOT / OPENVINO_ROOT below as needed.
 $ErrorActionPreference = "Stop"
 
+# Repo root is the parent of this scripts/ directory.
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+
 # --- Locate VS, cmake, ninja (same as build.ps1) ---
 $vswhere = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
 if (-not (Test-Path $vswhere)) { throw "vswhere.exe not found: $vswhere" }
@@ -17,20 +20,20 @@ if (-not (Test-Path $vcvars)) { throw "vcvars64.bat not found: $vcvars" }
 # --- Deps ---
 $TensorRtRoot = "C:\Tools\nvidia\TensorRT-10.16.1.11.Windows.amd64.cuda-12.9"
 $OpenVinoRoot  = "c:\tools\openvino\openvino_toolkit_windows_2025.3.0.19807.44526285f24_x86_64"
-$BuildDir      = "build-gpu"
+$BuildDir      = Join-Path $RepoRoot "build-gpu"
 
 if (-not (Test-Path "$TensorRtRoot\include\NvInfer.h")) {
     throw "TensorRT include not found at $TensorRtRoot"
 }
 
-$cmd = "`"$vcvars`" >nul 2>&1 && `"$cmake`" -S . -B $BuildDir -G Ninja " +
+$cmd = "`"$vcvars`" >nul 2>&1 && `"$cmake`" -S `"$RepoRoot`" -B `"$BuildDir`" -G Ninja " +
        "-DCMAKE_BUILD_TYPE=Release -DCMAKE_MAKE_PROGRAM=`"$ninja`" " +
        "-DOPENVINO_ROOT=`"$OpenVinoRoot`" -DTENSORRT_ROOT=`"$TensorRtRoot`""
 Write-Host "== Configuring (GPU) =="
 cmd /c $cmd
 if ($LASTEXITCODE -ne 0) { throw "cmake configure failed" }
 
-$cmd2 = "`"$vcvars`" >nul 2>&1 && `"$cmake`" --build $BuildDir"
+$cmd2 = "`"$vcvars`" >nul 2>&1 && `"$cmake`" --build `"$BuildDir`""
 Write-Host "== Building =="
 cmd /c $cmd2
 if ($LASTEXITCODE -ne 0) { throw "cmake build failed" }

@@ -1,6 +1,7 @@
 # test_server.ps1 - Start inferlite and exercise the REST endpoints.
 $ErrorActionPreference = "Stop"
-$build = "c:\Test\triton\InferLite-dpsk-f\build"
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+$build = Join-Path $RepoRoot "build"
 Set-Location $build
 
 # Ensure no stale server.

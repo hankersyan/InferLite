@@ -1,0 +1,166 @@
+// grpc_service.proto - KServe / Triton Inference Server v2 protocol (gRPC).
+//
+// A compatible SUBSET of the reference GRPCInferenceService exposed by the
+// inference server. Only synchronous unary RPCs are implemented (streaming,
+// model repository management, shared memory, classification, tracing and
+// statistics are intentionally out of scope for InferLite; see docs/PRD-all.md).
+//
+// The messages mirror the KServe v2 "ModelInfer" wire format so standard
+// clients (e.g. tritonclient / grpc client libraries) can talk to the server.
+
+syntax = "proto3";
+
+package inference;
+
+// @@
+// @@ GRPCInferenceService
+// @@
+service GRPCInferenceService {
+  // Check liveness of the server.
+  rpc ServerLive(ServerLiveRequest) returns (ServerLiveResponse) {}
+  // Check readiness of the server.
+  rpc ServerReady(ServerReadyRequest) returns (ServerReadyResponse) {}
+  // Get server metadata.
+  rpc ServerMetadata(ServerMetadataRequest) returns (ServerMetadataResponse) {}
+  // Check readiness of a model.
+  rpc ModelReady(ModelReadyRequest) returns (ModelReadyResponse) {}
+  // Get model metadata.
+  rpc ModelMetadata(ModelMetadataRequest) returns (ModelMetadataResponse) {}
+  // Get model configuration.
+  rpc ModelConfig(ModelConfigRequest) returns (ModelConfigResponse) {}
+  // Perform inference.
+  rpc ModelInfer(ModelInferRequest) returns (ModelInferResponse) {}
+}
+
+// @@
+// @@ Inference Server Health
+// @@
+
+message ServerLiveRequest {}
+
+message ServerLiveResponse {
+  bool live = 1;
+}
+
+message ServerReadyRequest {}
+
+message ServerReadyResponse {
+  bool ready = 1;
+}
+
+// @@
+// @@ Inference Server Metadata
+// @@
+
+message ServerMetadataRequest {}
+
+message ServerMetadataResponse {
+  string name = 1;
+  string version = 2;
+  repeated string extensions = 3;
+}
+
+// @@
+// @@ Model Readiness
+// @@
+
+message ModelReadyRequest {
+  string name = 1;
+  string version = 2;
+}
+
+message ModelReadyResponse {
+  bool ready = 1;
+}
+
+// @@
+// @@ Model Metadata
+// @@
+
+message ModelMetadataRequest {
+  string name = 1;
+  string version = 2;
+}
+
+message ModelMetadataResponse {
+  message TensorMetadata {
+    string name = 1;
+    string datatype = 2;
+    repeated int64 shape = 3;
+  }
+  string name = 1;
+  string versions = 2;
+  string platform = 3;
+  repeated TensorMetadata inputs = 4;
+  repeated TensorMetadata outputs = 5;
+}
+
+// @@
+// @@ Model Configuration
+// @@
+
+message ModelConfigRequest {
+  string name = 1;
+  string version = 2;
+}
+
+// A verbose, human-readable dump of the model's parsed configuration. Kept
+// intentionally unstructured (a single `config` string) to avoid pinning the
+// server to a fixed config schema; clients primarily use this for diagnostics.
+message ModelConfigResponse {
+  string name = 1;
+  string version = 2;
+  string config = 3;
+}
+
+// @@
+// @@ Inference
+// @@
+
+message InferTensorContents {
+  repeated bool bool_contents = 1;
+  repeated int32 int_contents = 2;
+  repeated int64 int64_contents = 3;
+  repeated uint32 uint_contents = 4;
+  repeated uint64 uint64_contents = 5;
+  repeated float fp32_contents = 6;
+  repeated double fp64_contents = 7;
+  repeated bytes bytes_contents = 8;
+}
+
+message ModelInferRequest {
+  message InferInputTensor {
+    string name = 1;
+    string datatype = 2;
+    repeated int64 shape = 3;
+    map<string, string> parameters = 4;
+    InferTensorContents contents = 5;
+  }
+  message InferRequestedOutputTensor {
+    string name = 1;
+    map<string, string> parameters = 2;
+  }
+  string model_name = 1;
+  string model_version = 2;
+  string id = 3;
+  map<string, string> parameters = 4;
+  repeated InferInputTensor inputs = 5;
+  repeated InferRequestedOutputTensor outputs = 6;
+  bytes raw_input_contents = 7;
+}
+
+message ModelInferResponse {
+  message InferOutputTensor {
+    string name = 1;
+    string datatype = 2;
+    repeated int64 shape = 3;
+    map<string, string> parameters = 4;
+    InferTensorContents contents = 5;
+  }
+  string model_name = 1;
+  string model_version = 2;
+  string id = 3;
+  map<string, string> parameters = 4;
+  repeated InferOutputTensor outputs = 5;
+  bytes raw_output_contents = 6;
+}

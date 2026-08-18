@@ -30,14 +30,18 @@ if not exist "%CMAKE%" (
 
 call "%VCVARS%" >nul
 
-if not exist build mkdir build
+REM Repo root is the parent of this scripts\ directory.
+set "REPO=%~dp0.."
 
-"%CMAKE%" -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_MAKE_PROGRAM="%NINJA%"
+set "BUILDDIR=%REPO%\build"
+if not exist "%BUILDDIR%" mkdir "%BUILDDIR%"
+
+"%CMAKE%" -S "%REPO%" -B "%BUILDDIR%" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_MAKE_PROGRAM="%NINJA%"
 if errorlevel 1 exit /b 1
 
-"%CMAKE%" --build build
+"%CMAKE%" --build "%BUILDDIR%"
 if errorlevel 1 exit /b 1
 
 echo.
-echo Build complete: build\inferlite.exe
+echo Build complete: %BUILDDIR%\inferlite.exe
 endlocal

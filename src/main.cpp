@@ -27,6 +27,7 @@ void printUsage(const char* prog) {
         << "  --model-repository=<path>   Path to the model repository (required)\n"
         << "  --host=<addr>               Listen host (default: 0.0.0.0)\n"
         << "  --http-port=<port>          HTTP port (default: 8000)\n"
+        << "  --grpc-port=<port>          gRPC port (default: 0=disabled; built with gRPC)\n"
         << "  --max-queue-size=<n>        Max queued requests (default: 100, 0=unbounded)\n"
         << "  --request-timeout-ms=<n>    Per-request queue timeout in ms (default: 30000)\n"
         << "  --http-threads=<n>          HTTP worker threads (default: 4)\n"
@@ -69,6 +70,8 @@ inferlite::ServerOptions parseArgs(int argc, char** argv) {
             opts.host = requireValue(arg, "--host");
         } else if (arg.rfind("--http-port=", 0) == 0) {
             opts.http_port = std::stoi(requireValue(arg, "--http-port"));
+        } else if (arg.rfind("--grpc-port=", 0) == 0) {
+            opts.grpc_port = std::stoi(requireValue(arg, "--grpc-port"));
         } else if (arg.rfind("--max-queue-size=", 0) == 0) {
             opts.max_queue_size = static_cast<size_t>(
                 std::max(0, std::stoi(requireValue(arg, "--max-queue-size"))));
@@ -134,9 +137,16 @@ int main(int argc, char** argv) {
         std::cerr << "[boot] server constructed\n" << std::flush;
         server.start();
         std::cerr << "[boot] server started\n" << std::flush;
-        std::cout << "InferLite ready: listening on " << opts.host << ":"
+        std::cout << "InferLite ready: HTTP listening on " << opts.host << ":"
                   << opts.http_port << " (model repo: " << opts.model_repository << ")\n"
                   << std::flush;
+#ifdef INFERLITE_ENABLE_GRPC
+        if (opts.grpc_port > 0) {
+            std::cout << "InferLite ready: gRPC listening on " << opts.host << ":"
+                      << opts.grpc_port << "\n"
+                      << std::flush;
+        }
+#endif
         std::cout << "Press Ctrl+C to stop.\n" << std::flush;
         server.waitForShutdown();
     } catch (const std::exception& e) {

@@ -1,7 +1,8 @@
 # test_server_phase4.ps1 - Start inferlite and exercise the Phase 4
 # multi-device models (Intel CPU / Intel GPU / AUTO).
 $ErrorActionPreference = "Stop"
-$build = "c:\Test\triton\InferLite-dpsk-f\build"
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+$build = Join-Path $RepoRoot "build"
 Set-Location $build
 
 Get-Process inferlite -ErrorAction SilentlyContinue | Stop-Process -Force

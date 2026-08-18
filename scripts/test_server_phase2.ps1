@@ -2,7 +2,8 @@
 # Validates: model integrity (manifest), audit trail, health/detailed, versions,
 # structured error codes, ensemble DAG, plugin backend, and self-test readiness.
 $ErrorActionPreference = "Stop"
-$build = Join-Path $PSScriptRoot "build"
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+$build = Join-Path $RepoRoot "build"
 Set-Location $build
 
 # Ensure no stale server.

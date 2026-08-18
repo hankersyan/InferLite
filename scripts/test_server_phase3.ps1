@@ -1,6 +1,7 @@
 # test_phase3_smoke.ps1 - Phase 3 smoke test (CPU-only regression check).
 $ErrorActionPreference = "Stop"
-$build = Join-Path $PSScriptRoot "build"
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+$build = Join-Path $RepoRoot "build"
 Set-Location $build
 
 Get-Process inferlite -ErrorAction SilentlyContinue | Stop-Process -Force

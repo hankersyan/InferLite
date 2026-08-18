@@ -2,6 +2,9 @@
 # Auto-detects the Visual Studio installation via vswhere.
 $ErrorActionPreference = "Stop"
 
+# Repo root is the parent of this scripts/ directory.
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+
 $vswhere = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
 if (-not (Test-Path $vswhere)) { throw "vswhere.exe not found: $vswhere" }
 
@@ -18,14 +21,15 @@ if (-not (Test-Path $ninja)) { throw "ninja not found: $ninja" }
 
 # Build the vcvars-call command. cmd strips the first set of quotes when called
 # with /c, so we add an extra layer of quotes.
-$cmd = "`"$vcvars`" >nul 2>&1 && `"$cmake`" -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_MAKE_PROGRAM=`"$ninja`""
+$buildDir = Join-Path $RepoRoot "build"
+$cmd = "`"$vcvars`" >nul 2>&1 && `"$cmake`" -S `"$RepoRoot`" -B `"$buildDir`" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_MAKE_PROGRAM=`"$ninja`""
 Write-Host "== Configuring =="
 cmd /c $cmd
 if ($LASTEXITCODE -ne 0) { throw "cmake configure failed" }
 
-$cmd2 = "`"$vcvars`" >nul 2>&1 && `"$cmake`" --build build"
+$cmd2 = "`"$vcvars`" >nul 2>&1 && `"$cmake`" --build `"$buildDir`""
 Write-Host "== Building =="
 cmd /c $cmd2
 if ($LASTEXITCODE -ne 0) { throw "cmake build failed" }
 
-Write-Host "Build complete: build\inferlite.exe"
+Write-Host "Build complete: $buildDir\inferlite.exe"

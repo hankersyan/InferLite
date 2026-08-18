@@ -1,7 +1,7 @@
 # test_gpu_server.ps1 - Start the GPU build and verify GPU reporting + CPU regression.
 # Builds with build_gpu.ps1 first, then starts the server with CUDA/TensorRT on PATH.
 $ErrorActionPreference = "Stop"
-$root = "c:\Test\triton\inferlite"
+$root = Split-Path -Parent $PSScriptRoot
 $build = "$root\build-gpu"
 
 # Ensure the GPU build exists.
