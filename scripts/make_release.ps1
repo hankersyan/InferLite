@@ -128,7 +128,8 @@ The gRPC interface exposes ``ServerLive``, ``ServerReady``, ``ServerMetadata``,
 grpcio + the generated stubs).
 
 ## Notes
-- Sample models are in ``models/`` (5 OpenVINO device variants of ``y = 2*x + 1``).
+- Sample models are in ``models/`` (OpenVINO device variants of ``y = 2*x + 1``,
+  plus ``multi_io_model`` with two inputs / two outputs).
 - Verify integrity with the SHA-256 values in ``MANIFEST.json``.
 - **TensorRT end-to-end execution requires a GPU with compute capability ≥ 7.5**
   (TensorRT 10.x dropped Pascal/SM 6.1 support). The ``gpu/`` bundle still runs
@@ -150,6 +151,18 @@ all dependencies, sample model repository, and release notes.
 ---
 
 ## What's new in $VerTag
+
+**v0.2.1 (this release):**
+- **Triton array-of-message ``input``/``output`` syntax** now supported in
+  ``config.pbtxt``, e.g. ``input: [ { name: "x" dims: [1,4] }, ... ]`` (in
+  addition to the repeated-message form ``input { ... }``).
+- **Multi-input / multi-output model** ``multi_io_model`` added (2 inputs, 2
+  outputs) to exercise the array syntax end-to-end.
+- **Model repository consolidated** into a single ``models/`` (the duplicate
+  ``models_verify/`` was removed; only representative models kept — device
+  variants, sample, multi-IO, and one plugin/ensemble pipeline each).
+
+**v0.2 (previous):**
 - **gRPC interface** (Phase 5): a Triton/KServe v2-compatible
   ``GRPCInferenceService`` (``ServerLive``/``ServerReady``/``ServerMetadata``/
   ``ModelReady``/``ModelMetadata``/``ModelConfig``/``ModelInfer``). The gRPC and
@@ -172,7 +185,7 @@ dist/$VerTag/
 │   └── inferlite.exe + *.dll (OpenVINO + TensorRT 10.16 + CUDA 12.6 + gRPC)
 └── models/                     # ready-to-run sample model repository
     ├── sample_model/  intel_cpu_model/  intel_npu_model/
-    ├── intel_gpu_model/  intel_auto_model/
+    ├── intel_gpu_model/  intel_auto_model/  multi_io_model/
     └── manifest.json
 ````
 
@@ -243,10 +256,10 @@ DLLs (protobuf, abseil, re2, c-ares, zlib, OpenSSL).
 ---
 
 ## Known issues / not yet validated
-- Plugin backend (``sample_plugin.dll``) ships as a stub; plugin/ensemble-plugin
-  models fail to load until a real plugin DLL is built (server uses fail-fast).
 - End-to-end TensorRT inference requires SM ≥ 7.5 (see above).
 - gRPC streaming is not implemented (unary RPCs only).
+- The shipped ``models/`` contains only the self-contained device/sample/multi-IO
+  models; the repo's plugin/ensemble demo models are excluded for portability.
 
 ---
 
