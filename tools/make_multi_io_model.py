@@ -2,7 +2,7 @@
 """Generate a multi-input / multi-output OpenVINO IR sample model for testing
 InferLite's Triton array-of-message input/output config syntax.
 
-Creates models_verify/multi_io_model/1/{model.xml, model.bin} and a config.pbtxt
+Creates models/multi_io_model/1/{model.xml, model.bin} and a config.pbtxt
 that uses the unified array form with TWO inputs and TWO outputs:
 
   input:  [ { name:"input_a" ... }, { name:"input_b" ... } ]
@@ -37,7 +37,7 @@ def build_model():
 
 def main():
     parser = argparse.ArgumentParser(description="Generate a multi-IO OpenVINO model.")
-    parser.add_argument("--out", default="models_verify/multi_io_model", help="Output model dir")
+    parser.add_argument("--out", default="models/multi_io_model", help="Output model dir")
     args = parser.parse_args()
 
     version_dir = os.path.join(args.out, "1")

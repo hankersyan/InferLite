@@ -15,7 +15,7 @@ $ErrorActionPreference = "Stop"
 # Repo root is the parent of this scripts/ directory.
 $root = Split-Path -Parent $PSScriptRoot
 $build = "$root\build-grpc"
-$modelRepo = "$root\models_verify"
+$modelRepo = "$root\models"
 
 if (-not (Test-Path "$build\inferlite.exe")) { throw "inferlite.exe not found in $build" }
 Get-Process inferlite -ErrorAction SilentlyContinue | Stop-Process -Force

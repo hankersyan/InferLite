@@ -20,10 +20,10 @@ $VerTag = if ($Version -match '^v') { $Version } else { "v$Version" }
 $ReleaseDir = Join-Path $RepoRoot "dist\$VerTag"
 $CpuBuild = Join-Path $RepoRoot "build-grpc-cpu"
 $GpuBuild = Join-Path $RepoRoot "build-grpc-gpu"
-# Curated model repository: the 5 OpenVINO device variants + sample_model.
-# The full repo models/ includes plugin/ensemble models that fail-fast at load
-# (plugin DLLs ship as stubs), so we ship the clean set from models_verify.
-$ModelSrc = Join-Path $RepoRoot "models_verify"
+# Curated model repository: ship the runnable device/multi-IO/sample models.
+# The combined models/ repo also contains plugin/ensemble demo models; we ship
+# only the self-contained device set to keep the release minimal and portable.
+$ModelSrc = Join-Path $RepoRoot "models"
 
 Write-Host "== Releasing InferLite $VerTag to $ReleaseDir =="
 
@@ -50,8 +50,17 @@ foreach ($bundle in @(@{Src=$CpuBuild; Dst="$ReleaseDir\cpu"}, @{Src=$GpuBuild; 
     }
 }
 
-# Curated model repository (5 OpenVINO device variants + sample_model).
-Copy-Item $ModelSrc "$ReleaseDir\models" -Recurse -Force
+# Curated model repository: copy each model directory individually, skipping
+# the plugin/ensemble demo models, then regenerate manifest.json for the
+# staged subset.
+New-Item -ItemType Directory -Path "$ReleaseDir\models" | Out-Null
+Get-ChildItem $ModelSrc -Directory | ForEach-Object {
+    $name = $_.Name
+    if ($name -match 'plugin|ensemble') { return }   # fail-fast at load: skip
+    Copy-Item $_.FullName "$ReleaseDir\models\$name" -Recurse -Force
+}
+& python (Join-Path $RepoRoot "tools\make_manifest.py") --repo "$ReleaseDir\models"
+if ($LASTEXITCODE -ne 0) { throw "failed to regenerate release model manifest" }
 
 Write-Host "== Staged bundle contents =="
 Write-Host "cpu files: $((Get-ChildItem "$ReleaseDir\cpu" -File).Count)"

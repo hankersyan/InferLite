@@ -1,7 +1,0 @@
-{
-  "model_id": "multi_io_model",
-  "version": "1.0.0",
-  "intended_use": "Test multi-input/multi-output Triton array config syntax",
-  "training_dataset_id": "N/A",
-  "approval_status": "approved"
-}

@@ -238,18 +238,15 @@ cmake --build build-gpu --config Release
 > card or a TensorRT release that still supports Pascal (e.g. TRT 8.x).
 
 The build also produces `build\sample_plugin.dll` (example plugin). To use the
-plugin/ensemble demo models, copy the DLL into each plugin model directory
-(both pipelines — A and B — share the same DLL):
+plugin/ensemble demo models, copy the DLL into each plugin model directory:
 
 ```
 Copy-Item build\sample_plugin.dll models\preprocess_plugin\
 Copy-Item build\sample_plugin.dll models\postprocess_plugin\
-Copy-Item build\sample_plugin.dll models\preprocess_plugin_b\
-Copy-Item build\sample_plugin.dll models\postprocess_plugin_b\
 ```
 
 Each plugin model's `config.pbtxt` may carry a `parameters` block that
-configures the node independently (see "Multiple pipeline testing" below).
+configures the node independently (see "Plugin & ensemble testing" below).
 
 The build copies the required runtime libraries next to `build\inferlite.exe`.
 
@@ -329,6 +326,8 @@ GET /v2/metrics    -> requests counts, average latency, queue depth, config hash
 - `tools/make_device_models.py` generates the CPU/NPU/GPU/AUTO device
   sample models (exporting precompiled blobs when the corresponding Intel
   hardware is present).
+- `tools/make_multi_io_model.py` generates the `multi_io_model` (2 inputs, 2
+  outputs) that exercises the Triton array-of-message input/output config.
 - `tools/make_manifest.py` generates `models\manifest.json` with SHA-256 hashes.
 - `test_server_phase2.ps1` starts the server in validated mode and exercises
   integrity, validation, ensemble, plugin, audit log, and metrics.
@@ -338,27 +337,17 @@ GET /v2/metrics    -> requests counts, average latency, queue depth, config hash
 - `load_test.ps1 -Concurrency <n> -PerWorker <m>` runs a sustained concurrent
   load test.
 
-### Multiple pipeline testing
+### Plugin & ensemble testing
 
-Two independent ensemble pipelines ship in `models\`; each owns its own
-pre-processing and post-processing plugin models, and both reuse the same
-`sample_plugin.dll` and the same `sample_model` (`y = 2x + 1`). Behavior
-differences come entirely from each plugin model's `parameters` block, so a
-pipeline change is a config-only change — no plugin recompile.
+A single representative ensemble pipeline ships in `models\`: it chains
+`preprocess_plugin → sample_model → postprocess_plugin`, all sharing
+`sample_plugin.dll` and `sample_model` (`y = 2x + 1`):
 
-| Pipeline | Preprocess | Postprocess | Input `[1,2,3,4]` → output |
-|----------|-----------|-------------|-----------------------------|
-| `ensemble_pipeline` | `preprocess_plugin` (×0.5, default) | `postprocess_plugin` (clamp [0,100] + 0.5, default) | `[2.5, 3.5, 4.5, 5.5]` |
-| `ensemble_pipeline_b` | `preprocess_plugin_b` (`scale=0.25`) | `postprocess_plugin_b` (clamp [0,50], `offset=1.0`) | `[2.5, 3.0, 3.5, 4.0]` |
-
-Both pipelines chain `preprocess → sample_model → postprocess`, e.g.
-`ensemble_pipeline_b`:
-
-```12:33:models/ensemble_pipeline_b/config.pbtxt
+```10:34:models/ensemble_pipeline/config.pbtxt
 ensemble_scheduling {
-  step { model_name: "preprocess_plugin_b" ... }   # ×0.25
-  step { model_name: "sample_model"          ... }   # 2x + 1
-  step { model_name: "postprocess_plugin_b"  ... }   # clamp[0,50] + 1.0
+  step { model_name: "preprocess_plugin"  ... }   # ×0.5 (default)
+  step { model_name: "sample_model"       ... }   # 2x + 1
+  step { model_name: "postprocess_plugin" ... }   # clamp[0,100] + 0.5
 }
 ```
 
@@ -372,20 +361,11 @@ preserve the stock pre/post behavior):
 | `clamp_min` / `clamp_max` | postprocess | clamp bounds (default `0` / `100`) |
 | `offset` | postprocess | value added after clamping (default `0.5`) |
 
-Example — pipeline B's postprocessor owns clamp `[0,50]` and offset `1.0`:
-
-```5:16:models/postprocess_plugin_b/config.pbtxt
-parameters { key: "clamp_min" value { string_value: "0" } }
-parameters { key: "clamp_max" value { string_value: "50" } }
-parameters { key: "offset"    value { string_value: "1.0" } }
-```
-
 Quick verification (server started in validated mode):
 
 ```
 POST /v2/models/ensemble_pipeline/infer    -> [2.5, 3.5, 4.5, 5.5]
-POST /v2/models/ensemble_pipeline_b/infer  -> [2.5, 3.0, 3.5, 4.0]
-POST /v2/models/preprocess_plugin_b/infer  # [2,4,6,8] -> [0.5, 1.0, 1.5, 2.0]
+POST /v2/models/preprocess_plugin/infer    # [2,4,6,8] -> [1.0, 2.0, 3.0, 4.0]
 ```
 
 Each plugin model carries its own `self_test`, so `--validated-mode` gates
