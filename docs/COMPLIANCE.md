@@ -32,7 +32,9 @@ earn that classification the runtime implements the following **safety
 mechanisms** (traceable to risk controls):
 
 - **Deterministic execution** — static model set, no runtime model loading, no
-  dynamic batching; identical input + configuration yields identical output.
+  request‑combining batching (identical input + configuration yields identical
+  output); `max_batch_size` only adds a Triton‑style batch dimension to shapes,
+  so inference remains a deterministic 1:1 request→output mapping.
 - **Model integrity** — approved-model manifest with SHA-256 verification; a
   tampered model file aborts startup (fail-fast), preventing a wrong-model
   scenario.

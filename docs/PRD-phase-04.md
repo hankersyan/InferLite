@@ -196,7 +196,7 @@ The static DAG executor now handles nodes on **CPU, NPU, Intel GPU, and NVIDIA G
 
 - **No changes to NVIDIA GPU (TensorRT) implementation** – already released in Phase 3.
 - **No Moore Threads GPU** – remains on hold.
-- **No dynamic batching or static batching.**
+- **No request‑combining batching.** A model may opt into Triton‑style batch‑dimension shapes via `max_batch_size` (config `dims` per‑request, clients prepend the batch dim).
 - **No live model updates or runtime model loading.**
 - **No multi‑device per model** (each model instance group is tied to a single device; ensembles can combine multiple devices).
 - **No gRPC or streaming.**

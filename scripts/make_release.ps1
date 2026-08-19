@@ -66,26 +66,7 @@ Write-Host "== Staged bundle contents =="
 Write-Host "cpu files: $((Get-ChildItem "$ReleaseDir\cpu" -File).Count)"
 Write-Host "gpu files: $((Get-ChildItem "$ReleaseDir\gpu" -File).Count)"
 
-# --- 3. Generate MANIFEST.json (SHA-256 for every artifact) ---
-Write-Host "== Generating MANIFEST.json =="
-$manifest = [ordered]@{
-    version = $Version
-    release = "InferLite"
-    release_date = Get-Date -Format "yyyy-MM-dd"
-    artifacts = @()
-}
-Get-ChildItem $ReleaseDir -Recurse -File | Sort-Object FullName | ForEach-Object {
-    $rel = $_.FullName.Substring($ReleaseDir.Length + 1)
-    $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
-    $manifest.artifacts += [ordered]@{
-        path = $rel
-        size_bytes = $_.Length
-        sha256 = $hash
-    }
-}
-$manifest | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $ReleaseDir "MANIFEST.json") -Encoding utf8
-
-# --- 4. Write README.md and RELEASE_NOTES.md ---
+# --- 3. Write README.md and RELEASE_NOTES.md ---
 $readme = @"
 # InferLite $VerTag — Quick Start
 
@@ -129,7 +110,9 @@ grpcio + the generated stubs).
 
 ## Notes
 - Sample models are in ``models/`` (OpenVINO device variants of ``y = 2*x + 1``,
-  plus ``multi_io_model`` with two inputs / two outputs).
+  ``multi_io_model`` with two inputs / two outputs, and ``batched_model`` showing
+  Triton-style ``max_batch_size`` with config ``dims: [4]`` and client shape
+  ``[1, 4]``).
 - Verify integrity with the SHA-256 values in ``MANIFEST.json``.
 - **TensorRT end-to-end execution requires a GPU with compute capability ≥ 7.5**
   (TensorRT 10.x dropped Pascal/SM 6.1 support). The ``gpu/`` bundle still runs
@@ -152,7 +135,19 @@ all dependencies, sample model repository, and release notes.
 
 ## What's new in $VerTag
 
-**v0.2.1 (this release):**
+**v0.2.2 (this release):**
+- **Triton-style batching (``max_batch_size``)** implemented. Shapes now follow
+  Triton's convention: ``max_batch_size: 0`` disables batching (tensor shapes
+  match ``dims`` exactly); ``max_batch_size > 0`` enables a leading batch
+  dimension on request/output tensors, where config ``dims`` are per-request and
+  the accepted batch is ``1 <= B <= max_batch_size``.
+- **``batched_model``** added (``max_batch_size: 1``): config ``dims: [4]`` while
+  clients send/receive ``[1, 4]``. A shape missing the batch dim (``[4]``) or
+  exceeding ``max_batch_size`` (``[2, 4]``) is rejected with ``INVALID_INPUT``.
+- **``tools/make_batched_model.py``** generates the model; **``scripts/test_batch.ps1``**
+  verifies the batch convention end-to-end.
+
+**v0.2.1 (previous):**
 - **Triton array-of-message ``input``/``output`` syntax** now supported in
   ``config.pbtxt``, e.g. ``input: [ { name: "x" dims: [1,4] }, ... ]`` (in
   addition to the repeated-message form ``input { ... }``).
@@ -186,6 +181,7 @@ dist/$VerTag/
 └── models/                     # ready-to-run sample model repository
     ├── sample_model/  intel_cpu_model/  intel_npu_model/
     ├── intel_gpu_model/  intel_auto_model/  multi_io_model/
+    ├── batched_model/  (Triton max_batch_size: 1 demo)
     └── manifest.json
 ````
 
@@ -267,5 +263,24 @@ DLLs (protobuf, abseil, re2, c-ares, zlib, OpenSSL).
 KServe/Triton v2 gRPC interface.*
 "@
 $notes | Set-Content (Join-Path $ReleaseDir "RELEASE_NOTES.md") -Encoding utf8
+
+# --- 4. Generate MANIFEST.json (SHA-256 for every artifact, incl. docs) ---
+Write-Host "== Generating MANIFEST.json =="
+$manifest = [ordered]@{
+    version = $Version
+    release = "InferLite"
+    release_date = Get-Date -Format "yyyy-MM-dd"
+    artifacts = @()
+}
+Get-ChildItem $ReleaseDir -Recurse -File | Sort-Object FullName | ForEach-Object {
+    $rel = $_.FullName.Substring($ReleaseDir.Length + 1)
+    $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
+    $manifest.artifacts += [ordered]@{
+        path = $rel
+        size_bytes = $_.Length
+        sha256 = $hash
+    }
+}
+$manifest | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $ReleaseDir "MANIFEST.json") -Encoding utf8
 
 Write-Host "Release complete: $ReleaseDir"

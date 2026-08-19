@@ -110,7 +110,10 @@ struct GoldenTest {
 struct ModelConfig {
     std::string name;
     std::string backend;  // "openvino", "plugin", "ensemble"
-    int64_t max_batch_size = 0;  // must be 0 (batching disabled)
+    // Triton-style batching: 0 disables batching (no batch dimension);
+    // >0 enables batching where request tensors carry a leading batch
+    // dimension B (1 <= B <= max_batch_size) and config dims are per-request.
+    int64_t max_batch_size = 0;
     std::vector<TensorSpec> inputs;
     std::vector<TensorSpec> outputs;
     InstanceGroup instance_group;

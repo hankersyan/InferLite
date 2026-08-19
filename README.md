@@ -19,7 +19,6 @@ provided by the OpenVINO backend and selected through `instance_group.kind`
 (`KIND_CPU` / `KIND_NPU` / `KIND_GPU_INTEL` / `KIND_AUTO`).
 
 ## Motivations
-- Nvidia phased out the triton inference server's windows support.
 
 ## Vision (from `docs/PRD-all.md`)
 
@@ -32,8 +31,9 @@ provided by the OpenVINO backend and selected through `instance_group.kind`
   parallel.
 - **Zero-copy pipelines** — data is passed by reference between adjacent steps
   on the same device.
-- **Deterministic, low-latency serving** — static graph, no dynamic batching,
-  no hot reloading, minimal scheduling overhead.
+- **Deterministic, low-latency serving** — static graph, no request-combining
+  dynamic batching, no hot reloading, minimal scheduling overhead. Triton-style
+  batch-dimension shapes are supported via `max_batch_size` (see Features).
 - **Standard interface** — a compatible, synchronous subset of the reference
   server's request API plus health and JSON metrics.
 
@@ -47,8 +47,6 @@ mechanisms, validated (locked) mode, required documentation package, and
 security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)**.
 
 ## Features
-
-### Features
 
 - **Model repository** — parses model configuration files, picks the highest
   numeric version directory for each model.
@@ -103,6 +101,13 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
 - **Device model tooling** — `tools/make_device_models.py` generates CPU/NPU/GPU/
   AUTO sample models, exporting precompiled blobs when the corresponding Intel
   hardware is present; reference configs live in `tools/examples/`.
+- **Triton-style batching** — `max_batch_size` follows Triton's convention: `0`
+  disables batching (tensor shapes match `dims` exactly); `>0` enables a leading
+  batch dimension on request/output tensors where config `dims` are per-request
+  and the accepted batch is `1 <= B <= max_batch_size`. With `max_batch_size: 1`
+  a model whose IR accepts `[1, 4]` declares `dims: [4]` and clients send/receive
+  shape `[1, 4]`. `tools/make_batched_model.py` generates such a model; see
+  `scripts/test_batch.ps1`.
 
 - **TensorRT GPU backend** (opt-in) — deserializes approved `model.plan` engine
   files; each instance owns a CUDA stream; `execute()` enqueues on the stream
@@ -124,8 +129,10 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
 
 ### Not yet implemented
 
-OpenVINO multi-GPU, dynamic/static batching, live model updates, a profiling
-tool, and gRPC streaming.
+OpenVINO multi-GPU, live model updates, a profiling tool, and gRPC streaming.
+Request-combining dynamic batching is on the roadmap (see **Planned**);
+Triton-style batch-dimension shapes via `max_batch_size` are already
+implemented (see Features).
 
 ### gRPC interface
 
@@ -141,10 +148,12 @@ See `docs/GRPC.md` for details and `scripts/build_grpc.ps1` /
 
 ### Planned
 
-- **Dynamic batching** — combining concurrent requests into a single inference.
+- **Request-combining dynamic batching** — the scheduler collecting queued
+  concurrent requests and executing them as a single combined inference
+  (bounded by `max_batch_size`), then splitting outputs back per request. The
+  batch-dimension shape convention is already implemented.
 - **Live model updates** — reloading or hot-swapping models at runtime.
 - **Profiling tool** — latency and throughput profiling across devices.
-- **Batch API** — Triton-compatible `batching` and batch inference endpoints.
 - **In-process API** — embed the engine as a shared library (Triton-style
   `TRITONSERVER_Server` C API): expose a library target, and add an
   `extern "C"` embedding interface for C/C++/Python callers without network
@@ -178,7 +187,7 @@ src/
   memory_manager.*         # host + pinned + device-buffer memory pools
   audit_log.*              # tamper-evident hash-chained audit log
   config_store.*           # manifest/metadata/self-test/hash management
-  validation.*             # input/output validation + structured error codes
+  validation.*             # input/output validation, batch-dim, structured errors
   sha256.*                 # SHA-256 hashing
   tensor.hpp               # tensor/data-type definitions
   diagnostics.*            # engineer-facing diagnostic log
@@ -191,12 +200,15 @@ scripts/
   build_grpc.ps1           # gRPC build (opt-in, requires gRPC SDK)
   gen_grpc*.ps1            # regenerate protobuf/gRPC C++ & Python stubs
   test_*.ps1               # HTTP / GPU / gRPC test suites
+  test_batch.ps1           # Triton-style batching (max_batch_size) test
 third_party/
   grpc/importlibs/         # regenerated gRPC DLL import libs (Anaconda stack only)
   dist/                    # packaged distribution (runtime DLLs + models)
 tools/
   make_sample_model.py     # generates models/sample_model (IR + config + metadata)
   make_device_models.py    # generates CPU/NPU/GPU/AUTO device sample models
+  make_multi_io_model.py   # generates models/multi_io_model (2-in/2-out array syntax)
+  make_batched_model.py    # generates models/batched_model (Triton max_batch_size)
   make_manifest.py         # generates models/manifest.json with SHA-256 hashes
   examples/                # reference configs (kind: KIND_NPU / KIND_GPU_INTEL / KIND_AUTO)
   sample_plugin/           # example CPU plugin source (sample_plugin.dll)
@@ -315,6 +327,11 @@ Content-Type: application/json
 `data` may be a JSON number array (serialized per `datatype`) or a base64
 string. The response contains `outputs` (base64 `data`) and a `trace_id`.
 
+**Batched models.** For a model with `max_batch_size > 0`, the request/output
+`shape` must include the leading batch dimension `B` (`1 <= B <= max_batch_size`)
+prepended to the per-request config `dims`. With `max_batch_size: 1`, a model
+declaring `dims: [4]` is queried with `shape: [1, 4]`.
+
 ### Metrics
 ```
 GET /v2/metrics    -> requests counts, average latency, queue depth, config hash
@@ -328,7 +345,13 @@ GET /v2/metrics    -> requests counts, average latency, queue depth, config hash
   hardware is present).
 - `tools/make_multi_io_model.py` generates the `multi_io_model` (2 inputs, 2
   outputs) that exercises the Triton array-of-message input/output config.
+- `tools/make_batched_model.py` generates the `batched_model`
+  (`max_batch_size: 1`) that exercises Triton-style batch-dimension shapes:
+  config `dims: [4]` while clients send/receive `[1, 4]`.
 - `tools/make_manifest.py` generates `models\manifest.json` with SHA-256 hashes.
+- `test_batch.ps1` verifies Triton-style batching: valid `[1, 4]` inference
+  returns `[3, 5, 7, 9]`, a shape missing the batch dim (`[4]`) and a batch
+  exceeding `max_batch_size` (`[2, 4]`) are both rejected with `INVALID_INPUT`.
 - `test_server_phase2.ps1` starts the server in validated mode and exercises
   integrity, validation, ensemble, plugin, audit log, and metrics.
 - `test_server_phase4.ps1` starts the server and exercises the
@@ -343,7 +366,7 @@ A single representative ensemble pipeline ships in `models\`: it chains
 `preprocess_plugin → sample_model → postprocess_plugin`, all sharing
 `sample_plugin.dll` and `sample_model` (`y = 2x + 1`):
 
-```10:34:models/ensemble_pipeline/config.pbtxt
+```
 ensemble_scheduling {
   step { model_name: "preprocess_plugin"  ... }   # ×0.5 (default)
   step { model_name: "sample_model"       ... }   # 2x + 1

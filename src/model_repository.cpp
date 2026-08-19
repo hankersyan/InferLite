@@ -64,10 +64,15 @@ void validateConfig(const ModelConfig& cfg, const fs::path& model_dir) {
                               cfg.backend + "' (only 'openvino', 'tensorrt', 'plugin', "
                               "'ensemble' are supported)");
     }
-    if (cfg.max_batch_size != 0) {
+    // max_batch_size follows Triton's convention: 0 disables batching; >0
+    // enables Triton-style batching where request tensors carry a leading batch
+    // dimension (1 <= B <= max_batch_size) and config dims are per-request.
+    // Only a negative value is rejected.
+    if (cfg.max_batch_size < 0) {
         throw RepositoryError("model '" + cfg.name +
-                              "' has max_batch_size=" + std::to_string(cfg.max_batch_size) +
-                              "; batching must be disabled (max_batch_size=0)");
+                              "' has invalid max_batch_size=" +
+                              std::to_string(cfg.max_batch_size) +
+                              "; must be >= 0");
     }
     if (cfg.instance_group.count <= 0) {
         throw RepositoryError("model '" + cfg.name + "' has invalid instance_group count " +

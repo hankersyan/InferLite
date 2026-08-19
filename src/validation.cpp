@@ -16,8 +16,27 @@ bool dimsConform(const std::vector<int64_t>& spec_dims, const std::vector<int64_
     return true;
 }
 
+bool resolveBatch(int64_t max_batch_size, const std::vector<int64_t>& spec_dims,
+                  const std::vector<int64_t>& actual, int64_t& batch) {
+    if (max_batch_size <= 0) {
+        // Batching disabled: no batch dimension. The tensor shape must conform
+        // to the spec dims directly (a single request with no leading batch).
+        if (!dimsConform(spec_dims, actual)) return false;
+        batch = 1;
+        return true;
+    }
+    // Triton batching enabled: the tensor carries a leading batch dimension B
+    // (the number of requests combined), and `actual[1:]` is the per-request
+    // shape which must conform to the spec dims.
+    if (actual.size() != spec_dims.size() + 1) return false;
+    batch = actual[0];
+    if (batch < 1 || batch > max_batch_size) return false;
+    std::vector<int64_t> rest(actual.begin() + 1, actual.end());
+    return dimsConform(spec_dims, rest);
+}
+
 bool validateInputTensor(const TensorSpec& spec, const Tensor& input, size_t max_input_bytes,
-                         ErrorCode& err_code, std::string& err_msg) {
+                         int64_t max_batch_size, ErrorCode& err_code, std::string& err_msg) {
     err_code = ErrorCode::kInvalidInput;
     if (input.name != spec.name) {
         err_msg = "input tensor name '" + input.name + "' does not match spec '" +
@@ -30,19 +49,31 @@ bool validateInputTensor(const TensorSpec& spec, const Tensor& input, size_t max
                   std::string(dataTypeToString(spec.data_type));
         return false;
     }
-    if (!dimsConform(spec.dims, input.shape)) {
+    int64_t batch = 0;
+    if (!resolveBatch(max_batch_size, spec.dims, input.shape, batch)) {
         std::ostringstream ss;
         ss << "input '" << input.name << "' shape mismatch: got [";
         for (size_t i = 0; i < input.shape.size(); ++i) {
             if (i) ss << ',';
             ss << input.shape[i];
         }
-        ss << "], spec [";
-        for (size_t i = 0; i < spec.dims.size(); ++i) {
-            if (i) ss << ',';
-            ss << spec.dims[i];
+        ss << "], spec ";
+        if (max_batch_size > 0) {
+            // The expected client shape is [B, ...spec.dims] with 1<=B<=max_batch_size.
+            ss << "[B, ...[" ;
+            for (size_t i = 0; i < spec.dims.size(); ++i) {
+                if (i) ss << ',';
+                ss << spec.dims[i];
+            }
+            ss << "]] where 1<=B<=" << max_batch_size;
+        } else {
+            ss << "[";
+            for (size_t i = 0; i < spec.dims.size(); ++i) {
+                if (i) ss << ',';
+                ss << spec.dims[i];
+            }
+            ss << "]";
         }
-        ss << ']';
         err_msg = ss.str();
         return false;
     }
@@ -63,7 +94,8 @@ bool validateInputs(const ModelConfig& cfg, const std::vector<Tensor>& inputs,
         bool found = false;
         for (const auto& in : inputs) {
             if (in.name == spec.name) {
-                if (!validateInputTensor(spec, in, max_input_bytes, err_code, err_msg)) {
+                if (!validateInputTensor(spec, in, max_input_bytes, cfg.max_batch_size,
+                                         err_code, err_msg)) {
                     return false;
                 }
                 found = true;
@@ -184,7 +216,7 @@ bool readTensorScalar(const Tensor& t, size_t elem_idx, double& out) {
 }
 
 bool validateOutput(const TensorSpec& spec, const OutputValidation& rules, const Tensor& output,
-                    ErrorCode& err_code, std::string& err_msg) {
+                    int64_t max_batch_size, ErrorCode& err_code, std::string& err_msg) {
     err_code = ErrorCode::kOutputValidationFailed;
     // Note: the caller matches outputs to specs by position, so we do not
     // require the tensor name to equal the spec name here.
@@ -194,11 +226,14 @@ bool validateOutput(const TensorSpec& spec, const OutputValidation& rules, const
                   std::string(dataTypeToString(spec.data_type));
         return false;
     }
-    if (rules.check_shape && !dimsConform(spec.dims, output.shape)) {
-        std::ostringstream ss;
-        ss << "output '" << output.name << "' shape does not conform to spec";
-        err_msg = ss.str();
-        return false;
+    if (rules.check_shape) {
+        int64_t batch = 0;
+        if (!resolveBatch(max_batch_size, spec.dims, output.shape, batch)) {
+            std::ostringstream ss;
+            ss << "output '" << output.name << "' shape does not conform to spec";
+            err_msg = ss.str();
+            return false;
+        }
     }
     // Scan every element for NaN / Inf and range.
     size_t count = static_cast<size_t>(shapeElementCount(output.shape));
@@ -253,7 +288,8 @@ bool validateOutputs(const ModelConfig& cfg, const std::vector<Tensor>& outputs,
                       std::to_string(max_output_bytes);
             return false;
         }
-        if (!validateOutput(cfg.outputs[i], cfg.output_validation, out, err_code, err_msg)) {
+        if (!validateOutput(cfg.outputs[i], cfg.output_validation, out, cfg.max_batch_size,
+                            err_code, err_msg)) {
             return false;
         }
     }

@@ -63,7 +63,7 @@ Add a **validated, deterministic TensorRT GPU backend** to the existing CPU infe
 ## 3. What Is Explicitly NOT in Phase 3
 
 - **No OpenVINO GPU plugin.** OpenVINO models stay CPU‑only. This avoids OpenCL/CUDA interoperability complexity and keeps the regulatory surface smaller.
-- **No dynamic batching or static batching.** All inference is single‑request (batch size = 1).
+- **No request‑combining batching.** Inference is single‑request; a model may opt into Triton‑style batch‑dimension shapes via `max_batch_size` (config `dims` per‑request, clients prepend the batch dim).
 - **No live model updates or runtime model loading.**
 - **No profiling tool.**
 - **No multi‑GPU support** (only a single physical GPU, device 0).
