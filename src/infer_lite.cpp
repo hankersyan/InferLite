@@ -371,7 +371,7 @@ void InferLite::start() {
     http_->start();
 #ifdef INFERLITE_ENABLE_GRPC
     if (opts_.grpc_port > 0) {
-        grpc_ = std::make_unique<GrpcServer>(this, opts_.grpc_port);
+        grpc_ = std::make_unique<GrpcServer>(this, opts_.host, opts_.grpc_port);
         grpc_->start();
     }
 #endif

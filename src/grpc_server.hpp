@@ -31,9 +31,10 @@ class InferLite;
 class GrpcServer final : public inference::GRPCInferenceService::Service {
 public:
     // `owner`: the InferLite instance backing this service (must outlive the
-    // server). `port`: TCP port; 0 means an ephemeral port (use port() after
-    // start()).
-    explicit GrpcServer(InferLite* owner, int port);
+    // server). `host`: listen address ("0.0.0.0" binds all interfaces; passed
+    // through from --host so both HTTP and gRPC honor the same setting).
+    // `port`: TCP port; 0 means an ephemeral port (use port() after start()).
+    explicit GrpcServer(InferLite* owner, std::string host, int port);
     ~GrpcServer() override;
 
     GrpcServer(const GrpcServer&) = delete;
@@ -73,6 +74,7 @@ public:
 
 private:
     InferLite* owner_;
+    std::string host_;
     int port_;
     std::unique_ptr<grpc::Server> server_;
     int bound_port_ = 0;

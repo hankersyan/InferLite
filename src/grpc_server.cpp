@@ -5,6 +5,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "infer_lite.hpp"
@@ -179,7 +180,8 @@ void bytesToContents(const Tensor& t, inference::InferTensorContents& c) {
 
 }  // namespace
 
-GrpcServer::GrpcServer(InferLite* owner, int port) : owner_(owner), port_(port) {}
+GrpcServer::GrpcServer(InferLite* owner, std::string host, int port)
+    : owner_(owner), host_(std::move(host)), port_(port) {}
 
 GrpcServer::~GrpcServer() {
     stop();
@@ -187,9 +189,12 @@ GrpcServer::~GrpcServer() {
 
 void GrpcServer::start() {
     grpc::ServerBuilder builder;
-    builder.SetMaxReceiveMessageSize(64 * 1024 * 1024);  // 64 MiB (matches 50 MB default)
-    builder.AddListeningPort("0.0.0.0:" + std::to_string(port_),
-                             grpc::InsecureServerCredentials(), &bound_port_);
+    // 64 MiB receive cap: headroom above the 50 MB default input-size limit so
+    // any request accepted by the inference core fits on the wire.
+    builder.SetMaxReceiveMessageSize(64 * 1024 * 1024);
+    const std::string addr = (host_.empty() ? std::string("0.0.0.0") : host_) + ":" +
+                             std::to_string(port_);
+    builder.AddListeningPort(addr, grpc::InsecureServerCredentials(), &bound_port_);
     builder.RegisterService(this);
     server_ = builder.BuildAndStart();
     if (!server_) {
@@ -243,7 +248,10 @@ int GrpcServer::port() const {
         return ::grpc::Status(::grpc::StatusCode::NOT_FOUND,
                               "model '" + name + "' is not loaded");
     }
-    // A loaded model that passed startup self-test is ready.
+    // Readiness follows the server-wide startup self-test: fail-fast loading
+    // means every loaded model passed its own golden-input self-test, and the
+    // README documents READY as "all self-tests pass", so the server-wide flag
+    // applies uniformly to every loaded model.
     response->set_ready(owner_->ready());
     return ::grpc::Status::OK;
 }

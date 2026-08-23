@@ -19,6 +19,10 @@ provided by the OpenVINO backend and selected through `instance_group.kind`
 (`KIND_CPU` / `KIND_NPU` / `KIND_GPU_INTEL` / `KIND_AUTO`).
 
 ## Motivations
+- Nvidia phased out the triton inference server's windows support.
+
+## Concept
+![inferlite_concept](docs/inferlite-concept.jpg)
 
 ## Vision (from `docs/PRD-all.md`)
 
