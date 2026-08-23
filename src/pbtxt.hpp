@@ -49,7 +49,9 @@ inline const char* deviceKindToString(DeviceKind k) {
 struct InstanceGroup {
     int count = 1;
     // Triton-style kind (KIND_CPU / KIND_GPU / KIND_NPU / KIND_GPU_INTEL /
-    // KIND_AUTO). For OpenVINO models this selects the execution device.
+    // KIND_AUTO). KIND_GPU maps to NVIDIA TensorRT on device 0; the remaining
+    // kinds select the OpenVINO execution device (CPU/NPU/Intel GPU/AUTO).
+    // For OpenVINO models this selects the execution device.
     std::string kind = "KIND_CPU";
     // Resolved device kind used by the scheduler/backend. Derived from `kind`.
     // Defaults to CPU for OpenVINO.
@@ -63,6 +65,15 @@ struct EnsembleStep {
     std::vector<std::string> input_map_to;    // step's input parameter names
     std::vector<std::string> output_map_from; // step output names
     std::vector<std::string> output_map_to;   // names in the parent scope
+};
+
+// A single key/value parameter from a Triton-style `parameters` block. The
+// value is kept in string form (Triton stores string_value / int64_value /
+// bool_value; the consumer converts as needed). Used by the plugin backend so
+// each pipeline can own its pre/post-processing behavior via config.pbtxt.
+struct PluginParameter {
+    std::string key;
+    std::string value;
 };
 
 // FDA model metadata (metadata.json or inline in config.pbtxt).
@@ -99,7 +110,10 @@ struct GoldenTest {
 struct ModelConfig {
     std::string name;
     std::string backend;  // "openvino", "plugin", "ensemble"
-    int64_t max_batch_size = 0;  // must be 0 (batching disabled)
+    // Triton-style batching: 0 disables batching (no batch dimension);
+    // >0 enables batching where request tensors carry a leading batch
+    // dimension B (1 <= B <= max_batch_size) and config dims are per-request.
+    int64_t max_batch_size = 0;
     std::vector<TensorSpec> inputs;
     std::vector<TensorSpec> outputs;
     InstanceGroup instance_group;
@@ -107,6 +121,10 @@ struct ModelConfig {
     // --- Phase 2 additions ---
     // Plugin backend: shared library name (e.g. "libpreprocess_plugin.so").
     std::string plugin_library;
+    // Plugin backend: per-model key/value parameters (Triton `parameters`).
+    // Each pipeline's plugin model can carry its own scale/clamp/offset, so
+    // multiple pipelines each own their pre/post-processing behavior.
+    std::vector<PluginParameter> parameters;
     // Ensemble backend: ordered steps that form the DAG.
     std::vector<EnsembleStep> ensemble_steps;
     // FDA model metadata.

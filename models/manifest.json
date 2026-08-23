@@ -1,0 +1,49 @@
+{
+  "version": "1",
+  "models": [
+    {
+      "model_id": "ensemble_pipeline",
+      "version": ""
+    },
+    {
+      "model_id": "intel_auto_model",
+      "version": "1",
+      "sha256": "1dc3e0544893d2ce62e7eee08483c25ea70168d250740fd8312454fe0c152058"
+    },
+    {
+      "model_id": "intel_cpu_model",
+      "version": "1",
+      "sha256": "d40e0eb67318d544af3771f07f7b05fbe44f8af71c6d1b1f9eeee48425ad9c9f"
+    },
+    {
+      "model_id": "intel_gpu_model",
+      "version": "1",
+      "sha256": "a62cbdbcbb97bb6c0b911a7b926c5b98c8710ed43740e502b15de4a3bbea04af"
+    },
+    {
+      "model_id": "intel_npu_model",
+      "version": "1",
+      "sha256": "04c3d92095580d46cc3e529eca0e17b9c6c5db0b5dfdfe428ca5df2a274f3a3c"
+    },
+    {
+      "model_id": "multi_io_model",
+      "version": "1",
+      "sha256": "0370091a8d887ac21c08fc7f220c46e78520edb079d1ee2922f5d5c04508a5ad"
+    },
+    {
+      "model_id": "postprocess_plugin",
+      "version": "",
+      "plugin_sha256": "b9b555c0ffbb03afa4b8511c4d50f2d3fdc8e5991d7806af24ba9d14cc52a4b1"
+    },
+    {
+      "model_id": "preprocess_plugin",
+      "version": "",
+      "plugin_sha256": "b9b555c0ffbb03afa4b8511c4d50f2d3fdc8e5991d7806af24ba9d14cc52a4b1"
+    },
+    {
+      "model_id": "sample_model",
+      "version": "1",
+      "sha256": "95b1412d665a783364f116832e6d35e82e97556f73f5cfd19778aec285aa3f92"
+    }
+  ]
+}

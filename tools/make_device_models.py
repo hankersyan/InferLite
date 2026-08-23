@@ -107,14 +107,19 @@ def make_device_model(root, model_name, device, count):
 
     if blob_name is not None:
         if available:
-            compiled = ov.Core().compile_model(model, ov_name)
-            blob_path = os.path.join(version_dir, blob_name)
-            import io
-            buf = io.BytesIO()
-            compiled.export_model(buf)
-            with open(blob_path, "wb") as f:
-                f.write(buf.getvalue())
-            print("  [%s] exported %s (device %s)" % (model_name, blob_name, ov_name))
+            try:
+                compiled = ov.Core().compile_model(model, ov_name)
+                blob_path = os.path.join(version_dir, blob_name)
+                import io
+                buf = io.BytesIO()
+                compiled.export_model(buf)
+                with open(blob_path, "wb") as f:
+                    f.write(buf.getvalue())
+                print("  [%s] exported %s (device %s)" % (model_name, blob_name, ov_name))
+            except Exception as e:  # device listed but failed to compile
+                print("  [%s] device '%s' listed but compile failed (%s); "
+                      "writing IR only (kind=KIND_CPU)" % (model_name, device, e))
+                device = "cpu"
         else:
             print("  [%s] device '%s' unavailable; writing IR only (kind=KIND_CPU)" %
                   (model_name, device))

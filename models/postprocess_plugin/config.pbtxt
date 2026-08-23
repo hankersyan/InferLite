@@ -1,0 +1,40 @@
+name: "postprocess_plugin"
+backend: "plugin"
+max_batch_size: 0
+plugin_library: "sample_plugin.dll"
+input {
+  name: "processed"
+  data_type: TYPE_FP32
+  dims: [ 1, 4 ]
+}
+output {
+  name: "result"
+  data_type: TYPE_FP32
+  dims: [ 1, 4 ]
+}
+instance_group {
+  count: 1
+  kind: KIND_CPU
+}
+metadata {
+  model_id: "postprocess_plugin"
+  version: "1.0.0"
+  intended_use: "Test CPU plugin postprocessing"
+  training_dataset_id: "N/A"
+  approval_status: "approved"
+}
+self_test {
+  input {
+    name: "processed"
+    data_type: TYPE_FP32
+    dims: [ 1, 4 ]
+    data: [ 1.0, 2.0, 3.0, 4.0 ]
+  }
+  expected_output {
+    name: "result"
+    data_type: TYPE_FP32
+    dims: [ 1, 4 ]
+    data: [ 1.5, 2.5, 3.5, 4.5 ]
+  }
+  epsilon: 0.0001
+}

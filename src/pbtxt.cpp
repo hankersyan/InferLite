@@ -260,6 +260,84 @@ Tensor parseSelfTestTensor(Lexer& lex, const char* what) {
     return t;
 }
 
+// Parse the body of a single tensor-spec message used by the `input`/`output`
+// fields, e.g.:
+//   { name: "x" data_type: TYPE_FP32 dims: [ 1, 4 ] }
+// The caller must have already consumed the leading '{'; this reads fields
+// until the matching '}'. `what` is used only in error messages.
+TensorSpec parseTensorSpecBody(Lexer& lex, const char* what) {
+    TensorSpec spec;
+    while (true) {
+        std::string f = lex.next();
+        if (f == "}") break;
+        if (f.empty()) throw PbtxtError("unexpected EOF in " + std::string(what) + " block");
+        if (f == "name") {
+            requireToken(lex, ":", "input.name");
+            spec.name = lex.next();
+        } else if (f == "data_type") {
+            requireToken(lex, ":", "input.data_type");
+            std::string v = stripTypePrefix(lex.next());
+            spec.data_type = dataTypeFromString(v);
+            if (spec.data_type == DataType::kInvalid) {
+                throw PbtxtError("unsupported data_type in " + std::string(what) + ": " + v);
+            }
+        } else if (f == "dims") {
+            requireToken(lex, ":", "input.dims");
+            spec.dims = parseDims(lex);
+        } else {
+            // Skip unknown scalar/message fields inside the block.
+            std::string t = lex.next();
+            if (t == "{") {
+                int depth = 1;
+                while (depth > 0) {
+                    std::string inner = lex.next();
+                    if (inner == "{") ++depth;
+                    else if (inner == "}") --depth;
+                    else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                }
+            }
+        }
+    }
+    if (spec.name.empty()) throw PbtxtError(std::string(what) + " missing 'name'");
+    if (spec.data_type == DataType::kInvalid) {
+        throw PbtxtError(std::string(what) + " missing valid 'data_type'");
+    }
+    return spec;
+}
+
+// Parse the `input`/`output` field. Two proto-text forms are accepted:
+//   repeated-message form (already consumed 'input'):
+//     input { name: "x" ... }     -> caller passed 'tok' == "{"
+//   array-of-message form (Triton unified IO schema):
+//     input: [ { name: "x" ... }, { name: "y" ... } ]
+//       -> caller passed 'tok' == ":"
+std::vector<TensorSpec> parseIOField(Lexer& lex, const char* what, const std::string& tok) {
+    std::vector<TensorSpec> specs;
+    if (tok == ":") {
+        // Array-of-message form: input: [ {...}, {...} ]
+        std::string t = lex.next();
+        if (t != "[") {
+            throw PbtxtError("expected '[' for " + std::string(what) + " array, got '" + t + "'");
+        }
+        while (true) {
+            std::string n = lex.next();
+            if (n == "]") break;
+            if (n == ",") continue;
+            if (n != "{") {
+                throw PbtxtError("expected '{' in " + std::string(what) + " array, got '" + n + "'");
+            }
+            specs.push_back(parseTensorSpecBody(lex, what));
+        }
+    } else {
+        // Repeated-message form: input { ... }
+        if (tok != "{") {
+            throw PbtxtError("expected '{' for " + std::string(what) + ", got '" + tok + "'");
+        }
+        specs.push_back(parseTensorSpecBody(lex, what));
+    }
+    return specs;
+}
+
 // Resolve a DeviceKind from an instance_group's `kind` string.
 DeviceKind kindFromStringInternal(const std::string& s) {
     std::string v = toUpper(s);
@@ -302,74 +380,15 @@ ModelConfig parseConfigPbtxt(const std::string& text) {
             require(":", "max_batch_size");
             cfg.max_batch_size = parseInteger(lex.next());
         } else if (field == "input") {
-            require("{", "input");
-            TensorSpec spec;
-            while (true) {
-                std::string f = lex.next();
-                if (f == "}") break;
-                if (f.empty()) throw PbtxtError("unexpected EOF in input{}");
-                if (f == "name") {
-                    require(":", "input.name");
-                    spec.name = lex.next();
-                } else if (f == "data_type") {
-                    require(":", "input.data_type");
-                    std::string v = stripTypePrefix(lex.next());
-                    spec.data_type = dataTypeFromString(v);
-                    if (spec.data_type == DataType::kInvalid) {
-                        throw PbtxtError("unsupported data_type in input: " + v);
-                    }
-                } else if (f == "dims") {
-                    require(":", "input.dims");
-                    spec.dims = parseDims(lex);
-                } else {
-                    // Skip unknown scalar/message fields inside input.
-                    std::string t = lex.next();
-                    if (t == "{") {
-                        int depth = 1;
-                        while (depth > 0) {
-                            std::string inner = lex.next();
-                            if (inner == "{") ++depth;
-                            else if (inner == "}") --depth;
-                            else if (inner.empty()) throw PbtxtError("unbalanced braces");
-                        }
-                    }
-                }
-            }
-            cfg.inputs.push_back(std::move(spec));
+            // Accept both `input { ... }` and `input: [ { ... }, ... ]`.
+            std::string tok = lex.next();
+            auto specs = parseIOField(lex, "input", tok);
+            cfg.inputs.insert(cfg.inputs.end(), specs.begin(), specs.end());
         } else if (field == "output") {
-            require("{", "output");
-            TensorSpec spec;
-            while (true) {
-                std::string f = lex.next();
-                if (f == "}") break;
-                if (f.empty()) throw PbtxtError("unexpected EOF in output{}");
-                if (f == "name") {
-                    require(":", "output.name");
-                    spec.name = lex.next();
-                } else if (f == "data_type") {
-                    require(":", "output.data_type");
-                    std::string v = stripTypePrefix(lex.next());
-                    spec.data_type = dataTypeFromString(v);
-                    if (spec.data_type == DataType::kInvalid) {
-                        throw PbtxtError("unsupported data_type in output: " + v);
-                    }
-                } else if (f == "dims") {
-                    require(":", "output.dims");
-                    spec.dims = parseDims(lex);
-                } else {
-                    std::string t = lex.next();
-                    if (t == "{") {
-                        int depth = 1;
-                        while (depth > 0) {
-                            std::string inner = lex.next();
-                            if (inner == "{") ++depth;
-                            else if (inner == "}") --depth;
-                            else if (inner.empty()) throw PbtxtError("unbalanced braces");
-                        }
-                    }
-                }
-            }
-            cfg.outputs.push_back(std::move(spec));
+            // Accept both `output { ... }` and `output: [ { ... }, ... ]`.
+            std::string tok = lex.next();
+            auto specs = parseIOField(lex, "output", tok);
+            cfg.outputs.insert(cfg.outputs.end(), specs.begin(), specs.end());
         } else if (field == "instance_group") {
             require("{", "instance_group");
             while (true) {
@@ -398,6 +417,55 @@ ModelConfig parseConfigPbtxt(const std::string& text) {
         } else if (field == "plugin_library") {
             require(":", "plugin_library");
             cfg.plugin_library = lex.next();
+        } else if (field == "parameters") {
+            require("{", "parameters");
+            while (true) {
+                std::string f = lex.next();
+                if (f == "}") break;
+                if (f.empty()) throw PbtxtError("unexpected EOF in parameters{}");
+                if (f == "key") {
+                    require(":", "parameters.key");
+                    PluginParameter p;
+                    p.key = lex.next();
+                    // Triton-style value wrapper:
+                    //   value { string_value: "..." | int64_value: N | bool_value: B }
+                    std::string t = lex.next();
+                    if (t == "value") t = lex.next();
+                    if (t != "{") {
+                        throw PbtxtError("expected 'value { ... }' for parameters key '" +
+                                         p.key + "'");
+                    }
+                    int depth = 1;
+                    while (depth > 0) {
+                        std::string inner = lex.next();
+                        if (inner == "{") { ++depth; continue; }
+                        if (inner == "}") { --depth; continue; }
+                        if (inner.empty()) throw PbtxtError("unbalanced braces in parameters.value");
+                        if (inner == "string_value" || inner == "int64_value" ||
+                            inner == "bool_value" || inner == "uint64_value" ||
+                            inner == "double_value") {
+                            require(":", "parameters.value." + inner);
+                            p.value = lex.next();
+                        } else {
+                            // Unknown scalar inside value{}: consume ':' + value.
+                            require(":", "parameters.value field");
+                            lex.next();
+                        }
+                    }
+                    cfg.parameters.push_back(std::move(p));
+                } else {
+                    std::string t = lex.next();
+                    if (t == "{") {
+                        int depth = 1;
+                        while (depth > 0) {
+                            std::string inner = lex.next();
+                            if (inner == "{") ++depth;
+                            else if (inner == "}") --depth;
+                            else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                        }
+                    }
+                }
+            }
         } else if (field == "ensemble_scheduling") {
             require("{", "ensemble_scheduling");
             while (true) {

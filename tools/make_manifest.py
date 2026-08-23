@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 """Generate manifest.json for the InferLite model repository.
 
-Computes SHA-256 hashes of each OpenVINO model's artifacts and each plugin
-library using the same rule as the server (Phase 4 adds the precompiled blobs):
-  model_hash = SHA256( concat( SHA256_hex(model.xml),
-                               SHA256_hex(model.bin),
-                               SHA256_hex(model.npu_blob),   # if present
-                               SHA256_hex(model.gpu_blob) ) )# if present
+Computes SHA-256 hashes of each model's artifact files and each plugin library
+using the same rule as the server:
+  model_hash = SHA256( concat( SHA256_hex(each artifact) ) )
+               where artifacts are model.xml + model.bin (OpenVINO),
+               model.plan (TensorRT), and the precompiled blobs
+               model.npu_blob / model.gpu_blob (Intel NPU / GPU) if present.
   plugin_sha256 = SHA256_hex(plugin library file)
 
 Writes models/manifest.json. The manifest hash is reported by the server.
@@ -15,6 +15,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 
 
 def sha256_file(path):
@@ -26,9 +27,11 @@ def sha256_file(path):
 
 
 def model_hash(version_dir):
+    # Artifact files in a fixed, deterministic order (matches the server).
     parts = []
     # Order must match the server's config_store.hashModelFiles().
-    for name in ("model.xml", "model.bin", "model.npu_blob", "model.gpu_blob"):
+    for name in ("model.xml", "model.bin", "model.plan",
+                 "model.npu_blob", "model.gpu_blob"):
         p = os.path.join(version_dir, name)
         if os.path.exists(p):
             parts.append(sha256_file(p))
@@ -59,8 +62,18 @@ def main():
         entry = {"model_id": model_name, "version": version}
         if version:
             entry["sha256"] = model_hash(os.path.join(model_dir, version))
-        # Plugin library in the model dir.
-        plugin = os.path.join(model_dir, "sample_plugin.dll")
+        # Plugin library in the model dir. The filename is taken from the
+        # config.pbtxt `plugin_library` field (each plugin model may use its
+        # own library); fall back to sample_plugin.dll for backwards
+        # compatibility with repositories written before plugin_library.
+        plugin_name = None
+        with open(cfg, "r", encoding="utf-8", errors="replace") as f:
+            m = re.search(r'plugin_library\s*:\s*"([^"]+)"', f.read())
+            if m:
+                plugin_name = m.group(1)
+        if plugin_name is None:
+            plugin_name = "sample_plugin.dll"
+        plugin = os.path.join(model_dir, plugin_name)
         if os.path.exists(plugin):
             entry["plugin_sha256"] = sha256_file(plugin)
         models.append(entry)

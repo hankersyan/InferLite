@@ -97,10 +97,16 @@ The server adopts the layered design of the reference production framework, adap
 The server uses the same protobuf‑like text format as the reference server for each model, plugin, or ensemble. Supported fields:
 
 - `name`, `backend` (valid values: `tensorrt`, `openvino`, `plugin`, `ensemble`)
-- `max_batch_size` (set to 0 for single‑request stateless models)
+- `max_batch_size` — Triton‑style batching: `0` disables batching (no batch
+  dimension); `>0` enables batching where request tensors carry a leading batch
+  dimension `B` (`1 <= B <= max_batch_size`) and `dims` are per‑request (without
+  the batch dimension). With `max_batch_size: 1` the batch dimension is always
+  `1`, so a model whose IR accepts `[1, 4]` declares `dims: [4]` and clients send
+  shape `[1, 4]`.
 - `input` / `output` tensor definitions (name, data type, dims)
 - `instance_group` – `count`, `kind` (KIND_GPU, KIND_CPU), and optionally `gpus` (only device 0)
 - `ensemble_scheduling` (for ensemble models): a `step` list with `model_name`, `input_map`, `output_map`
+- `parameters` (for plugin models): a Triton-style `parameters { key: "..." value { string_value: "..." } }` block, repeated per key. The key/value pairs are passed to the plugin's `inferlite_plugin_create`, so each pipeline owns its pre/post-processing behavior (e.g. a per-pipeline `scale`, `clamp_min`/`clamp_max`, `offset`) without code changes. See `tools/sample_plugin/sample_plugin.cpp` for the keys understood by the sample plugin.
 
 **Example: plugin backend model**
 ```
@@ -111,7 +117,13 @@ input [{ name: "raw_image", data_type: TYPE_UINT8, dims: [-1, -1, 3] }]
 output [{ name: "normalized_tensor", data_type: TYPE_FP32, dims: [3, 224, 224] }]
 instance_group [{ kind: KIND_CPU, count: 2 }]
 plugin_library: "libpreprocess_plugin.so"
+parameters {
+  key: "scale"
+  value { string_value: "0.5" }
+}
 ```
+
+Multiple pipelines can each reference their own plugin models (e.g. `preprocess_pipeline_a` / `preprocess_pipeline_b`) inside their `ensemble_scheduling`; each plugin model carries its own `parameters`, so each pipeline's preprocessing and postprocessing are owned and configured independently.
 
 #### 5.3 Inference Server Core
 
@@ -204,7 +216,7 @@ This API intentionally mirrors the reference server’s endpoint structure to si
 | Backend API | Adapted (built‑in backends) | Removes dynamic loading complexity; only TensorRT, OpenVINO, and plugin backends needed |
 | Instance Groups | Adopted | Controls per‑model concurrency via `count` and `kind` |
 | Ensemble Scheduling (DAG) | Adopted | Zero‑copy, concurrent execution of pipeline steps; static graph only |
-| Dynamic Batching | Omitted | Not needed for single‑stream industrial workloads |
+| Triton Batch Dimension (`max_batch_size`) | Adopted | `max_batch_size` shapes follow Triton: config `dims` are per‑request; clients prepend the batch dim. Request combining across the queue is deferred; `max_batch_size` bounds the accepted batch dim |
 | Live Model Update | Omitted | Server restart only, guaranteeing deterministic behaviour |
 | Shared Memory / IPC | Omitted | Single process can share pointers directly |
 | Priority / Rate Limiting | Omitted | Bounded queue provides sufficient back‑pressure control |

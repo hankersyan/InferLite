@@ -15,14 +15,19 @@ using clock = std::chrono::steady_clock;
 Scheduler::Scheduler(BackendPtr backend, std::shared_ptr<const ModelConfig> config,
                      size_t instance_count, size_t max_queue_size,
                      int64_t default_timeout_ms, int64_t max_inference_time_ms,
-                     std::shared_ptr<MemoryManager> memory)
+                     std::shared_ptr<MemoryManager> memory, std::string device_kind)
     : backend_(std::move(backend)),
       config_(std::move(config)),
       memory_(std::move(memory)),
+      device_kind_(std::move(device_kind)),
       max_queue_size_(max_queue_size),
       default_timeout_ms_(default_timeout_ms),
       max_inference_time_ms_(max_inference_time_ms > 0 ? max_inference_time_ms : 5000) {
-    // Spawn one worker thread per CPU instance.
+    worker_count_ = instance_count;
+    // Spawn one worker thread per instance. For GPU instances the backend
+    // executes on its own CUDA stream; workers simply drive the blocking
+    // execute() call (which the backend synchronizes via CUDA events), so the
+    // same worker model covers both CPU and GPU concurrently.
     for (size_t i = 0; i < instance_count; ++i) {
         workers_.emplace_back([this, i]() { workerLoop(i); });
     }
@@ -111,6 +116,20 @@ void Scheduler::processOne(std::shared_ptr<InferenceRequest> req) {
         if (req->done) return;  // timed out while queued
     }
 
+    // Phase 3 fault isolation: a quarantined (CUDA-faulted) instance refuses
+    // further work with a structured error code rather than risking corruption.
+    if (quarantined_.load(std::memory_order_acquire)) {
+        std::lock_guard<std::mutex> lock(req->m);
+        if (req->done) return;
+        req->result.ok = false;
+        req->result.error_code = ErrorCode::kInternalError;
+        req->result.error = "model instance is quarantined after a CUDA fault";
+        req->done = true;
+        stats_.requests_failed.fetch_add(1, std::memory_order_relaxed);
+        req->cv.notify_all();
+        return;
+    }
+
     auto start = clock::now();
     try {
         // Backends are CPU-bound and block synchronously. We record the elapsed
@@ -135,6 +154,13 @@ void Scheduler::processOne(std::shared_ptr<InferenceRequest> req) {
             req->result.error_code = bres.error_code;
             req->result.error = bres.error;
             req->result.outputs = std::move(bres.outputs);
+
+            // Phase 3 fault isolation: if the backend quarantined itself (e.g.
+            // a CUDA error), mark the model instance dead so no further work is
+            // assigned. A dead instance yields a structured INTERNAL_ERROR.
+            if (bres.quarantine) {
+                quarantined_.store(true, std::memory_order_release);
+            }
         }
         req->done = true;
     } catch (const std::exception& e) {

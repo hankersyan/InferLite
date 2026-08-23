@@ -1,0 +1,36 @@
+# Example TensorRT (GPU) model configuration (Phase 3).
+#
+# To use this model, place it under the active model repository (e.g.
+# models/sample_trt_model/) with a versioned subdirectory containing a compiled
+# TensorRT engine file `model.plan`, then regenerate manifest.json with
+# tools/make_manifest.py (the .plan file is hashed and must match the manifest).
+#
+# Generate a .plan engine from a trained/ONNX model with trtexec, e.g.:
+#   trtexec --onnx=model.onnx --saveEngine=model.plan
+#
+# Requires the server to be built with GPU support (TENSORRT_ROOT set at CMake
+# configure time). OpenVINO models, plugins, and ensembles remain CPU-only.
+name: "sample_trt_model"
+backend: "tensorrt"
+max_batch_size: 0
+input {
+  name: "input"
+  data_type: TYPE_FP32
+  dims: [ 1, 4 ]
+}
+output {
+  name: "output"
+  data_type: TYPE_FP32
+  dims: [ 1, 4 ]
+}
+instance_group {
+  count: 2
+  kind: KIND_GPU
+}
+metadata {
+  model_id: "sample_trt_model"
+  version: "1.0.0"
+  intended_use: "Example TensorRT GPU model for phase-03 validation"
+  training_dataset_id: "N/A"
+  approval_status: "approved"
+}

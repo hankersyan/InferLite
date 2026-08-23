@@ -37,6 +37,13 @@ typedef struct PluginNodeInfo {
     int32_t input_count;
     const InferliteTensorDesc* outputs;  // declared output specs
     int32_t output_count;
+    // Per-model key/value parameters from the config.pbtxt `parameters` block.
+    // Each pipeline's plugin model can carry its own pre/post-processing
+    // configuration (e.g. scale, clamp, offset). Parallel arrays; may be null
+    // with count 0 when no parameters are configured.
+    const char* const* parameter_keys;
+    const char* const* parameter_values;
+    int32_t parameter_count;
 } PluginNodeInfo;
 
 // Opaque handle to a plugin node instance.

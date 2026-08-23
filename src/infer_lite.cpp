@@ -22,7 +22,16 @@
 #include "pbtxt.hpp"
 #include "plugin_backend.hpp"
 #include "sha256.hpp"
+#include "tensorrt_backend.hpp"
 #include "validation.hpp"
+
+#ifdef INFERLITE_ENABLE_GPU
+#include "gpu_memory_manager.hpp"
+#endif
+
+#ifdef INFERLITE_ENABLE_GRPC
+#include "grpc_server.hpp"
+#endif
 
 namespace inferlite {
 
@@ -126,6 +135,9 @@ int errorCodeToStatus(ErrorCode c) {
 
 InferLite::InferLite(const ServerOptions& opts) : opts_(opts) {
     memory_ = std::make_shared<MemoryManager>();
+#ifdef INFERLITE_ENABLE_GPU
+    gpu_memory_ = std::make_shared<GpuMemoryManager>();
+#endif
     diag_ = std::make_unique<Diagnostics>(opts_.diagnostic_log_path);
     audit_ = std::make_unique<AuditLog>(opts_.audit_log_path);
 
@@ -166,11 +178,16 @@ InferLite::InferLite(const ServerOptions& opts) : opts_(opts) {
         entry.version_path = lm.version_path;
 
         // Register config hash and verify model file integrity against the
-        // manifest (if enabled). Ensembles/plugins have no IR files to verify.
+        // manifest (if enabled). Ensembles/plugins have no artifact files to
+        // verify; OpenVINO (model.xml/.bin) and TensorRT (model.plan) do.
         config_store_->registerConfigHash(entry.name, lm.config_hash);
-        if (lm.config->backend == "openvino") {
+        if (lm.config->backend == "openvino" || lm.config->backend == "tensorrt") {
             config_store_->registerModelFiles(entry.name, lm.version_path);
         }
+        entry.device_label = (lm.config->backend == "tensorrt" &&
+                              lm.config->instance_group.kind == "KIND_GPU")
+                                 ? "GPU"
+                                 : "CPU";
 
         if (lm.config->backend == "ensemble") {
             // Defer; resolved in pass 2.
@@ -179,11 +196,14 @@ InferLite::InferLite(const ServerOptions& opts) : opts_(opts) {
         }
 
         entry.backend = makeBackend(lm);
-        // Phase 4: derive the execution device label for audit/health reporting.
+        // Derive the execution device label for audit/health reporting. OpenVINO
+        // backends report their resolved device (CPU/NPU/INTEL_GPU/AUTO); the
+        // TensorRT backend reports "GPU"; everything else (plugin/ensemble) is CPU.
         if (auto ovb = std::dynamic_pointer_cast<OpenVinoBackend>(entry.backend)) {
             entry.device_label = ovb->deviceLabel();
+        } else if (entry.device_label == "GPU") {
+            entry.device_label = "GPU";
         } else {
-            // Plugin / other backends run on CPU.
             entry.device_label = "CPU";
         }
         backend_by_name[entry.name] = entry.backend;
@@ -213,7 +233,11 @@ InferLite::InferLite(const ServerOptions& opts) : opts_(opts) {
         }
         e.scheduler = std::make_shared<Scheduler>(e.backend, e.config, instance_count,
                                                   opts_.max_queue_size, per_req_timeout,
-                                                  limits_.max_inference_time_ms, memory_);
+                                                  limits_.max_inference_time_ms, memory_,
+                                                  e.device_label);
+        if (e.device_label == "GPU") {
+            gpu_usage_bytes_[e.name].store(0, std::memory_order_relaxed);
+        }
         models_.push_back(std::move(e));
     }
 
@@ -275,6 +299,27 @@ BackendPtr InferLite::makeBackend(const LoadedModel& lm) {
                                  "' must be built in the ensemble pass");
     }
 
+    if (cfg.backend == "tensorrt") {
+#ifdef INFERLITE_ENABLE_GPU
+        if (!gpu_memory_) {
+            throw std::runtime_error("TensorRT backend '" + cfg.name +
+                                     "' requested but GPU memory manager is unavailable");
+        }
+        std::string plan_path = lm.version_path;
+        if (!plan_path.empty() && plan_path.back() != '/' && plan_path.back() != '\\') {
+            plan_path += "/";
+        }
+        plan_path += "model.plan";
+        auto trt = std::make_shared<TensorRtBackend>(gpu_memory_);
+        trt->load(cfg, plan_path, opts_.max_gpu_memory_mb);
+        return trt;
+#else
+        throw std::runtime_error("TensorRT backend '" + cfg.name +
+                                 "' requested but GPU support is not compiled in "
+                                 "(rebuild with a TensorRT SDK / TENSORRT_ROOT)");
+#endif
+    }
+
     // openvino backend.
     auto backend = std::make_shared<OpenVinoBackend>();
     backend->setResourceLimits(&limits_);
@@ -324,15 +369,167 @@ void InferLite::start() {
     http_ = std::make_unique<HttpServer>(opts_.host, opts_.http_port, handler,
                                          opts_.http_threads);
     http_->start();
+#ifdef INFERLITE_ENABLE_GRPC
+    if (opts_.grpc_port > 0) {
+        grpc_ = std::make_unique<GrpcServer>(this, opts_.host, opts_.grpc_port);
+        grpc_->start();
+    }
+#endif
     running_ = true;
 }
 
 void InferLite::stop() {
+#ifdef INFERLITE_ENABLE_GRPC
+    if (grpc_) {
+        grpc_->stop();
+        grpc_.reset();
+    }
+#endif
     if (http_) {
         http_->stop();
         http_.reset();
     }
     running_ = false;
+}
+
+const Scheduler* InferLite::findScheduler(const std::string& name) const {
+    for (const auto& m : models_) {
+        if (m.name == name) return m.scheduler.get();
+    }
+    return nullptr;
+}
+
+bool InferLite::modelExists(const std::string& name) const {
+    return findScheduler(name) != nullptr;
+}
+
+std::string InferLite::modelDevice(const std::string& name) const {
+    for (const auto& m : models_) {
+        if (m.name == name) return m.device_label;
+    }
+    return {};
+}
+
+std::vector<std::string> InferLite::modelNames() const {
+    std::vector<std::string> names;
+    names.reserve(models_.size());
+    for (const auto& m : models_) names.push_back(m.name);
+    return names;
+}
+
+std::string InferLite::newTraceId() {
+    return generateTraceId();
+}
+
+InferenceOutcome InferLite::runInference(const std::string& model_name,
+                                         std::vector<Tensor> inputs,
+                                         std::string trace_id) {
+    InferenceOutcome outcome;
+
+    // Locate the model.
+    const ModelEntry* entry = nullptr;
+    for (const auto& m : models_) {
+        if (m.name == model_name) {
+            entry = &m;
+            break;
+        }
+    }
+    if (!entry) {
+        outcome.error_code = ErrorCode::kModelNotFound;
+        outcome.error = "MODEL_NOT_FOUND";
+        return outcome;
+    }
+
+    auto fail = [&outcome](ErrorCode code, const std::string& msg) {
+        outcome.ok = false;
+        outcome.error_code = code;
+        outcome.error = msg;
+        return outcome;
+    };
+
+    if (trace_id.empty()) trace_id = generateTraceId();
+    outcome.trace_id = trace_id;
+
+    // Structured input validation against the model spec (shape/type/size).
+    ErrorCode vc = ErrorCode::kNone;
+    std::string vm;
+    if (!validateInputs(*entry->config, inputs, limits_.max_input_size_bytes, vc, vm)) {
+        return fail(vc, vm);
+    }
+
+    // Build the audit input-shape summary.
+    std::string input_shape_str;
+    {
+        std::ostringstream ss;
+        ss << '[';
+        for (size_t i = 0; i < inputs.size(); ++i) {
+            if (i) ss << ',';
+            for (size_t d = 0; d < inputs[i].shape.size(); ++d) {
+                if (d) ss << ',';
+                ss << inputs[i].shape[d];
+            }
+        }
+        ss << ']';
+        input_shape_str = ss.str();
+    }
+
+    auto ireq = std::make_shared<InferenceRequest>();
+    ireq->inputs = std::move(inputs);
+    ireq->timeout_ms = opts_.request_timeout_ms;
+
+    auto start = std::chrono::steady_clock::now();
+    std::shared_ptr<InferenceResult> result;
+    try {
+        result = entry->scheduler->submit(ireq);
+    } catch (const std::exception& e) {
+        result = std::make_shared<InferenceResult>();
+        result->ok = false;
+        result->error_code = ErrorCode::kInternalError;
+        result->error = e.what();
+    }
+    auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                           std::chrono::steady_clock::now() - start)
+                           .count();
+
+    // Finalize the audit entry.
+    if (audit_) {
+        AuditEntry ae;
+        ae.trace_id = trace_id;
+        ae.model_id = entry->name;
+        ae.model_version = entry->config->metadata.version;
+        ae.model_hash = config_store_->modelHash(entry->name);
+        ae.software_version = config_store_->softwareVersion();
+        ae.config_hash = config_store_->configHash(entry->name);
+        ae.duration_ms = duration_ms;
+        ae.device = entry->device_label;
+        try {
+            json::Value parsed_shape = json::parse(input_shape_str);
+            if (parsed_shape.isArray()) {
+                for (const auto& d : parsed_shape.asArray()) {
+                    ae.input_shape.push_back(static_cast<int64_t>(d.asDouble()));
+                }
+            }
+        } catch (...) {
+        }
+        ae.inference_status = result->ok ? "SUCCESS" : "FAILURE";
+        ae.error_code = result->ok ? "" : std::string(errorCodeToString(result->error_code));
+        try {
+            audit_->write(ae);
+        } catch (const std::exception& e) {
+            diag_->error(std::string("audit log write failed: ") + e.what());
+        }
+    }
+
+    if (!result->ok) {
+        outcome.error_code = result->error_code;
+        outcome.error = result->error;
+        return outcome;
+    }
+
+    outcome.ok = true;
+    outcome.device = entry->device_label;
+    outcome.outputs = std::move(result->outputs);
+    return outcome;
 }
 
 void InferLite::waitForShutdown() {
@@ -389,6 +586,23 @@ HttpResponse InferLite::handleHealthDetailed() {
     o.asObject()["software_version"] = json::Value(config_store_->softwareVersion());
     o.asObject()["openvino_version"] = json::Value(config_store_->openvinoVersion());
     o.asObject()["manifest_enabled"] = json::Value(config_store_->manifestEnabled());
+#ifdef INFERLITE_ENABLE_GPU
+    o.asObject()["gpu"] = json::Value(json::Value::Object());
+    {
+        json::Value& g = o.asObject()["gpu"];
+        g.asObject()["enabled"] = json::Value(true);
+        g.asObject()["device"] = json::Value(opts_.gpu_device);
+        g.asObject()["max_gpu_memory_mb"] = json::Value(static_cast<int64_t>(opts_.max_gpu_memory_mb));
+        g.asObject()["max_concurrent_gpu_instances"] =
+            json::Value(static_cast<int64_t>(opts_.max_concurrent_gpu_instances));
+        g.asObject()["device_pool_bytes"] = json::Value(static_cast<int64_t>(gpu_memory_->devicePoolBytes()));
+        g.asObject()["pinned_pool_bytes"] = json::Value(static_cast<int64_t>(gpu_memory_->pinnedPoolBytes()));
+    }
+#else
+    o.asObject()["gpu"] = json::Value(json::Value::Object());
+    o.asObject()["gpu"].asObject()["enabled"] = json::Value(false);
+    o.asObject()["gpu"].asObject()["reason"] = json::Value("not compiled in (no TensorRT SDK)");
+#endif
     json::Value models = json::Value(json::Value::Array());
     for (const auto& e : models_) {
         json::Value m = json::Value::Object();
@@ -499,6 +713,11 @@ HttpResponse InferLite::handleMetrics() {
         mm.asObject()["requests_timed_out"] = json::Value(static_cast<int64_t>(st.requests_timed_out.load()));
         mm.asObject()["average_latency_us"] = json::Value(m.scheduler->averageLatencyUs());
         mm.asObject()["queue_depth"] = json::Value(static_cast<int64_t>(m.scheduler->queueDepth()));
+        if (m.device_label == "GPU") {
+            auto it = gpu_usage_bytes_.find(m.name);
+            mm.asObject()["gpu_memory_bytes"] = json::Value(static_cast<int64_t>(
+                it != gpu_usage_bytes_.end() ? it->second.load(std::memory_order_relaxed) : 0));
+        }
         models_arr.asArray().push_back(std::move(mm));
     }
     double avg_us = total_completed > 0
@@ -511,6 +730,14 @@ HttpResponse InferLite::handleMetrics() {
     obj.asObject()["queue_depth"] = json::Value(static_cast<int64_t>(total_queue));
     obj.asObject()["config_hash"] = json::Value(config_store_->configStoreHash());
     obj.asObject()["models"] = std::move(models_arr);
+#ifdef INFERLITE_ENABLE_GPU
+    obj.asObject()["gpu_memory"] = json::Value(json::Value::Object());
+    {
+        json::Value& g = obj.asObject()["gpu_memory"];
+        g.asObject()["device_pool_bytes"] = json::Value(static_cast<int64_t>(gpu_memory_->devicePoolBytes()));
+        g.asObject()["pinned_pool_bytes"] = json::Value(static_cast<int64_t>(gpu_memory_->pinnedPoolBytes()));
+    }
+#endif
     resp.status = 200;
     resp.body = obj.dump();
     return resp;
@@ -520,21 +747,7 @@ HttpResponse InferLite::handleInfer(const HttpRequest& req, const std::string& m
     HttpResponse resp;
     resp.content_type = "application/json";
 
-    // Locate the model.
-    const ModelEntry* entry = nullptr;
-    for (const auto& m : models_) {
-        if (m.name == model_name) {
-            entry = &m;
-            break;
-        }
-    }
-    if (!entry) {
-        resp.status = 404;
-        resp.body = "{\"error\":\"MODEL_NOT_FOUND\"}";
-        return resp;
-    }
-
-    auto makeError = [&](ErrorCode code, const std::string& msg) -> HttpResponse {
+    auto makeError = [](ErrorCode code, const std::string& msg) -> HttpResponse {
         HttpResponse r;
         r.status = errorCodeToStatus(code);
         r.body = std::string("{\"error\":\"") + errorCodeToString(code) +
@@ -609,89 +822,17 @@ HttpResponse InferLite::handleInfer(const HttpRequest& req, const std::string& m
         input_tensors.push_back(std::move(t));
     }
 
-    // Structured input validation against the model spec (shape/type/size).
-    ErrorCode vc = ErrorCode::kNone;
-    std::string vm;
-    if (!validateInputs(*entry->config, input_tensors, limits_.max_input_size_bytes, vc, vm)) {
-        return makeError(vc, vm);
-    }
-
-    // Create the audit entry (trace_id + model + config hashes).
-    std::string trace_id = generateTraceId();
-    std::string input_shape_str;
-    {
-        std::ostringstream ss;
-        ss << '[';
-        for (size_t i = 0; i < input_tensors.size(); ++i) {
-            if (i) ss << ',';
-            for (size_t d = 0; d < input_tensors[i].shape.size(); ++d) {
-                if (d) ss << ',';
-                ss << input_tensors[i].shape[d];
-            }
-        }
-        ss << ']';
-        input_shape_str = ss.str();
-    }
-
-    auto ireq = std::make_shared<InferenceRequest>();
-    ireq->inputs = std::move(input_tensors);
-    ireq->timeout_ms = opts_.request_timeout_ms;
-
-    auto start = std::chrono::steady_clock::now();
-    std::shared_ptr<InferenceResult> result;
-    try {
-        result = entry->scheduler->submit(ireq);
-    } catch (const std::exception& e) {
-        result = std::make_shared<InferenceResult>();
-        result->ok = false;
-        result->error_code = ErrorCode::kInternalError;
-        result->error = e.what();
-    }
-    auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                           std::chrono::steady_clock::now() - start)
-                           .count();
-
-    // Finalize the audit entry.
-    if (audit_) {
-        AuditEntry ae;
-        ae.trace_id = trace_id;
-        ae.model_id = entry->name;
-        ae.model_version = entry->config->metadata.version;
-        ae.model_hash = config_store_->modelHash(entry->name);
-        ae.software_version = config_store_->softwareVersion();
-        ae.config_hash = config_store_->configHash(entry->name);
-        ae.duration_ms = duration_ms;
-        // Phase 4: report the resolved execution device (CPU/NPU/INTEL_GPU/AUTO).
-        ae.device = entry->device_label;
-        // input_shape is serialized by the audit helper; pass a parsed shape.
-        try {
-            json::Value parsed_shape = json::parse(input_shape_str);
-            if (parsed_shape.isArray()) {
-                for (const auto& d : parsed_shape.asArray()) {
-                    ae.input_shape.push_back(static_cast<int64_t>(d.asDouble()));
-                }
-            }
-        } catch (...) {
-        }
-        ae.inference_status = result->ok ? "SUCCESS" : "FAILURE";
-        ae.error_code = result->ok ? "" : std::string(errorCodeToString(result->error_code));
-        try {
-            audit_->write(ae);
-        } catch (const std::exception& e) {
-            diag_->error(std::string("audit log write failed: ") + e.what());
-        }
-    }
-
-    if (!result->ok) {
-        // Map result error code to a structured error response.
-        ErrorCode code = result->error_code;
-        return makeError(code, result->error);
+    // Shared inference core: validation + scheduling + audit + outputs.
+    InferenceOutcome outcome = runInference(model_name, std::move(input_tensors),
+                                            generateTraceId());
+    if (!outcome.ok) {
+        return makeError(outcome.error_code, outcome.error);
     }
 
     // Build response: outputs with name/shape/datatype/data (base64).
     json::Value resp_obj = json::Value::Object();
     json::Value outputs_arr = json::Value(json::Value::Array());
-    for (const auto& out : result->outputs) {
+    for (const auto& out : outcome.outputs) {
         json::Value o = json::Value::Object();
         o.asObject()["name"] = json::Value(out.name);
         json::Value shape = json::Value(json::Value::Array());
@@ -702,7 +843,7 @@ HttpResponse InferLite::handleInfer(const HttpRequest& req, const std::string& m
         outputs_arr.asArray().push_back(std::move(o));
     }
     resp_obj.asObject()["model_name"] = json::Value(model_name);
-    resp_obj.asObject()["trace_id"] = json::Value(trace_id);
+    resp_obj.asObject()["trace_id"] = json::Value(outcome.trace_id);
     resp_obj.asObject()["outputs"] = std::move(outputs_arr);
     resp.status = 200;
     resp.body = resp_obj.dump();

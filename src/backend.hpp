@@ -18,6 +18,14 @@ struct BackendResult {
     ErrorCode error_code = ErrorCode::kNone;
     std::string error;  // human-readable diagnostic
     std::vector<Tensor> outputs;
+    // --- Phase 3 (GPU) ---
+    // Device the inference ran on ("CPU" or "GPU"), for the audit log.
+    std::string device = "CPU";
+    // GPU device memory (bytes) consumed by this inference (0 for CPU-only).
+    size_t gpu_memory_bytes = 0;
+    // Set to true when a CUDA error indicates the instance must be quarantined
+    // (fault isolation): the scheduler marks it dead and stops assigning work.
+    bool quarantine = false;
 };
 
 class IBackend {

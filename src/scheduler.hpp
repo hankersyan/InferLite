@@ -20,6 +20,10 @@
 #include "memory_manager.hpp"
 #include "tensor.hpp"
 
+#ifdef INFERLITE_ENABLE_GPU
+#include "gpu_memory_manager.hpp"
+#endif
+
 namespace inferlite {
 
 struct ModelConfig;
@@ -59,9 +63,13 @@ class Scheduler {
 public:
     // max_queue_size: hard cap on the number of requests waiting for an
     // instance. 0 disables the bound (unbounded).
+    // `device_kind`: "CPU" spawns a worker thread per instance; "GPU" tracks a
+    // pool of busy/free GPU instances (each mapped to a CUDA stream) driven by
+    // the same worker threads, enabling concurrent execution across streams.
     Scheduler(BackendPtr backend, std::shared_ptr<const ModelConfig> config,
               size_t instance_count, size_t max_queue_size, int64_t default_timeout_ms,
-              int64_t max_inference_time_ms, std::shared_ptr<MemoryManager> memory);
+              int64_t max_inference_time_ms, std::shared_ptr<MemoryManager> memory,
+              std::string device_kind = "CPU");
     ~Scheduler();
 
     Scheduler(const Scheduler&) = delete;
@@ -75,7 +83,8 @@ public:
     size_t queueDepth() const;
 
     const SchedulerStats& stats() const { return stats_; }
-    size_t instanceCount() const { return workers_.size(); }
+    size_t instanceCount() const { return worker_count_; }
+    const std::string& deviceKind() const { return device_kind_; }
 
     // Per-model latency (microseconds, average). Used by metrics.
     double averageLatencyUs() const {
@@ -91,6 +100,7 @@ private:
     BackendPtr backend_;
     std::shared_ptr<const ModelConfig> config_;
     std::shared_ptr<MemoryManager> memory_;
+    std::string device_kind_;
 
     size_t max_queue_size_;
     int64_t default_timeout_ms_;
@@ -102,7 +112,12 @@ private:
     bool stop_ = false;
 
     std::vector<std::thread> workers_;
+    size_t worker_count_ = 0;
     SchedulerStats stats_;
+
+    // Phase 3: true once a backend instance quarantines itself (CUDA fault).
+    // A quarantined scheduler rejects further work with INTERNAL_ERROR.
+    std::atomic<bool> quarantined_{false};
 
     // Semaphore-like counter limiting the number of requests dequeued but not
     // yet completed. Bound = instance_count.

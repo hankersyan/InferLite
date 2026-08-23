@@ -1,0 +1,41 @@
+name: "ensemble_pipeline"
+backend: "ensemble"
+max_batch_size: 0
+input {
+  name: "raw"
+  data_type: TYPE_FP32
+  dims: [ 1, 4 ]
+}
+output {
+  name: "result"
+  data_type: TYPE_FP32
+  dims: [ 1, 4 ]
+}
+instance_group {
+  count: 1
+  kind: KIND_CPU
+}
+ensemble_scheduling {
+  step {
+    model_name: "preprocess_plugin"
+    input_map { raw: "raw" }
+    output_map { normalized: "normalized" }
+  }
+  step {
+    model_name: "sample_model"
+    input_map { input: "normalized" }
+    output_map { add: "y" }
+  }
+  step {
+    model_name: "postprocess_plugin"
+    input_map { processed: "y" }
+    output_map { result: "result" }
+  }
+}
+metadata {
+  model_id: "ensemble_pipeline"
+  version: "1.0.0"
+  intended_use: "Test CPU ensemble pipeline"
+  training_dataset_id: "N/A"
+  approval_status: "approved"
+}

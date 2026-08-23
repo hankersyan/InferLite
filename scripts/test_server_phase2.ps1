@@ -2,8 +2,9 @@
 # Validates: model integrity (manifest), audit trail, health/detailed, versions,
 # structured error codes, ensemble DAG, plugin backend, and self-test readiness.
 $ErrorActionPreference = "Stop"
-$build = "c:\Test\triton\inferlite\build"
-Set-Location $PSScriptRoot
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+$build = Join-Path $RepoRoot "build"
+Set-Location $build
 
 # Ensure no stale server.
 Get-Process inferlite -ErrorAction SilentlyContinue | Stop-Process -Force
@@ -12,7 +13,7 @@ Start-Sleep -Milliseconds 500
 Remove-Item "$build\audit_p2.log", "$build\diag_p2.log" -ErrorAction SilentlyContinue
 
 $p = Start-Process -FilePath "$build\inferlite.exe" `
-    -ArgumentList "--model-repository=models --http-port=8100 --max-queue-size=100 --http-threads=4 --validated-mode --audit-log=$build\audit_p2.log --diagnostic-log=$build\diag_p2.log" `
+    -ArgumentList "--model-repository=..\models --http-port=8100 --max-queue-size=100 --http-threads=4 --validated-mode --audit-log=$build\audit_p2.log --diagnostic-log=$build\diag_p2.log" `
     -PassThru -RedirectStandardOutput "$build\out_p2.txt" -RedirectStandardError "$build\err_p2.txt"
 Start-Sleep -Seconds 5
 if ($p.HasExited) {

@@ -57,7 +57,8 @@
 - **Version Policy:** Server reads the highest numeric directory name at startup and ignores others.
 - **Configuration (`config.pbtxt`):** Supports a minimal subset of fields:
   - `name`, `backend` (must be `openvino`)
-  - `max_batch_size` (must be `0`; batching is disabled).
+  - `max_batch_size` (Triton‑style: `0` disables batching; `>0` enables a
+    leading batch dimension on request tensors, with config `dims` per‑request).
   - `input` / `output` tensor definitions (name, data_type, dims)
   - `instance_group` (`count`, `kind`: strictly `KIND_CPU`).
 
@@ -102,7 +103,7 @@ A lightweight HTTP server exposes a minimal, synchronous subset of the standard 
 
 - **Command Line:** 
   `--model-repository=/path/to/models --http-port=8000 --max-queue-size=100`
-- **Startup Sequence:** Scan repo → Validate configs (fail if `max_batch_size > 0` or `KIND_GPU` is requested) → Load OpenVINO CPU backends → Create instances → Start HTTP listener.
+- **Startup Sequence:** Scan repo → Validate configs (reject `max_batch_size < 0` or invalid `KIND_*`) → Load OpenVINO CPU backends → Create instances → Start HTTP listener.
 - **Fail-fast:** Any configuration error or OpenVINO backend failure aborts the server immediately.
 
 ---

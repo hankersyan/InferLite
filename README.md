@@ -6,15 +6,23 @@ a production serving framework — model repository, backend abstraction, bounde
 scheduling, and reusable memory — while dropping all cloud-scale, multi-tenant,
 and dynamic operations that add unnecessary complexity on the factory floor.
 
-This repository implements **Phase 1** (see `docs/PRD-phase-01.md`),
-**Phase 2** (see `docs/PRD-phase-02.md`), and **Phase 4** (see
-`docs/PRD-phase-04.md`, Intel CPU / NPU / GPU / AUTO multi-device execution);
-`docs/PRD-all.md` describes the full product direction. See
+It ships with two backends — a CPU/runtime backend built on OpenVINO and an
+opt-in **TensorRT GPU backend** — and runs as a validated, deterministic
+component of a regulated medical device. See
 [`docs/COMPLIANCE.md`](docs/COMPLIANCE.md) for the FDA / medical-device
 compliance posture.
 
+The GPU backend is compiled only when a TensorRT SDK is available at CMake
+configure time (`-DTENSORRT_ROOT=...`); without it the server builds and runs
+CPU-only with no regression. Intel CPU / NPU / Intel GPU / AUTO execution is
+provided by the OpenVINO backend and selected through `instance_group.kind`
+(`KIND_CPU` / `KIND_NPU` / `KIND_GPU_INTEL` / `KIND_AUTO`).
+
 ## Motivations
 - Nvidia phased out the triton inference server's windows support.
+
+## Concept
+![inferlite_concept](docs/inferlite-concept.jpg)
 
 ## Vision (from `docs/PRD-all.md`)
 
@@ -27,8 +35,9 @@ compliance posture.
   parallel.
 - **Zero-copy pipelines** — data is passed by reference between adjacent steps
   on the same device.
-- **Deterministic, low-latency serving** — static graph, no dynamic batching,
-  no hot reloading, minimal scheduling overhead.
+- **Deterministic, low-latency serving** — static graph, no request-combining
+  dynamic batching, no hot reloading, minimal scheduling overhead. Triton-style
+  batch-dimension shapes are supported via `max_batch_size` (see Features).
 - **Standard interface** — a compatible, synchronous subset of the reference
   server's request API plus health and JSON metrics.
 
@@ -42,8 +51,6 @@ mechanisms, validated (locked) mode, required documentation package, and
 security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)**.
 
 ## Features
-
-### Completed
 
 - **Model repository** — parses model configuration files, picks the highest
   numeric version directory for each model.
@@ -77,6 +84,10 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
 - **C++ plugin backend** — shared libraries implementing the InferLite plugin
   ABI, loaded at startup, hash-verified against the manifest, and executed on
   the CPU thread pool.
+- **Per-plugin parameters** — a Triton-style `parameters` block in
+  `config.pbtxt` passes key/value strings to each plugin node at creation, so
+  multiple pipelines can each own their own pre-/post-processing while sharing
+  the same plugin DLL.
 - **Metrics** — queue depth, per-model latency, and a configuration hash.
 - **Intel CPU execution** — compiles the IR (`model.xml`/`model.bin`) on the
   OpenVINO CPU plugin; thread/stream tuning applied only where the plugin
@@ -94,18 +105,63 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
 - **Device model tooling** — `tools/make_device_models.py` generates CPU/NPU/GPU/
   AUTO sample models, exporting precompiled blobs when the corresponding Intel
   hardware is present; reference configs live in `tools/examples/`.
+- **Triton-style batching** — `max_batch_size` follows Triton's convention: `0`
+  disables batching (tensor shapes match `dims` exactly); `>0` enables a leading
+  batch dimension on request/output tensors where config `dims` are per-request
+  and the accepted batch is `1 <= B <= max_batch_size`. With `max_batch_size: 1`
+  a model whose IR accepts `[1, 4]` declares `dims: [4]` and clients send/receive
+  shape `[1, 4]`. `tools/make_batched_model.py` generates such a model; see
+  `scripts/test_batch.ps1`.
 
-### Todo
+- **TensorRT GPU backend** (opt-in) — deserializes approved `model.plan` engine
+  files; each instance owns a CUDA stream; `execute()` enqueues on the stream
+  and synchronizes via a CUDA event. Runs under the same FDA safety boundary as
+  the CPU runtime.
+- **GPU memory manager** — a reusable CUDA device buffer pool plus a pinned host
+  pool for efficient host↔device transfers.
+- **GPU instance groups** — `kind: KIND_GPU` with a `count` for TensorRT models;
+  multiple GPU instances run concurrently on separate streams and alongside CPU
+  models.
+- **Unified scheduler** — manages both CPU and GPU instances with busy/free
+  tracking and quarantine of a CUDA-faulted instance (fault isolation).
+- **GPU-aware ensembles** — DAGs may mix CPU and TensorRT nodes; cross-device
+  edges use explicit pinned copies, and a step failure cancels the ensemble.
+- **FDA controls extended to GPU** — `.plan` files are SHA-256 hashed and listed
+  in the manifest, outputs are validated after the device→host copy, the audit
+  log records `device: "GPU"`, and `MAX_GPU_MEMORY_MB` /
+  `MAX_INFERENCE_TIME_MS` bound GPU execution.
 
-- **NVIDIA GPU (TensorRT) execution** — a dedicated TensorRT backend for
-  `KIND_GPU` (NVIDIA) models.
-- **GPU ensembles** — zero-copy DAG pipelines executing across device memory.
-- **Dynamic batching** — combining concurrent requests into a single inference.
+### Not yet implemented
+
+OpenVINO multi-GPU, live model updates, a profiling tool, and gRPC streaming.
+Request-combining dynamic batching is on the roadmap (see **Planned**);
+Triton-style batch-dimension shapes via `max_batch_size` are already
+implemented (see Features).
+
+### gRPC interface
+
+A Triton/KServe v2-compatible gRPC interface (`GRPCInferenceService`) is
+implemented (health, server/model metadata, model config, and `ModelInfer`) and
+shares the same inference core as HTTP. It is **opt-in** and disabled by
+default. Build it against a source-built gRPC (vcpkg) with
+`scripts/build_grpc.ps1`. The gRPC C++ runtime must be built with an MSVC
+toolchain whose STL/CRT ABI matches the compiler used here; a prebuilt gRPC DLL
+stack built with an older MSVC crashes on RPC dispatch due to an ABI mismatch.
+See `docs/GRPC.md` for details and `scripts/build_grpc.ps1` /
+`scripts/test_grpc_server.ps1` for build/test.
+
+### Planned
+
+- **Request-combining dynamic batching** — the scheduler collecting queued
+  concurrent requests and executing them as a single combined inference
+  (bounded by `max_batch_size`), then splitting outputs back per request. The
+  batch-dimension shape convention is already implemented.
 - **Live model updates** — reloading or hot-swapping models at runtime.
 - **Profiling tool** — latency and throughput profiling across devices.
-- **Batch API** — Triton-compatible `batching` and batch inference endpoints.
-- **gRPC interface** — Triton-compatible gRPC inference, health, and model
-  endpoints (currently HTTP only).
+- **In-process API** — embed the engine as a shared library (Triton-style
+  `TRITONSERVER_Server` C API): expose a library target, and add an
+  `extern "C"` embedding interface for C/C++/Python callers without network
+  overhead.
 
 ## Layout
 
@@ -122,6 +178,7 @@ src/
   main.cpp                 # CLI + fail-fast startup
   infer_lite.*             # app wiring + routing + audit/validation orchestration
   http_server.*            # HTTP/1.1 server (thread pool)
+  grpc_server.*            # gRPC GRPCInferenceService (opt-in, see docs/GRPC.md)
   json.*                   # minimal JSON parser/serializer
   pbtxt.*                  # model configuration parser
   model_repository.*       # repository scan + validation
@@ -134,13 +191,28 @@ src/
   memory_manager.*         # host + pinned + device-buffer memory pools
   audit_log.*              # tamper-evident hash-chained audit log
   config_store.*           # manifest/metadata/self-test/hash management
-  validation.*             # input/output validation + structured error codes
+  validation.*             # input/output validation, batch-dim, structured errors
   sha256.*                 # SHA-256 hashing
   tensor.hpp               # tensor/data-type definitions
   diagnostics.*            # engineer-facing diagnostic log
+proto/
+  grpc_service.proto       # KServe/Triton v2 gRPC protocol (opt-in)
+generated/                 # protoc-generated C++/Python stubs from proto/
+scripts/
+  build.ps1 / build.bat    # HTTP-only build
+  build_gpu.ps1            # TensorRT/GPU build
+  build_grpc.ps1           # gRPC build (opt-in, requires gRPC SDK)
+  gen_grpc*.ps1            # regenerate protobuf/gRPC C++ & Python stubs
+  test_*.ps1               # HTTP / GPU / gRPC test suites
+  test_batch.ps1           # Triton-style batching (max_batch_size) test
+third_party/
+  grpc/importlibs/         # regenerated gRPC DLL import libs (Anaconda stack only)
+  dist/                    # packaged distribution (runtime DLLs + models)
 tools/
   make_sample_model.py     # generates models/sample_model (IR + config + metadata)
   make_device_models.py    # generates CPU/NPU/GPU/AUTO device sample models
+  make_multi_io_model.py   # generates models/multi_io_model (2-in/2-out array syntax)
+  make_batched_model.py    # generates models/batched_model (Triton max_batch_size)
   make_manifest.py         # generates models/manifest.json with SHA-256 hashes
   examples/                # reference configs (kind: KIND_NPU / KIND_GPU_INTEL / KIND_AUTO)
   sample_plugin/           # example CPU plugin source (sample_plugin.dll)
@@ -154,10 +226,32 @@ Prerequisites:
 - CMake + Ninja (shipped with VS)
 - OpenVINO 2025.3 Windows C++ runtime (extracted under `c:\tools\openvino`, or
   point CMake at it with `-DOPENVINO_ROOT=...`)
+- (Optional, for the GPU backend) NVIDIA TensorRT SDK + CUDA; set `TENSORRT_ROOT`
+  to the TensorRT install directory at CMake configure time.
 
 ```
-powershell -ExecutionPolicy Bypass -File build.ps1
+powershell -ExecutionPolicy Bypass -File scripts\build.ps1
 ```
+
+CPU-only by default. To enable the GPU backend:
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\build_gpu.ps1
+```
+
+or manually:
+
+```
+cmake -S . -B build-gpu -DOPENVINO_ROOT=c:\tools\openvino -DTENSORRT_ROOT=C:\TensorRT
+cmake --build build-gpu --config Release
+```
+
+> **GPU hardware note:** TensorRT 10.x requires a GPU with **SM ≥ 7.5**
+> (GTX 16xx / RTX 20xx or newer). Pascal-era GPUs such as the GTX 10xx (SM 6.1)
+> are not supported and engine build/execution fails with
+> `Target GPU SM 61 is not supported`. The GPU backend still compiles and runs
+> (reporting `gpu.enabled:true`), but end-to-end GPU inference needs a supported
+> card or a TensorRT release that still supports Pascal (e.g. TRT 8.x).
 
 The build also produces `build\sample_plugin.dll` (example plugin). To use the
 plugin/ensemble demo models, copy the DLL into each plugin model directory:
@@ -166,6 +260,9 @@ plugin/ensemble demo models, copy the DLL into each plugin model directory:
 Copy-Item build\sample_plugin.dll models\preprocess_plugin\
 Copy-Item build\sample_plugin.dll models\postprocess_plugin\
 ```
+
+Each plugin model's `config.pbtxt` may carry a `parameters` block that
+configures the node independently (see "Plugin & ensemble testing" below).
 
 The build copies the required runtime libraries next to `build\inferlite.exe`.
 
@@ -190,6 +287,7 @@ Options:
 | `--model-repository=<path>` | (required) | Model repository root |
 | `--host=<addr>` | `0.0.0.0` | Listen address |
 | `--http-port=<port>` | `8000` | HTTP port |
+| `--grpc-port=<port>` | `0` | gRPC port (`0` = disabled; requires gRPC build) |
 | `--max-queue-size=<n>` | `100` | Max queued requests (0 = unbounded) |
 | `--request-timeout-ms=<n>` | `30000` | Per-request queue timeout |
 | `--http-threads=<n>` | `4` | HTTP worker threads |
@@ -201,6 +299,9 @@ Options:
 | `--max-inference-time-ms=<n>` | `5000` | Per-request inference time limit |
 | `--tls-cert=<path>` / `--tls-key=<path>` | – | TLS cert/key (validated deployments front the server with a TLS 1.2+ reverse proxy) |
 | `--software-version=<s>` | `InferLite 2.0.0` | Reported software version |
+| `--max-gpu-memory-mb=<n>` | `2048` | Per-model GPU memory cap (TensorRT) |
+| `--max-concurrent-gpu-instances=<n>` | `4` | Max concurrent GPU instances |
+| `--gpu-device=<n>` | `0` | CUDA device index (single GPU only) |
 
 ## Interface
 
@@ -230,6 +331,11 @@ Content-Type: application/json
 `data` may be a JSON number array (serialized per `datatype`) or a base64
 string. The response contains `outputs` (base64 `data`) and a `trace_id`.
 
+**Batched models.** For a model with `max_batch_size > 0`, the request/output
+`shape` must include the leading batch dimension `B` (`1 <= B <= max_batch_size`)
+prepended to the per-request config `dims`. With `max_batch_size: 1`, a model
+declaring `dims: [4]` is queried with `shape: [1, 4]`.
+
 ### Metrics
 ```
 GET /v2/metrics    -> requests counts, average latency, queue depth, config hash
@@ -238,21 +344,60 @@ GET /v2/metrics    -> requests counts, average latency, queue depth, config hash
 ## Testing
 
 - `tools/make_sample_model.py` generates the sample OpenVINO model (`y = 2x + 1`).
-- `tools/make_device_models.py` generates the Phase 4 CPU/NPU/GPU/AUTO device
+- `tools/make_device_models.py` generates the CPU/NPU/GPU/AUTO device
   sample models (exporting precompiled blobs when the corresponding Intel
   hardware is present).
+- `tools/make_multi_io_model.py` generates the `multi_io_model` (2 inputs, 2
+  outputs) that exercises the Triton array-of-message input/output config.
+- `tools/make_batched_model.py` generates the `batched_model`
+  (`max_batch_size: 1`) that exercises Triton-style batch-dimension shapes:
+  config `dims: [4]` while clients send/receive `[1, 4]`.
 - `tools/make_manifest.py` generates `models\manifest.json` with SHA-256 hashes.
+- `test_batch.ps1` verifies Triton-style batching: valid `[1, 4]` inference
+  returns `[3, 5, 7, 9]`, a shape missing the batch dim (`[4]`) and a batch
+  exceeding `max_batch_size` (`[2, 4]`) are both rejected with `INVALID_INPUT`.
 - `test_server_phase2.ps1` starts the server in validated mode and exercises
   integrity, validation, ensemble, plugin, audit log, and metrics.
-- `test_server_phase4.ps1` starts the server and exercises the Phase 4
+- `test_server_phase4.ps1` starts the server and exercises the
   multi-device models (CPU, NPU, AUTO), verifying device reporting, config
   `kind`, inference, and metrics.
 - `load_test.ps1 -Concurrency <n> -PerWorker <m>` runs a sustained concurrent
   load test.
 
-The demo ensemble (`ensemble_pipeline`) chains:
-preprocess (`×0.5`) → sample_model (`2x+1`) → postprocess (`+0.5`).
-For input `[1,2,3,4]` it returns `[2.5,3.5,4.5,5.5]`.
+### Plugin & ensemble testing
+
+A single representative ensemble pipeline ships in `models\`: it chains
+`preprocess_plugin → sample_model → postprocess_plugin`, all sharing
+`sample_plugin.dll` and `sample_model` (`y = 2x + 1`):
+
+```
+ensemble_scheduling {
+  step { model_name: "preprocess_plugin"  ... }   # ×0.5 (default)
+  step { model_name: "sample_model"       ... }   # 2x + 1
+  step { model_name: "postprocess_plugin" ... }   # clamp[0,100] + 0.5
+}
+```
+
+The sample plugin supports these `parameters` keys (all optional; defaults
+preserve the stock pre/post behavior):
+
+| Key | Applies to | Effect |
+|-----|-----------|--------|
+| `mode` | both | `"preprocess"` \| `"postprocess"` \| `"identity"` (default: inferred from model name) |
+| `scale` | preprocess | multiplier applied to every element (default `0.5`) |
+| `clamp_min` / `clamp_max` | postprocess | clamp bounds (default `0` / `100`) |
+| `offset` | postprocess | value added after clamping (default `0.5`) |
+
+Quick verification (server started in validated mode):
+
+```
+POST /v2/models/ensemble_pipeline/infer    -> [2.5, 3.5, 4.5, 5.5]
+POST /v2/models/preprocess_plugin/infer    # [2,4,6,8] -> [1.0, 2.0, 3.0, 4.0]
+```
+
+Each plugin model carries its own `self_test`, so `--validated-mode` gates
+readiness on all of them; `GET /v2/health/detailed` reports each model's
+status independently.
 
 ## Acknowledgements
 - deepseek-v4-flash

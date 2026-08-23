@@ -1,0 +1,18 @@
+# Intel cpu model (Phase 4).
+name: "intel_gpu_model"
+backend: "openvino"
+max_batch_size: 0
+input {
+  name: "input"
+  data_type: TYPE_FP32
+  dims: [ 1, 4 ]
+}
+output {
+  name: "add"
+  data_type: TYPE_FP32
+  dims: [ 1, 4 ]
+}
+instance_group {
+  count: 1
+  kind: KIND_CPU
+}

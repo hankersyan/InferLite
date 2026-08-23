@@ -55,17 +55,24 @@ bool highestVersionDir(const fs::path& model_dir, fs::path& out, int64_t& versio
 }
 
 // Validate a config. Throws RepositoryError on any violation (fail-fast
-// startup). Supports openvino, plugin, and ensemble backends (all CPU-only).
+// startup). Supports openvino, tensorrt, plugin, and ensemble backends.
+// OpenVINO/plugins/ensembles are CPU-only; TensorRT uses KIND_GPU instances.
 void validateConfig(const ModelConfig& cfg, const fs::path& model_dir) {
-    if (cfg.backend != "openvino" && cfg.backend != "plugin" && cfg.backend != "ensemble") {
+    if (cfg.backend != "openvino" && cfg.backend != "tensorrt" &&
+        cfg.backend != "plugin" && cfg.backend != "ensemble") {
         throw RepositoryError("model '" + cfg.name + "' uses unsupported backend '" +
-                              cfg.backend +
-                              "' (only 'openvino', 'plugin', 'ensemble' are supported)");
+                              cfg.backend + "' (only 'openvino', 'tensorrt', 'plugin', "
+                              "'ensemble' are supported)");
     }
-    if (cfg.max_batch_size != 0) {
+    // max_batch_size follows Triton's convention: 0 disables batching; >0
+    // enables Triton-style batching where request tensors carry a leading batch
+    // dimension (1 <= B <= max_batch_size) and config dims are per-request.
+    // Only a negative value is rejected.
+    if (cfg.max_batch_size < 0) {
         throw RepositoryError("model '" + cfg.name +
-                              "' has max_batch_size=" + std::to_string(cfg.max_batch_size) +
-                              "; batching must be disabled (max_batch_size=0)");
+                              "' has invalid max_batch_size=" +
+                              std::to_string(cfg.max_batch_size) +
+                              "; must be >= 0");
     }
     if (cfg.instance_group.count <= 0) {
         throw RepositoryError("model '" + cfg.name + "' has invalid instance_group count " +
@@ -109,15 +116,21 @@ void validateConfig(const ModelConfig& cfg, const fs::path& model_dir) {
         return;
     }
 
-    // openvino backend: the version directory must contain the model artifacts
+    // OpenVINO backend: the version directory must contain the model artifacts
     // required for the configured device. CPU/AUTO need model.xml (AUTO may use
     // a blob); NPU needs model.npu_blob; Intel GPU needs model.gpu_blob.
+    // TensorRT backend: the version directory must contain model.plan.
     fs::path version_dir;
     int64_t version = -1;
     if (!highestVersionDir(model_dir, version_dir, version)) {
         throw RepositoryError("model '" + cfg.name + "' has no numeric version directory");
     }
-    if (dk == DeviceKind::kNpu) {
+    if (cfg.backend == "tensorrt") {
+        if (!fs::exists(version_dir / "model.plan")) {
+            throw RepositoryError("model '" + cfg.name + "' missing model.plan in version dir '" +
+                                  version_dir.string() + "'");
+        }
+    } else if (dk == DeviceKind::kNpu) {
         if (!fs::exists(version_dir / "model.npu_blob")) {
             throw RepositoryError("NPU model '" + cfg.name +
                                   "' missing model.npu_blob in version dir '" +
