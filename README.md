@@ -22,7 +22,7 @@ provided by the OpenVINO backend and selected through `instance_group.kind`
 - Nvidia phased out the triton inference server's windows support.
 
 ## Concept
-![inferlite_concept](docs/inferlite-concept.jpg)
+![inferlite_concept](docs/InferLite-concept.jpg)
 
 ## Vision (from `docs/PRD-all.md`)
 
