@@ -48,3 +48,5 @@ Thumbs.db
 *.tmp
 # Temporary gRPC diagnostics
 check_grpc*.ps1
+
+temp/
