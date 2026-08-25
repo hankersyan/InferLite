@@ -1,7 +1,7 @@
 name: "multi_io_model"
 backend: "openvino"
 max_batch_size: 0
-input: [
+input [
   {
     name: "input_a"
     data_type: TYPE_FP32
@@ -13,7 +13,7 @@ input: [
     dims: [ 1, 4 ]
   }
 ]
-output: [
+output [
   {
     name: "out_a"
     data_type: TYPE_FP32

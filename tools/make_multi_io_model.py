@@ -5,8 +5,8 @@ InferLite's Triton array-of-message input/output config syntax.
 Creates models/multi_io_model/1/{model.xml, model.bin} and a config.pbtxt
 that uses the unified array form with TWO inputs and TWO outputs:
 
-  input:  [ { name:"input_a" ... }, { name:"input_b" ... } ]
-  output: [ { name:"out_a" ... },   { name:"out_b" ... } ]
+  input  [ { name:"input_a" ... }, { name:"input_b" ... } ]
+  output [ { name:"out_a" ... },   { name:"out_b" ... } ]
 
 The model computes:
   out_a = input_a * 2 + 1   (element-wise over [1,4])
@@ -49,7 +49,7 @@ def main():
     cfg = """name: "multi_io_model"
 backend: "openvino"
 max_batch_size: 0
-input: [
+input [
   {
     name: "input_a"
     data_type: TYPE_FP32
@@ -61,7 +61,7 @@ input: [
     dims: [ 1, 4 ]
   }
 ]
-output: [
+output [
   {
     name: "out_a"
     data_type: TYPE_FP32

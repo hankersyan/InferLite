@@ -201,6 +201,7 @@ def save_jpg(img, path):
 
 
 def main():
+    t_total0 = time.perf_counter()
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--server", default=DEFAULT_SERVER,
@@ -232,8 +233,10 @@ def main():
     if image_bgr is None:
         sys.exit(f"ERROR: cannot decode image: {image_path}")
     blob, scale = preprocess(image_bgr)
+    t_pre = time.perf_counter()
     print(f"image      : {image_path} ({image_bgr.shape[1]}x{image_bgr.shape[0]})")
     print(f"input blob : {blob.shape} fp32, scale={scale:.4f}")
+    print(f"preprocess : {(t_pre - t_total0) * 1000:.1f} ms")
 
     # --- run inference -------------------------------------------------------
     outputs, latency_s, trace_id = infer(args.server, args.model, blob)
@@ -255,6 +258,7 @@ def main():
                                          "Mconv7_stage2_L2": heatmaps})
 
     keypoints = detect_keypoints(heatmaps, scale, args.threshold)
+    t_post = time.perf_counter()
     n_detected = sum(1 for kp in keypoints if kp["x"] is not None)
     print(f"keypoints  : {n_detected}/{len(KEYPOINT_NAMES)} detected "
           f"(threshold={args.threshold})")
@@ -268,7 +272,10 @@ def main():
 
     save_jpg(draw_skeleton(image_bgr, keypoints), out_dir / "pose_result.jpg")
     save_jpg(draw_heatmaps_grid(heatmaps), out_dir / "heatmaps_grid.jpg")
+    t_end = time.perf_counter()
 
+    print(f"\npostprocess: {(t_post - t_pre) * 1000:.1f} ms")
+    print(f"total      : {(t_end - t_total0) * 1000:.1f} ms")
     print(f"\nresults written to {out_dir.resolve()}")
     for name in ("outputs.npz", "keypoints.json", "pose_result.jpg", "heatmaps_grid.jpg"):
         p = out_dir / name

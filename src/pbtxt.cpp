@@ -305,17 +305,19 @@ TensorSpec parseTensorSpecBody(Lexer& lex, const char* what) {
     return spec;
 }
 
-// Parse the `input`/`output` field. Two proto-text forms are accepted:
+// Parse the `input`/`output` field. Proto-text forms accepted:
 //   repeated-message form (already consumed 'input'):
 //     input { name: "x" ... }     -> caller passed 'tok' == "{"
 //   array-of-message form (Triton unified IO schema):
 //     input: [ { name: "x" ... }, { name: "y" ... } ]
 //       -> caller passed 'tok' == ":"
+//     input  [ { name: "x" ... }, { name: "y" ... } ]
+//       -> caller passed 'tok' == "["  (colon optional, per proto text format)
 std::vector<TensorSpec> parseIOField(Lexer& lex, const char* what, const std::string& tok) {
     std::vector<TensorSpec> specs;
-    if (tok == ":") {
-        // Array-of-message form: input: [ {...}, {...} ]
-        std::string t = lex.next();
+    if (tok == ":" || tok == "[") {
+        // Array-of-message form: input: [ {...}, {...} ]  or  input [ {...}, {...} ]
+        std::string t = tok == "[" ? tok : lex.next();
         if (t != "[") {
             throw PbtxtError("expected '[' for " + std::string(what) + " array, got '" + t + "'");
         }
@@ -373,8 +375,9 @@ ModelConfig parseConfigPbtxt(const std::string& text) {
         if (field == "name") {
             require(":", "name");
             cfg.name = lex.next();
-        } else if (field == "backend") {
-            require(":", "backend");
+        } else if (field == "backend" || field == "platform") {
+            // Triton accepts both `backend` and the legacy `platform` field.
+            require(":", field);
             cfg.backend = lex.next();
         } else if (field == "max_batch_size") {
             require(":", "max_batch_size");
