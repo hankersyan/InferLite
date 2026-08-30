@@ -175,7 +175,8 @@ models/
       model.xml
       model.bin
 src/
-  main.cpp                 # CLI + fail-fast startup
+  main.cpp                 # CLI + fail-fast startup + Windows service control
+  service_support.*        # Windows service (SCM) install/uninstall/run
   infer_lite.*             # app wiring + routing + audit/validation orchestration
   http_server.*            # HTTP/1.1 server (thread pool)
   grpc_server.*            # gRPC GRPCInferenceService (opt-in, see docs/GRPC.md)
@@ -205,6 +206,8 @@ scripts/
   gen_grpc*.ps1            # regenerate protobuf/gRPC C++ & Python stubs
   test_*.ps1               # HTTP / GPU / gRPC test suites
   test_batch.ps1           # Triton-style batching (max_batch_size) test
+  service.ps1              # Windows service install/start/stop/status/uninstall
+  test_service.ps1         # Windows service + console regression test
 third_party/
   grpc/importlibs/         # regenerated gRPC DLL import libs (Anaconda stack only)
   dist/                    # packaged distribution (runtime DLLs + models)
@@ -302,6 +305,65 @@ Options:
 | `--max-gpu-memory-mb=<n>` | `2048` | Per-model GPU memory cap (TensorRT) |
 | `--max-concurrent-gpu-instances=<n>` | `4` | Max concurrent GPU instances |
 | `--gpu-device=<n>` | `0` | CUDA device index (single GPU only) |
+| `--install-service` | – | Register this exe as a Windows service (admin) |
+| `--uninstall-service` | – | Remove the registered Windows service (admin) |
+| `--service` | – | Run under the Windows Service Control Manager (falls back to console if launched manually) |
+| `--service-name=<name>` | `InferLite` | Service name to install / run |
+| `--service-display=<name>` | `InferLite Inference Server` | Display name used at install |
+| `--install-service-user=<user>` / `--install-service-password=<pw>` | – | Service account for the installed service (default: LocalSystem) |
+
+## Run as a Windows service
+
+InferLite runs either as a normal console/cmd process (the default) or as a
+managed **Windows service** under the Service Control Manager (SCM). Both modes
+use the same binary and the same command-line grammar.
+
+**Install** (run from an elevated PowerShell — LocalSystem account by default):
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\service.ps1 -Action install `
+    -ModelRepository C:\Test\triton\inferlite\models -HttpPort 8000
+```
+
+Equivalently, invoke the binary directly:
+
+```
+build\inferlite.exe --install-service --model-repository=C:\models --http-port=8000
+```
+
+The installed service is **auto-start** and records the supplied arguments in
+the registry (`Services\<name>\Parameters\ConfigArgs`), reproducing them each
+time the service is started. To run under a specific service account, pass
+`-ServiceUser` / `-ServicePassword` (or the `--install-service-user=` /
+`--install-service-password=` flags).
+
+**Manage**:
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\service.ps1 -Action start
+powershell -ExecutionPolicy Bypass -File scripts\service.ps1 -Action status
+powershell -ExecutionPolicy Bypass -File scripts\service.ps1 -Action stop
+powershell -ExecutionPolicy Bypass -File scripts\service.ps1 -Action restart
+powershell -ExecutionPolicy Bypass -File scripts\service.ps1 -Action uninstall
+```
+
+or with the standard `sc.exe` tool (`sc start InferLite`, `sc stop InferLite`,
+`sc delete InferLite`).
+
+**Notes**
+
+- `--install-service` / `--uninstall-service` must be run from an **elevated**
+  prompt (they call the SCM APIs).
+- `--service` starts the server under the SCM and blocks until the service is
+  stopped; a stop request (`sc stop`, shutdown) triggers a graceful shutdown
+  (health port stops, listeners close, audit log finalized). If the binary is
+  launched with `--service` **manually** from a cmd window (not by the SCM), it
+  falls back to a normal foreground console run so it never silently exits.
+- When run as a service, open a console/event-log or the `--diagnostic-log`
+  file to see startup errors (there is no console window under SCM). A
+  tamper-evident `--audit-log` is recommended for validated deployments.
+- The service defaults to LocalSystem; give it the access it needs to the model
+  repository and any audit/diagnostic log directories.
 
 ## Interface
 
@@ -356,6 +418,12 @@ GET /v2/metrics    -> requests counts, average latency, queue depth, config hash
 - `test_batch.ps1` verifies Triton-style batching: valid `[1, 4]` inference
   returns `[3, 5, 7, 9]`, a shape missing the batch dim (`[4]`) and a batch
   exceeding `max_batch_size` (`[2, 4]`) are both rejected with `INVALID_INPUT`.
+- `test_human_pose_estimation.py` runs the `human-pose-estimation-0001` model
+  end-to-end (keypoint detection + skeleton/heatmap rendering) over **HTTP**
+  by default; pass `--grpc` (with `--grpc-server 127.0.0.1:8101`) to run the
+  identical test over the gRPC `ModelInfer` RPC — a large-tensor (1×3×256×456
+  FP32) request that exercises the binary tensor path over both protocols.
+  `test_grpc_server.ps1` includes the gRPC variant as part of the gRPC suite.
 - `test_server_phase2.ps1` starts the server in validated mode and exercises
   integrity, validation, ensemble, plugin, audit log, and metrics.
 - `test_server_phase4.ps1` starts the server and exercises the

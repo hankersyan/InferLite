@@ -153,5 +153,20 @@ try {
 } catch { Write-Output "HTTP check skipped (server state: $(-not $p.HasExited))" }
 
 Write-Output ""
+Write-Output "== Human-pose-estimation over gRPC (large-tensor ModelInfer) =="
+if (Test-Path "$root\models\human-pose-estimation-0001\1\model.xml") {
+    $poseOut = Join-Path $root "temp\human_pose_grpc"
+    Remove-Item $poseOut -Recurse -ErrorAction SilentlyContinue
+    & $python "$root\scripts\test_human_pose_estimation.py" --grpc `
+        --grpc-server 127.0.0.1:8001 --out $poseOut 2>&1
+    $poseCode = $LASTEXITCODE
+    Write-Output "gRPC pose test exit code: $poseCode"
+} else {
+    Write-Output "SKIP: human-pose-estimation-0001 model not present in models/"
+    $poseCode = 0
+}
+
+Write-Output ""
 Write-Output "Done. Stopping server."
 Stop-Process -Name inferlite -Force -ErrorAction SilentlyContinue
+if ($poseCode -ne 0) { exit $poseCode }

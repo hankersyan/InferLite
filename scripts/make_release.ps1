@@ -68,7 +68,7 @@ Write-Host "gpu files: $((Get-ChildItem "$ReleaseDir\gpu" -File).Count)"
 
 # --- 3. Write README.md and RELEASE_NOTES.md ---
 $readme = @"
-# InferLite $VerTag — Quick Start
+# InferLite $VerTag - Quick Start
 
 InferLite is a Triton-compatible inference server with CPU (Intel/OpenVINO),
 Intel NPU (OpenVINO), NVIDIA GPU (TensorRT), and a gRPC interface
@@ -76,8 +76,8 @@ Intel NPU (OpenVINO), NVIDIA GPU (TensorRT), and a gRPC interface
 every runtime DLL is bundled next to ``inferlite.exe``.
 
 ## 1. Choose a bundle
-- ``cpu/`` — OpenVINO only (CPU, Intel NPU, Intel iGPU, AUTO) + HTTP + gRPC.
-- ``gpu/`` — OpenVINO **+ TensorRT** (adds NVIDIA GPU backend) + HTTP + gRPC.
+- ``cpu/`` - OpenVINO only (CPU, Intel NPU, Intel iGPU, AUTO) + HTTP + gRPC.
+- ``gpu/`` - OpenVINO **+ TensorRT** (adds NVIDIA GPU backend) + HTTP + gRPC.
 
 Both contain an ``inferlite.exe``; use the folder matching your host.
 
@@ -108,13 +108,39 @@ The gRPC interface exposes ``ServerLive``, ``ServerReady``, ``ServerMetadata``,
 ``scripts/test_grpc_server.ps1`` is a ready-to-use client (requires Python with
 grpcio + the generated stubs).
 
+## 6. Run as a Windows service
+The same binary runs under the Service Control Manager. From an **elevated**
+PowerShell:
+
+````powershell
+# install (auto-start, LocalSystem) and start
+# IMPORTANT: the model repository MUST be an ABSOLUTE path. A Windows service
+# starts with CWD = C:\Windows\System32, so a relative path (..\models) will
+# not resolve and the service will fail to load models at start.
+.\inferlite.exe --install-service --model-repository=C:\full\path\to\dist\$VerTag\models --http-port=8100 --grpc-port=8101
+sc start InferLite
+# or the convenience manager:
+powershell -ExecutionPolicy Bypass -File ..\scripts\service.ps1 -Action install `
+    -ModelRepository C:\full\path\to\dist\$VerTag\models -HttpPort 8100 -GrpcPort 8101
+powershell -ExecutionPolicy Bypass -File ..\scripts\service.ps1 -Action start
+
+# manage / remove
+sc stop InferLite      # graceful stop
+sc delete InferLite    # uninstall (elevated)
+````
+
+``--service`` runs under the SCM and falls back to a foreground console run when
+launched manually; ``--service-name`` selects the service name (default
+``InferLite``). A stop request triggers a graceful shutdown (listeners close,
+audit log finalized).
+
 ## Notes
 - Sample models are in ``models/`` (OpenVINO device variants of ``y = 2*x + 1``,
   ``multi_io_model`` with two inputs / two outputs, and ``batched_model`` showing
   Triton-style ``max_batch_size`` with config ``dims: [4]`` and client shape
   ``[1, 4]``).
 - Verify integrity with the SHA-256 values in ``MANIFEST.json``.
-- **TensorRT end-to-end execution requires a GPU with compute capability ≥ 7.5**
+- **TensorRT end-to-end execution requires a GPU with compute capability >= 7.5**
   (TensorRT 10.x dropped Pascal/SM 6.1 support). The ``gpu/`` bundle still runs
   and reports ``gpu.enabled:true``; it just cannot build an engine on older GPUs.
 - See ``RELEASE_NOTES.md`` for full details, supported devices, and known issues.
@@ -122,20 +148,43 @@ grpcio + the generated stubs).
 $readme | Set-Content (Join-Path $ReleaseDir "README.md") -Encoding utf8
 
 $notes = @"
-# InferLite $VerTag — Release Notes
+# InferLite $VerTag - Release Notes
 
 **Release:** $VerTag (channel: $Channel)
 **Release date:** $(Get-Date -Format "yyyy-MM-dd")
 **Branch:** ``dev-0.2-grpc``
 **Software version reported by server:** ``InferLite 2.0.0``
-**Package:** ``dist/$VerTag`` — self-contained runtime bundles (CPU + GPU) with
+**Package:** ``dist/$VerTag`` - self-contained runtime bundles (CPU + GPU) with
 all dependencies, sample model repository, and release notes.
 
 ---
 
 ## What's new in $VerTag
 
-**v0.2.2 (this release):**
+**v0.2.3 (this release):**
+- **Windows service support.** ``inferlite.exe`` now runs under the Service
+  Control Manager as well as from a console/cmd window:
+  - ``--install-service`` / ``--uninstall-service`` (elevated) register/remove a
+    Windows service that reproduces the install-time arguments from the
+    registry (auto-start, LocalSystem by default, or a custom account).
+  - ``--service`` runs under the SCM and **falls back to a normal foreground
+    console run** when launched manually, so it is safe to type in a cmd window.
+  - ``--service-name`` / ``--service-display`` / ``--install-service-user`` /
+    ``--install-service-password`` control the service identity and account.
+  - ``scripts/service.ps1`` manages the service (install/start/stop/restart/
+    status/uninstall); ``scripts/test_service.ps1`` verifies console + service
+    modes incl. graceful ``sc stop`` shutdown (SCM control handler -> graceful
+    stop -> clean ``STOPPED``).
+- **Shared CLI argument grammar.** The parser was extracted into a single
+  ``parseServerOptions`` used by both the console entry point and the service
+  worker, so both modes accept identical options.
+- **gRPC human-pose test.** ``test_human_pose_estimation.py`` gained ``--grpc`` /
+  ``--grpc-server``: the same keypoint-detection end-to-end test now runs over
+  the gRPC ``ModelInfer`` RPC (large FP32 tensor), and ``test_grpc_server.ps1``
+  includes it. Client-setup time is reported separately so HTTP vs gRPC timing
+  is comparable.
+
+**v0.2.2 (previous):**
 - **Triton-style batching (``max_batch_size``)** implemented. Shapes now follow
   Triton's convention: ``max_batch_size: 0`` disables batching (tensor shapes
   match ``dims`` exactly); ``max_batch_size > 0`` enables a leading batch
@@ -154,7 +203,7 @@ all dependencies, sample model repository, and release notes.
 - **Multi-input / multi-output model** ``multi_io_model`` added (2 inputs, 2
   outputs) to exercise the array syntax end-to-end.
 - **Model repository consolidated** into a single ``models/`` (the duplicate
-  ``models_verify/`` was removed; only representative models kept — device
+  ``models_verify/`` was removed; only representative models kept - device
   variants, sample, multi-IO, and one plugin/ensemble pipeline each).
 
 **v0.2 (previous):**
@@ -171,21 +220,21 @@ all dependencies, sample model repository, and release notes.
 
 ````
 dist/$VerTag/
-├── RELEASE_NOTES.md            # this file
-├── MANIFEST.json               # artifact list + SHA-256 checksums
-├── README.md                   # quick start
-├── cpu/                        # OpenVINO + HTTP + gRPC runtime
-│   └── inferlite.exe + *.dll (OpenVINO 2025.3 + TBB + gRPC runtimes)
-├── gpu/                        # OpenVINO + TensorRT + HTTP + gRPC runtime
-│   └── inferlite.exe + *.dll (OpenVINO + TensorRT 10.16 + CUDA 12.6 + gRPC)
-└── models/                     # ready-to-run sample model repository
-    ├── sample_model/  intel_cpu_model/  intel_npu_model/
-    ├── intel_gpu_model/  intel_auto_model/  multi_io_model/
-    ├── batched_model/  (Triton max_batch_size: 1 demo)
-    └── manifest.json
+|-- RELEASE_NOTES.md            # this file
+|-- MANIFEST.json               # artifact list + SHA-256 checksums
+|-- README.md                   # quick start
+|-- cpu/                        # OpenVINO + HTTP + gRPC runtime (console + Windows service)
+|   `-- inferlite.exe + *.dll (OpenVINO 2025.3 + TBB + gRPC runtimes)
+|-- gpu/                        # OpenVINO + TensorRT + HTTP + gRPC runtime (console + Windows service)
+|   `-- inferlite.exe + *.dll (OpenVINO + TensorRT 10.16 + CUDA 12.6 + gRPC)
+`-- models/                     # ready-to-run sample model repository
+    |-- sample_model/  intel_cpu_model/  intel_npu_model/
+    |-- intel_gpu_model/  intel_auto_model/  multi_io_model/
+    |-- batched_model/  (Triton max_batch_size: 1 demo)
+    `-- manifest.json
 ````
 
-Both ``cpu/`` and ``gpu/`` are **fully self-contained** — all required runtime
+Both ``cpu/`` and ``gpu/`` are **fully self-contained** - all required runtime
 DLLs are bundled next to ``inferlite.exe``.
 
 ---
@@ -194,11 +243,11 @@ DLLs are bundled next to ``inferlite.exe``.
 
 | Backend | Config ``kind`` | Status in $VerTag |
 |---------|---------------|----------------|
-| CPU (Intel/OpenVINO) | ``KIND_CPU`` | ✅ verified (inference correct) |
-| Intel NPU (OpenVINO) | ``KIND_NPU`` | ✅ code path & server support; falls back to CPU when no NPU hardware |
-| Intel iGPU (OpenVINO) | ``KIND_GPU_INTEL`` | ✅ code path; falls back to CPU when device can't compile |
-| Intel AUTO (OpenVINO) | ``KIND_AUTO`` | ✅ verified |
-| NVIDIA GPU (TensorRT) | ``KIND_GPU`` | ✅ build + server enablement verified; E2E execution requires SM ≥ 7.5 |
+| CPU (Intel/OpenVINO) | ``KIND_CPU`` | [x] verified (inference correct) |
+| Intel NPU (OpenVINO) | ``KIND_NPU`` | [x] code path & server support; falls back to CPU when no NPU hardware |
+| Intel iGPU (OpenVINO) | ``KIND_GPU_INTEL`` | [x] code path; falls back to CPU when device can't compile |
+| Intel AUTO (OpenVINO) | ``KIND_AUTO`` | [x] verified |
+| NVIDIA GPU (TensorRT) | ``KIND_GPU`` | [x] build + server enablement verified; E2E execution requires SM >= 7.5 |
 
 ### Verified environment (this build)
 - Windows 11 x64, MSVC / Visual Studio 2022, CMake + Ninja.
@@ -209,7 +258,7 @@ DLLs are bundled next to ``inferlite.exe``.
 ### Known hardware limitation (NVIDIA GPU / TensorRT)
 TensorRT 10.16 **dropped support for Pascal (SM < 7.5)**. On a GTX 1070 engine
 building fails. The GPU bundle still **runs and reports ``gpu.enabled:true``**;
-end-to-end TRT inference requires a GPU with compute capability **≥ 7.5**.
+end-to-end TRT inference requires a GPU with compute capability **>= 7.5**.
 
 ---
 
@@ -230,10 +279,10 @@ Invoke-WebRequest http://127.0.0.1:8100/v2/health/detailed
 
 ## Runtime dependencies bundled
 
-**``cpu/``** — OpenVINO 2025.3.0 runtime + plugins and TBB, plus the gRPC runtime
+**``cpu/``** - OpenVINO 2025.3.0 runtime + plugins and TBB, plus the gRPC runtime
 DLLs (protobuf, abseil, re2, c-ares, zlib, OpenSSL).
 
-**``gpu/``** — everything in ``cpu/`` **plus** the TensorRT 10.16 runtime
+**``gpu/``** - everything in ``cpu/`` **plus** the TensorRT 10.16 runtime
 (``nvinfer_10.dll``, ``nvinfer_lean_10.dll``, ``nvinfer_dispatch_10.dll``,
 ``nvinfer_vc_plugin_10.dll``, ``nvinfer_plugin_10.dll``, ``nvonnxparser_10.dll``,
 ``nvinfer_builder_resource_*.dll``) + CUDA 12.6 runtimes (``cudart64_12.dll``,
@@ -248,18 +297,21 @@ DLLs (protobuf, abseil, re2, c-ares, zlib, OpenSSL).
   unresolved ``GpuMemoryManager`` symbols).
 - **Self-contained GPU bundle:** TensorRT runtime DLLs are copied next to the
   exe so the server runs without TensorRT on ``PATH``.
+- **Windows service support (v0.2.3):** run as a managed service under the SCM
+  or as a normal console process; ``--install-service`` / ``--uninstall-service``
+  / ``--service`` + ``scripts/service.ps1``.
 
 ---
 
 ## Known issues / not yet validated
-- End-to-end TensorRT inference requires SM ≥ 7.5 (see above).
+- End-to-end TensorRT inference requires SM >= 7.5 (see above).
 - gRPC streaming is not implemented (unary RPCs only).
 - The shipped ``models/`` contains only the self-contained device/sample/multi-IO
   models; the repo's plugin/ensemble demo models are excluded for portability.
 
 ---
 
-*InferLite $VerTag — bundled CPU / Intel-NPU / NVIDIA-GPU support with a
+*InferLite $VerTag - bundled CPU / Intel-NPU / NVIDIA-GPU support with a
 KServe/Triton v2 gRPC interface.*
 "@
 $notes | Set-Content (Join-Path $ReleaseDir "RELEASE_NOTES.md") -Encoding utf8
