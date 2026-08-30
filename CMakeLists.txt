@@ -161,6 +161,7 @@ add_executable(inferlite
     src/sha256.cpp
     src/validation.cpp
     src/tensorrt_backend.cpp
+    src/service_support.cpp
 )
 
 # --- Example CPU plugin shared library (for Phase 2 plugin backend demo) -----
@@ -169,6 +170,13 @@ target_include_directories(sample_plugin PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
 target_include_directories(inferlite PRIVATE ${OV_INCLUDE_DIR})
 target_link_libraries(inferlite PRIVATE ${OV_LIB_DIR}/openvino.lib)
+
+# Windows service (SCM) support: advapi32 for OpenSCManager/CreateService/...
+# and shell32 for CommandLineToArgvW. Harmless on non-Windows toolchains
+# (the service source is guarded by _WIN32 and the libs are Windows-only).
+if(WIN32)
+    target_link_libraries(inferlite PRIVATE advapi32 shell32)
+endif()
 
 # --- Phase 5: gRPC interface when a gRPC SDK is available --------------------
 if(INFERLITE_ENABLE_GRPC)

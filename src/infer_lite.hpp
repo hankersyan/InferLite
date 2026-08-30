@@ -42,6 +42,13 @@ struct InferenceOutcome {
     std::string device;      // resolved execution device (CPU / NPU / ...)
 };
 
+// Parse InferLite command-line tokens (e.g. "--model-repository=...").
+// Shared by main.cpp (console) and the Windows service worker so both modes
+// use an identical argument grammar. Throws std::runtime_error on bad input.
+// Implemented in main.cpp.
+struct ServerOptions;
+ServerOptions parseServerOptions(const std::vector<std::string>& tokens);
+
 struct ServerOptions {
     std::string model_repository;
     std::string host = "0.0.0.0";
@@ -88,8 +95,13 @@ public:
     // Start the HTTP listener (and gRPC listener if enabled) (non-blocking).
     // Throws on bind failure.
     void start();
-    // Block until the process is signalled to stop (SIGINT / Ctrl+C).
+    // Block until the process is signalled to stop (SIGINT / Ctrl+C / a
+    // Windows-service stop request).
     void waitForShutdown();
+    // Request a graceful shutdown. Thread-safe; waitForShutdown() returns after
+    // this is called. Used by the Windows service control handler to stop the
+    // server from an SCM callback thread.
+    void requestStop() { running_ = false; }
     // Stop the server and clean up.
     void stop();
 

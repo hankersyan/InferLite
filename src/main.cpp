@@ -9,15 +9,36 @@
 //             [--max-gpu-memory-mb=N] [--max-concurrent-gpu-instances=N]
 //             [--gpu-device=N]
 //
+//   Windows service modes (requires an elevated prompt to install/uninstall):
+//     --install-service        Register this exe as a Windows service
+//     --uninstall-service      Remove the registered Windows service
+//     --service                Run under the SCM (falls back to console when
+//                              launched manually)
+//     --service-name=<name>    Service name (default: InferLite)
+//
 // Fail-fast: any repository/config/backend/integrity error aborts startup.
 #include <algorithm>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "infer_lite.hpp"
 
+#ifdef _WIN32
+#include "service_support.hpp"
+#endif
+
+namespace inferlite {
 namespace {
+
+std::string requireValue(const std::string& arg, const std::string& flag) {
+    size_t eq = arg.find('=');
+    if (eq == std::string::npos || eq + 1 >= arg.size()) {
+        throw std::runtime_error("missing value for " + flag);
+    }
+    return arg.substr(eq + 1);
+}
 
 void printUsage(const char* prog) {
     std::cerr
@@ -43,26 +64,27 @@ void printUsage(const char* prog) {
         << "  --max-gpu-memory-mb=<n>     Per-model GPU memory cap in MiB (default: 2048)\n"
         << "  --max-concurrent-gpu-instances=<n>  Max concurrent GPU instances (default: 4)\n"
         << "  --gpu-device=<n>            CUDA device index (default: 0, single GPU only)\n"
+#ifdef _WIN32
+        << "  --install-service           Install InferLite as a Windows service (admin)\n"
+        << "  --uninstall-service         Remove the InferLite Windows service (admin)\n"
+        << "  --service                   Run under the Windows Service Control Manager\n"
+        << "  --service-name=<name>       Service name to install/run (default: InferLite)\n"
+#endif
         << "  --help                      Show this help\n";
 }
 
-inferlite::ServerOptions parseArgs(int argc, char** argv) {
-    inferlite::ServerOptions opts;
+}  // namespace
+}  // namespace inferlite
+
+// Shared, header-declared argument parser. Called by both the console entry
+// point (main) and the Windows service worker so both use identical grammar.
+inferlite::ServerOptions inferlite::parseServerOptions(const std::vector<std::string>& tokens) {
+    ServerOptions opts;
     bool has_repo = false;
 
-    auto requireValue = [](const std::string& arg, const std::string& flag) -> std::string {
-        size_t eq = arg.find('=');
-        if (eq == std::string::npos || eq + 1 >= arg.size()) {
-            throw std::runtime_error("missing value for " + flag);
-        }
-        return arg.substr(eq + 1);
-    };
-
-    for (int i = 1; i < argc; ++i) {
-        std::string arg = argv[i];
+    for (const auto& arg : tokens) {
         if (arg == "--help" || arg == "-h") {
-            printUsage(argv[0]);
-            std::exit(0);
+            throw std::runtime_error("--help");
         } else if (arg.rfind("--model-repository=", 0) == 0) {
             opts.model_repository = requireValue(arg, "--model-repository");
             has_repo = true;
@@ -119,36 +141,131 @@ inferlite::ServerOptions parseArgs(int argc, char** argv) {
     return opts;
 }
 
+namespace {
+
+std::vector<std::string> argvToVector(int argc, char** argv) {
+    std::vector<std::string> out;
+    out.reserve(static_cast<size_t>(argc > 0 ? argc : 0));
+    for (int i = 1; i < argc; ++i) out.emplace_back(argv[i]);
+    return out;
+}
+
+int runServer(const inferlite::ServerOptions& opts) {
+    using namespace inferlite;
+    InferLite server(opts);
+    server.start();
+    std::cout << "InferLite ready: HTTP listening on " << opts.host << ":"
+              << opts.http_port << " (model repo: " << opts.model_repository << ")\n"
+              << std::flush;
+#ifdef INFERLITE_ENABLE_GRPC
+    if (opts.grpc_port > 0) {
+        std::cout << "InferLite ready: gRPC listening on " << opts.host << ":"
+                  << opts.grpc_port << "\n"
+                  << std::flush;
+    }
+#endif
+    std::cout << "Press Ctrl+C to stop.\n" << std::flush;
+    server.waitForShutdown();
+    server.stop();
+    return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
-    inferlite::ServerOptions opts;
-    try {
-        opts = parseArgs(argc, argv);
-    } catch (const std::exception& e) {
-        std::cerr << "error: " << e.what() << "\n\n";
-        printUsage(argv[0]);
-        return 2;
+    using namespace inferlite;
+    std::vector<std::string> tokens = argvToVector(argc, argv);
+
+    // --help / -h anywhere on the command line prints usage and exits.
+    for (const auto& t : tokens) {
+        if (t == "--help" || t == "-h") {
+            printUsage(argv[0]);
+            return 0;
+        }
+    }
+
+    // --- Windows service control (install / uninstall) ----------------------
+#ifdef _WIN32
+    {
+        bool do_install = false, do_uninstall = false;
+        std::string svc_name = "InferLite";
+        std::string svc_display = "InferLite Inference Server";
+        std::string svc_user, svc_password;
+        std::vector<std::string> server_args;
+        for (const auto& t : tokens) {
+            if (t == "--install-service") {
+                do_install = true;
+            } else if (t == "--uninstall-service") {
+                do_uninstall = true;
+            } else if (t.rfind("--service-name=", 0) == 0) {
+                svc_name = t.substr(std::string("--service-name=").size());
+            } else if (t.rfind("--service-display=", 0) == 0) {
+                svc_display = t.substr(std::string("--service-display=").size());
+            } else if (t.rfind("--install-service-user=", 0) == 0) {
+                svc_user = t.substr(std::string("--install-service-user=").size());
+            } else if (t.rfind("--install-service-password=", 0) == 0) {
+                svc_password = t.substr(std::string("--install-service-password=").size());
+            } else {
+                server_args.push_back(t);
+            }
+        }
+
+        if (do_install || do_uninstall) {
+            try {
+                if (do_uninstall) {
+                    uninstallService(svc_name);
+                    std::cout << "Uninstalled service '" << svc_name << "'.\n";
+                }
+                if (do_install) {
+                    // Build the argument string the service should run with.
+                    std::string args_str;
+                    for (const auto& a : server_args) {
+                        if (!args_str.empty()) args_str += " ";
+                        args_str += a;
+                    }
+                    installService(svc_name, svc_display, args_str, svc_user, svc_password);
+                    std::cout << "Installed service '" << svc_name << "'.\n"
+                              << "Start it with: sc start " << svc_name << "\n"
+                              << "or: scripts\\service.ps1 -Action start\n";
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "error: " << e.what() << "\n";
+                return 2;
+            }
+            return 0;
+        }
+    }
+#endif
+
+    // --- Normal / service run -------------------------------------------------
+    // Build the effective run tokens: drop --service / --service-name so they
+    // are never fed to parseServerOptions (which would reject them as unknown).
+    std::vector<std::string> run_tokens;
+    for (const auto& x : tokens) {
+        if (x == "--service" || x.rfind("--service-name=", 0) == 0) continue;
+        run_tokens.push_back(x);
     }
 
     try {
-        std::cerr << "[boot] constructing server...\n" << std::flush;
-        inferlite::InferLite server(opts);
-        std::cerr << "[boot] server constructed\n" << std::flush;
-        server.start();
-        std::cerr << "[boot] server started\n" << std::flush;
-        std::cout << "InferLite ready: HTTP listening on " << opts.host << ":"
-                  << opts.http_port << " (model repo: " << opts.model_repository << ")\n"
-                  << std::flush;
-#ifdef INFERLITE_ENABLE_GRPC
-        if (opts.grpc_port > 0) {
-            std::cout << "InferLite ready: gRPC listening on " << opts.host << ":"
-                      << opts.grpc_port << "\n"
-                      << std::flush;
+        ServerOptions opts = parseServerOptions(run_tokens);
+
+#ifdef _WIN32
+        // Detect --service. The service worker hands control to the SCM and
+        // blocks until the service is stopped. When the binary is launched
+        // manually (not by the SCM) runAsService returns -1 and we fall
+        // through to a normal foreground console run, so `--service` is safe
+        // to type in a cmd window.
+        for (const auto& t : tokens) {
+            if (t == "--service") {
+                int rc = runAsService(tokens, opts);
+                if (rc != -1) return rc;   // ran under SCM until stopped
+                break;                     // manual launch -> foreground console
+            }
         }
 #endif
-        std::cout << "Press Ctrl+C to stop.\n" << std::flush;
-        server.waitForShutdown();
+
+        std::cerr << "[boot] constructing server...\n" << std::flush;
+        return runServer(opts);
     } catch (const std::exception& e) {
         std::cerr << "FATAL: " << e.what() << "\n" << std::flush;
         return 1;

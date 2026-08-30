@@ -2,12 +2,16 @@
 """End-to-end test for the human-pose-estimation-0001 model on InferLite.
 
 Runs the Open Model Zoo lightweight-OpenPose model (human-pose-estimation-0001)
-against a running InferLite HTTP endpoint and dumps the results into a temp
-output folder:
+against a running InferLite endpoint and dumps the results into a temp output
+folder:
   - outputs.npz          raw output tensors (Mconv7_stage2_L1 PAF, Mconv7_stage2_L2 heatmaps)
   - keypoints.json       detected 18-keypoint peaks mapped back to the input image
   - pose_result.jpg      input image with keypoints + skeleton drawn
   - heatmaps_grid.jpg    the 18 keypoint heatmap channels (JET colormap)
+
+The same test runs over either protocol:
+  * HTTP  (default):  POST /v2/models/<model>/infer
+  * gRPC  (--grpc):   GRPCInferenceService.ModelInfer (KServe/Triton v2)
 
 Usage:
   # start the server first, e.g.:
@@ -15,6 +19,8 @@ Usage:
   python scripts\\test_human_pose_estimation.py
   python scripts\\test_human_pose_estimation.py --server http://127.0.0.1:8000 \
       --image tests\\images\\man-pose.jpg --out temp\\human_pose
+  # over gRPC (build-grpc\\inferlite.exe --grpc-port=8101):
+  python scripts\\test_human_pose_estimation.py --grpc --grpc-server 127.0.0.1:8101
 """
 
 import argparse
@@ -33,6 +39,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_IMAGE = REPO_ROOT / "tests" / "images" / "man-pose.jpg"
 DEFAULT_OUT = REPO_ROOT / "temp" / "human_pose"
 DEFAULT_SERVER = "http://127.0.0.1:8100"
+DEFAULT_GRPC_SERVER = "127.0.0.1:8101"
+# Generated KServe/Triton v2 gRPC stubs (scripts/gen_grpc_py.ps1).
+GRPC_STUB_DIR = REPO_ROOT / "generated" / "py"
 
 MODEL = "human-pose-estimation-0001"
 INPUT_NAME = "data"
@@ -89,7 +98,7 @@ def preprocess(image_bgr):
     return blob, scale
 
 
-def infer(server, model, blob):
+def infer_http(server, model, blob):
     """POST the input blob to /v2/models/<model>/infer, return dict of outputs."""
     url = f"{server}/v2/models/{model}/infer"
     payload = {
@@ -112,6 +121,65 @@ def infer(server, model, blob):
         arr = np.frombuffer(base64.b64decode(o["data"]), dtype=np.float32)
         outputs[o["name"]] = arr.reshape([int(d) for d in o["shape"]])
     return outputs, latency_s, doc.get("trace_id", "")
+
+
+def infer_grpc(server, model, blob):
+    """ModelInfer the blob over GRPCInferenceService; return dict of outputs.
+
+    The InferLite gRPC server reads/writes the typed `contents` fields (it does
+    not implement KServe's optional raw_*_contents), so the FP32 blob is carried
+    in input.contents.fp32_contents and the outputs are decoded from
+    output.contents.fp32_contents.
+    """
+    import grpc
+    sys.path.insert(0, str(GRPC_STUB_DIR))
+    import grpc_service_pb2 as pb
+    import grpc_service_pb2_grpc as g
+
+    channel = grpc.insecure_channel(server)
+    try:
+        stub = g.GRPCInferenceServiceStub(channel)
+
+        req = pb.ModelInferRequest(model_name=model)
+        tin = req.inputs.add()
+        tin.name = INPUT_NAME
+        tin.datatype = "FP32"
+        tin.shape.extend(blob.shape)
+        tin.contents.fp32_contents.extend(blob.reshape(-1).tolist())
+
+        t0 = time.perf_counter()
+        resp = stub.ModelInfer(req, timeout=30)
+        latency_s = time.perf_counter() - t0
+
+        outputs = {}
+        for o in resp.outputs:
+            arr = np.asarray(o.contents.fp32_contents, dtype=np.float32)
+            outputs[o.name] = arr.reshape([int(d) for d in o.shape])
+        return outputs, latency_s, resp.id
+    finally:
+        channel.close()
+
+
+def check_server_grpc(server):
+    """Probe ServerReady over gRPC; raise if the endpoint is unreachable."""
+    import grpc
+    sys.path.insert(0, str(GRPC_STUB_DIR))
+    import grpc_service_pb2 as pb
+    import grpc_service_pb2_grpc as g
+
+    channel = grpc.insecure_channel(server)
+    try:
+        stub = g.GRPCInferenceServiceStub(channel)
+        r = stub.ServerReady(pb.ServerReadyRequest(), timeout=5)
+        if not r.ready:
+            sys.exit(f"ERROR: gRPC server at {server} reports NOT READY.")
+    except Exception as e:
+        sys.exit(f"ERROR: cannot reach InferLite gRPC at {server} ({e}).\n"
+                 "Start the gRPC-enabled server first, e.g.:\n"
+                 "  build-grpc\\inferlite.exe --model-repository=models "
+                 "--http-port=8000 --grpc-port=8101")
+    finally:
+        channel.close()
 
 
 def find_peaks(heatmap, threshold=0.1, nms_radius=1):
@@ -201,11 +269,15 @@ def save_jpg(img, path):
 
 
 def main():
-    t_total0 = time.perf_counter()
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--server", default=DEFAULT_SERVER,
                         help=f"InferLite HTTP base URL (default: {DEFAULT_SERVER})")
+    parser.add_argument("--grpc", action="store_true",
+                        help="run the inference over gRPC (GRPCInferenceService) "
+                             "instead of HTTP")
+    parser.add_argument("--grpc-server", default=DEFAULT_GRPC_SERVER,
+                        help=f"gRPC host:port (default: {DEFAULT_GRPC_SERVER})")
     parser.add_argument("--model", default=MODEL,
                         help=f"model name (default: {MODEL})")
     parser.add_argument("--image", default=str(DEFAULT_IMAGE),
@@ -217,18 +289,31 @@ def main():
     args = parser.parse_args()
 
     # --- sanity check: server reachable -------------------------------------
-    try:
-        r = requests.get(f"{args.server}/v2/health/ready", timeout=5)
-        r.raise_for_status()
-    except requests.RequestException as e:
-        sys.exit(f"ERROR: cannot reach InferLite at {args.server} ({e}).\n"
-                 "Start the server first, e.g.:\n"
-                 "  build\\inferlite.exe --model-repository=models --http-port=8000")
+    # NOTE: the client setup is timed separately. The gRPC path does a one-time
+    # import of the grpc + generated protobuf stubs here (~100 ms of pure
+    # client-side overhead); timing it separately keeps the preprocess figure
+    # comparable between HTTP and gRPC.
+    protocol = "gRPC" if args.grpc else "HTTP"
+    print(f"protocol   : {protocol}")
+    t_setup0 = time.perf_counter()
+    if args.grpc:
+        check_server_grpc(args.grpc_server)
+    else:
+        try:
+            r = requests.get(f"{args.server}/v2/health/ready", timeout=5)
+            r.raise_for_status()
+        except requests.RequestException as e:
+            sys.exit(f"ERROR: cannot reach InferLite at {args.server} ({e}).\n"
+                     "Start the server first, e.g.:\n"
+                     "  build\\inferlite.exe --model-repository=models --http-port=8000")
+    t_setup1 = time.perf_counter()
+    print(f"client setup: {(t_setup1 - t_setup0) * 1000:.1f} ms")
 
     # --- load + preprocess ---------------------------------------------------
     image_path = Path(args.image)
     if not image_path.is_file():
         sys.exit(f"ERROR: image not found: {image_path}")
+    t_load0 = time.perf_counter()
     image_bgr = cv2.imread(str(image_path))
     if image_bgr is None:
         sys.exit(f"ERROR: cannot decode image: {image_path}")
@@ -236,10 +321,13 @@ def main():
     t_pre = time.perf_counter()
     print(f"image      : {image_path} ({image_bgr.shape[1]}x{image_bgr.shape[0]})")
     print(f"input blob : {blob.shape} fp32, scale={scale:.4f}")
-    print(f"preprocess : {(t_pre - t_total0) * 1000:.1f} ms")
+    print(f"load+prepro: {(t_pre - t_load0) * 1000:.1f} ms")
 
     # --- run inference -------------------------------------------------------
-    outputs, latency_s, trace_id = infer(args.server, args.model, blob)
+    if args.grpc:
+        outputs, latency_s, trace_id = infer_grpc(args.grpc_server, args.model, blob)
+    else:
+        outputs, latency_s, trace_id = infer_http(args.server, args.model, blob)
     print(f"inference  : {latency_s * 1000:.1f} ms  (trace_id={trace_id})")
     for name, arr in outputs.items():
         expected = OUTPUTS.get(name)
@@ -275,7 +363,9 @@ def main():
     t_end = time.perf_counter()
 
     print(f"\npostprocess: {(t_post - t_pre) * 1000:.1f} ms")
-    print(f"total      : {(t_end - t_total0) * 1000:.1f} ms")
+    # Total excludes the one-time client setup (gRPC stub import etc.) so HTTP
+    # vs gRPC totals are comparable.
+    print(f"total      : {(t_end - t_setup1) * 1000:.1f} ms")
     print(f"\nresults written to {out_dir.resolve()}")
     for name in ("outputs.npz", "keypoints.json", "pose_result.jpg", "heatmaps_grid.jpg"):
         p = out_dir / name
