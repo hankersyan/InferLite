@@ -168,7 +168,44 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
 
 ### Not yet implemented
 
-OpenVINO multi-GPU, live model updates, a profiling tool, and gRPC streaming.
+- **Model warmup** — Triton `model_warmup` sample requests at load time (the
+  golden-input self-test gates readiness, but does not pre-warm execution
+  paths).
+- **Response cache** — returning cached outputs for identical requests.
+- **Cross-model rate limiter** — coordinating execution across models through
+  shared logical resources.
+- **Ragged batching** — batching variable-sized inputs without padding.
+- **gRPC streaming** — unary RPCs only; no decoupled/streaming responses.
+- **Request cancellation** — clients cannot abort an in-flight request.
+- **System / CUDA shared memory** — tensors are always sent in the
+  request/response body; no registered shared-memory regions.
+- **Version policies** — only the highest numeric version is served (implicit
+  "latest"); no `version_policy { all | specific }` and no client-requested
+  version.
+- **Prometheus metrics** — metrics are exposed as JSON, not in the Prometheus
+  text format.
+- **Request tracing** — `trace_id` audit entries only; no trace configuration
+  API or OpenTelemetry export.
+- **gRPC binary tensor data** — `ModelInfer` consumes typed
+  `InferTensorContents` only; `raw_input_contents` / `raw_output_contents` are
+  not consumed or produced, even though `binary_tensor_data` is still listed in
+  the advertised `ServerMetadata` extensions (clients must not rely on it; use
+  typed contents or HTTP base64).
+- **OpenVINO multi-GPU** — a single OpenVINO GPU device per model.
+
+### Out of scope
+
+Deliberately not planned for a single-node, single-card workstation server:
+
+- **Other framework backends** — PyTorch, ONNX Runtime, TensorFlow, Python,
+  FIL, DALI, vLLM. Single-node serving needs only the OpenVINO and TensorRT
+  backends; TensorRT-LLM is the only LLM-serving backend kept under
+  consideration.
+- **Business Logic Scripting (BLS)** — dynamic Python pipelines are excluded
+  due to Python's runtime performance cost; static ensembles cover fixed DAGs.
+- **Cloud-scale operations** — Kubernetes autoscaling, cloud object storage,
+  multi-node distributed inference, built-in authentication, and
+  high-availability / failover.
 
 ### gRPC interface
 
@@ -184,7 +221,6 @@ See `docs/GRPC.md` for details and `scripts/build_grpc.ps1` /
 
 ### Planned
 
-- **Live model updates** — reloading or hot-swapping models at runtime.
 - **Profiling tool** — latency and throughput profiling across devices.
 - **In-process API** — embed the engine as a shared library (Triton-style
   `TRITONSERVER_Server` C API): expose a library target, and add an
@@ -333,7 +369,7 @@ Options:
 | `--max-input-size-bytes=<n>` | `52428800` | Input size limit |
 | `--max-output-size-bytes=<n>` | `52428800` | Output size limit |
 | `--max-inference-time-ms=<n>` | `5000` | Per-request inference time limit |
-| `--tls-cert=<path>` / `--tls-key=<path>` | – | TLS cert/key (validated deployments front the server with a TLS 1.2+ reverse proxy) |
+| `--tls-cert=<path>` / `--tls-key=<path>` | – | Accepted but **not used** — the server does not terminate TLS; validated deployments must front it with a TLS 1.2+ reverse proxy |
 | `--software-version=<s>` | `InferLite 2.0.0` | Reported software version |
 | `--max-gpu-memory-mb=<n>` | `2048` | Per-model GPU memory cap (TensorRT) |
 | `--max-concurrent-gpu-instances=<n>` | `4` | Max concurrent GPU instances |
@@ -406,6 +442,8 @@ or with the standard `sc.exe` tool (`sc start InferLite`, `sc stop InferLite`,
 ### Readiness
 ```
 GET /v2/health/ready      -> 200 {"status":"READY"}  (only if self-tests passed)
+GET /v2/health/live       -> currently an alias of /health/ready (503 when not
+                             ready; it is NOT a pure liveness probe)
 GET /v2/health/detailed   -> per-model status + hashes + versions
 GET /v2/versions          -> software + OpenVINO + model versions
 ```
@@ -540,7 +578,9 @@ The same operations are exposed over gRPC as `RepositoryIndex`,
   end-to-end (keypoint detection + skeleton/heatmap rendering) over **HTTP**
   by default; pass `--grpc` (with `--grpc-server 127.0.0.1:8101`) to run the
   identical test over the gRPC `ModelInfer` RPC — a large-tensor (1×3×256×456
-  FP32) request that exercises the binary tensor path over both protocols.
+  FP32) request that exercises the tensor payload path over both protocols
+  (base64 in the HTTP JSON body, typed `InferTensorContents` over gRPC; the
+  gRPC binary-tensor `raw_input_contents` extension is not implemented).
   `test_grpc_server.ps1` includes the gRPC variant as part of the gRPC suite.
 - `test_server_phase2.ps1` starts the server in validated mode and exercises
   integrity, validation, ensemble, plugin, audit log, and metrics.
@@ -553,6 +593,12 @@ The same operations are exposed over gRPC as `RepositoryIndex`,
   gating of the load/unload API.
 - `load_test.ps1 -Concurrency <n> -PerWorker <m>` runs a sustained concurrent
   load test.
+- Additional suites not detailed above: `test_server.ps1` (base HTTP
+  regression), `test_server_phase3.ps1` and `test_gpu_server.ps1` (GPU phase /
+  TensorRT GPU server), `test_service.ps1` (Windows service install/run
+  regression). `make_trt_engine.ps1` builds a TensorRT engine (`model.plan`)
+  via `trtexec`, and `make_release.ps1` packages the self-contained release
+  under `dist/` (see `dist/v0.2`).
 
 ### Plugin & ensemble testing
 
