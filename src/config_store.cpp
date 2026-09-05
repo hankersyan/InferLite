@@ -96,7 +96,10 @@ void ConfigStore::load() {
 std::string ConfigStore::registerModelFiles(const std::string& model_id,
                                             const std::string& version_dir) {
     std::string actual = hashModelFiles(version_dir);
-    model_hashes_[model_id] = actual;
+    {
+        std::lock_guard<std::mutex> lock(mu_);
+        model_hashes_[model_id] = actual;
+    }
 
     if (manifest_.enabled) {
         auto it = manifest_.models.find(model_id);
@@ -113,11 +116,13 @@ std::string ConfigStore::registerModelFiles(const std::string& model_id,
 
 void ConfigStore::registerConfigHash(const std::string& model_id,
                                      const std::string& config_hash_hex) {
+    std::lock_guard<std::mutex> lock(mu_);
     config_hashes_[model_id] = config_hash_hex;
 }
 
 const std::string& ConfigStore::configHash(const std::string& model_id) const {
     static const std::string kEmpty;
+    std::lock_guard<std::mutex> lock(mu_);
     auto it = config_hashes_.find(model_id);
     return it == config_hashes_.end() ? kEmpty : it->second;
 }
@@ -131,14 +136,18 @@ const std::string& ConfigStore::manifestHash(const std::string& model_id) const 
 
 const std::string& ConfigStore::modelHash(const std::string& model_id) const {
     static const std::string kEmpty;
+    std::lock_guard<std::mutex> lock(mu_);
     auto it = model_hashes_.find(model_id);
     return it == model_hashes_.end() ? kEmpty : it->second;
 }
 
 std::string ConfigStore::configStoreHash() const {
     std::string combined;
-    for (const auto& kv : config_hashes_) combined += kv.second;
-    for (const auto& kv : model_hashes_) combined += kv.second;
+    {
+        std::lock_guard<std::mutex> lock(mu_);
+        for (const auto& kv : config_hashes_) combined += kv.second;
+        for (const auto& kv : model_hashes_) combined += kv.second;
+    }
     return combined.empty() ? std::string() : hexEncode(sha256(combined));
 }
 

@@ -305,6 +305,9 @@ Options:
 | `--max-gpu-memory-mb=<n>` | `2048` | Per-model GPU memory cap (TensorRT) |
 | `--max-concurrent-gpu-instances=<n>` | `4` | Max concurrent GPU instances |
 | `--gpu-device=<n>` | `0` | CUDA device index (single GPU only) |
+| `--model-control-mode=<m>` | `none` | Triton model-control mode: `none` \| `poll` \| `explicit` (see “Model management”) |
+| `--repository-poll-secs=<n>` | `15` | Repository poll interval (seconds; `poll` mode only) |
+| `--load-model=<name>` | – | Model(s) to load at startup in `explicit` mode; repeatable; `*` loads all |
 | `--install-service` | – | Register this exe as a Windows service (admin) |
 | `--uninstall-service` | – | Remove the registered Windows service (admin) |
 | `--service` | – | Run under the Windows Service Control Manager (falls back to console if launched manually) |
@@ -403,6 +406,53 @@ declaring `dims: [4]` is queried with `shape: [1, 4]`.
 GET /v2/metrics    -> requests counts, average latency, queue depth, config hash
 ```
 
+### Model management (Triton model-control modes)
+
+InferLite follows NVIDIA Triton’s model management model. The repository layout,
+startup behavior, and runtime load/unload policy are selected with
+`--model-control-mode`:
+
+| Mode | Startup | Runtime repository changes | Control API (load/unload) |
+|------|---------|---------------------------|---------------------------|
+| `none` (default) | load **all** models; any invalid model aborts startup (fail-fast, legacy behavior) | ignored | disabled (rejected with `400`) |
+| `poll` | attempt to load **all** models; a model that fails is reported `UNAVAILABLE`, not fatal | polled every `--repository-poll-secs`; **new** models are loaded, **changed** models reloaded, **removed** models unloaded | disabled (rejected with `400`) |
+| `explicit` | load only `--load-model` names (`*` = all; none if omitted) | ignored until driven through the API | **enabled** — the intended operating mode |
+
+Modes `poll` and `explicit` never abort the server because one model is broken:
+failures mark that model `UNAVAILABLE` (with a `reason`) in the index while the
+rest keep serving. A model is reported `READY` only after it loads **and** passes
+its configured golden-input self-test. When a model that ensembles depend on is
+reloaded or removed, the referencing ensembles are reloaded/unloaded with it
+(`unload_dependents`).
+
+Repository-control endpoints (only `POST`):
+
+```
+POST /v2/repository/index                                      # list models + state
+  body (optional): {"ready": true|false}                       # filter to READY only
+  -> 200 [ {"name":..., "version":..., "state":"READY|UNAVAILABLE", "reason":...}, ... ]
+
+POST /v2/repository/models/<model_name>/load
+  body (optional): {"parameters": {"config": "<proto-text config.pbtxt override>"}}
+  -> 200 (empty) | 400 invalid | 404 not found
+
+POST /v2/repository/models/<model_name>/unload
+  body (optional): {"parameters": {"unload_dependents": true|false}}
+  -> 200 (empty) | 404 not found | 409 referenced by loaded ensembles
+```
+
+The same operations are exposed over gRPC as `RepositoryIndex`,
+`RepositoryModelLoad`, and `RepositoryModelUnload` (the server advertises the
+`model_repository` extension). Notes:
+
+- The load `config` parameter is a **proto-text** document in the same format as
+  `config.pbtxt` (InferLite’s config schema is proto-text, not Triton’s JSON).
+  When omitted, the on-disk `config.pbtxt` is used.
+- Triton’s inline `file:<version>/<file>` override directories are **not**
+  supported (the model directory must exist on disk).
+- In `none` mode the `/v2/models/<name>/config` endpoint and inference continue
+  to serve every model loaded at startup, exactly as in earlier releases.
+
 ## Testing
 
 - `tools/make_sample_model.py` generates the sample OpenVINO model (`y = 2x + 1`).
@@ -429,6 +479,10 @@ GET /v2/metrics    -> requests counts, average latency, queue depth, config hash
 - `test_server_phase4.ps1` starts the server and exercises the
   multi-device models (CPU, NPU, AUTO), verifying device reporting, config
   `kind`, inference, and metrics.
+- `test_model_control.ps1` starts the server in each model-control mode and
+  verifies the Triton repository-control flow: index state reporting, explicit
+  load/unload (including config overrides), poll hot-add/hot-remove, and mode
+  gating of the load/unload API.
 - `load_test.ps1 -Concurrency <n> -PerWorker <m>` runs a sustained concurrent
   load test.
 

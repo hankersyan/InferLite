@@ -8,6 +8,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -86,6 +87,12 @@ public:
     bool manifestEnabled() const { return manifest_.enabled; }
 
 private:
+    // Guards the per-model hash maps below. Hashes are registered during model
+    // loads (which, with runtime model management, can happen after the HTTP /
+    // gRPC servers are already serving) and read concurrently by metrics and
+    // model-reporting handlers.
+    mutable std::mutex mu_;
+
     std::string repository_root_;
     bool enforce_manifest_;
     Manifest manifest_;

@@ -1,9 +1,10 @@
 // grpc_service.proto - KServe / Triton Inference Server v2 protocol (gRPC).
 //
 // A compatible SUBSET of the reference GRPCInferenceService exposed by the
-// inference server. Only synchronous unary RPCs are implemented (streaming,
-// model repository management, shared memory, classification, tracing and
-// statistics are intentionally out of scope for InferLite; see docs/PRD-all.md).
+// inference server. Synchronous unary RPCs are implemented for health,
+// metadata, inference and the model-repository control extension (index / load /
+// unload). Streaming, shared memory, classification, tracing and statistics are
+// intentionally out of scope for InferLite; see docs/PRD-all.md.
 //
 // The messages mirror the KServe v2 "ModelInfer" wire format so standard
 // clients (e.g. tritonclient / grpc client libraries) can talk to the server.
@@ -30,6 +31,12 @@ service GRPCInferenceService {
   rpc ModelConfig(ModelConfigRequest) returns (ModelConfigResponse) {}
   // Perform inference.
   rpc ModelInfer(ModelInferRequest) returns (ModelInferResponse) {}
+  // Get the index of model repository contents.
+  rpc RepositoryIndex(RepositoryIndexRequest) returns (RepositoryIndexResponse) {}
+  // Load or reload a model from a repository.
+  rpc RepositoryModelLoad(RepositoryModelLoadRequest) returns (RepositoryModelLoadResponse) {}
+  // Unload a model from a repository.
+  rpc RepositoryModelUnload(RepositoryModelUnloadRequest) returns (RepositoryModelUnloadResponse) {}
 }
 
 // @@
@@ -164,3 +171,60 @@ message ModelInferResponse {
   repeated InferOutputTensor outputs = 5;
   bytes raw_output_contents = 6;
 }
+
+// @@
+// @@ Model Repository Management (Triton repository-control extension)
+// @@
+
+message RepositoryIndexRequest {
+  // The name of the repository. Ignored (InferLite serves a single repository).
+  string repository_name = 1;
+  // If true, only models that are ready for inference are returned.
+  bool ready = 2;
+}
+
+message RepositoryIndexResponse {
+  message ModelIndex {
+    string name = 1;
+    string version = 2;
+    string state = 3;
+    string reason = 4;
+  }
+  repeated ModelIndex models = 1;
+}
+
+// A single load/unload parameter value (typed union, mirrors Triton's
+// ModelRepositoryParameter).
+message ModelRepositoryParameter {
+  oneof parameter_choice {
+    bool bool_param = 1;
+    int64 int64_param = 2;
+    string string_param = 3;
+    bytes bytes_param = 4;
+  }
+}
+
+message RepositoryModelLoadRequest {
+  // The name of the repository. Ignored (InferLite serves a single repository).
+  string repository_name = 1;
+  string model_name = 2;
+  // Supported parameter:
+  //   "config"  (string) - proto-text config.pbtxt document used instead of the
+  //                        config.pbtxt on disk (InferLite configs are
+  //                        proto-text; see docs/GRPC.md for the deviation note).
+  map<string, ModelRepositoryParameter> parameters = 3;
+}
+
+message RepositoryModelLoadResponse {}
+
+message RepositoryModelUnloadRequest {
+  // The name of the repository. Ignored (InferLite serves a single repository).
+  string repository_name = 1;
+  string model_name = 2;
+  // Supported parameter:
+  //   "unload_dependents" (bool) - also unload loaded models that reference the
+  //                                unloaded model (e.g. ensembles).
+  map<string, ModelRepositoryParameter> parameters = 3;
+}
+
+message RepositoryModelUnloadResponse {}

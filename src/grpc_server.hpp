@@ -71,6 +71,15 @@ public:
     ::grpc::Status ModelInfer(::grpc::ServerContext* context,
                               const inference::ModelInferRequest* request,
                               inference::ModelInferResponse* response) override;
+    ::grpc::Status RepositoryIndex(::grpc::ServerContext* context,
+                                   const inference::RepositoryIndexRequest* request,
+                                   inference::RepositoryIndexResponse* response) override;
+    ::grpc::Status RepositoryModelLoad(::grpc::ServerContext* context,
+                                       const inference::RepositoryModelLoadRequest* request,
+                                       inference::RepositoryModelLoadResponse* response) override;
+    ::grpc::Status RepositoryModelUnload(::grpc::ServerContext* context,
+                                         const inference::RepositoryModelUnloadRequest* request,
+                                         inference::RepositoryModelUnloadResponse* response) override;
 
 private:
     InferLite* owner_;

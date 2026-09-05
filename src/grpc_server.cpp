@@ -28,6 +28,18 @@ namespace {
     }
 }
 
+// Map a repository-control result to a gRPC status (kept parallel to the HTTP
+// status mapping in infer_lite.cpp so both protocols agree on error taxonomy).
+::grpc::Status controlStatusToGrpc(const ControlStatus& st) {
+    if (st.ok) return ::grpc::Status::OK;
+    switch (st.http_status) {
+        case 404: return ::grpc::Status(::grpc::StatusCode::NOT_FOUND, st.error);
+        case 409: return ::grpc::Status(::grpc::StatusCode::FAILED_PRECONDITION, st.error);
+        case 500: return ::grpc::Status(::grpc::StatusCode::INTERNAL, st.error);
+        default: return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, st.error);
+    }
+}
+
 // Convert the typed `contents` of a KServe InferInputTensor into a raw
 // little-endian byte payload for the given DataType. Returns false and sets
 // `err` if the contents are missing or inconsistent with the datatype.
@@ -237,6 +249,8 @@ int GrpcServer::port() const {
     response->set_version(owner_->options().software_version);
     // Advertised protocol extensions this build supports.
     response->add_extensions("binary_tensor_data");
+    response->add_extensions("model_repository");
+    response->add_extensions("model_repository(unload_dependents)");
     return ::grpc::Status::OK;
 }
 
@@ -244,15 +258,19 @@ int GrpcServer::port() const {
                                       const inference::ModelReadyRequest* request,
                                       inference::ModelReadyResponse* response) {
     const std::string& name = request->name();
-    if (!owner_->modelExists(name)) {
-        return ::grpc::Status(::grpc::StatusCode::NOT_FOUND,
-                              "model '" + name + "' is not loaded");
+    bool found = false;
+    bool ready = false;
+    for (const auto& mi : owner_->modelInfo()) {
+        if (mi.name != name) continue;
+        found = true;
+        ready = mi.ready;
+        break;
     }
-    // Readiness follows the server-wide startup self-test: fail-fast loading
-    // means every loaded model passed its own golden-input self-test, and the
-    // README documents READY as "all self-tests pass", so the server-wide flag
-    // applies uniformly to every loaded model.
-    response->set_ready(owner_->ready());
+    if (!found) {
+        return ::grpc::Status(::grpc::StatusCode::NOT_FOUND,
+                              "model '" + name + "' not found in the repository");
+    }
+    response->set_ready(ready);
     return ::grpc::Status::OK;
 }
 
@@ -260,10 +278,13 @@ int GrpcServer::port() const {
                                          const inference::ModelMetadataRequest* request,
                                          inference::ModelMetadataResponse* response) {
     const std::string& name = request->name();
-    const auto& models = owner_->models();
-    for (const auto& m : models) {
-        if (m.name != name) continue;
-        const auto& cfg = *m.config;
+    for (const auto& mi : owner_->modelInfo()) {
+        if (mi.name != name) continue;
+        if (!mi.ready || !mi.config) {
+            return ::grpc::Status(::grpc::StatusCode::NOT_FOUND,
+                                  "model '" + name + "' is not loaded");
+        }
+        const auto& cfg = *mi.config;
         response->set_name(name);
         response->set_versions(cfg.metadata.version.empty() ? "unknown" : cfg.metadata.version);
         response->set_platform(cfg.backend);
@@ -286,10 +307,13 @@ int GrpcServer::port() const {
                                        const inference::ModelConfigRequest* request,
                                        inference::ModelConfigResponse* response) {
     const std::string& name = request->name();
-    const auto& models = owner_->models();
-    for (const auto& m : models) {
-        if (m.name != name) continue;
-        const auto& cfg = *m.config;
+    for (const auto& mi : owner_->modelInfo()) {
+        if (mi.name != name) continue;
+        if (!mi.ready || !mi.config) {
+            return ::grpc::Status(::grpc::StatusCode::NOT_FOUND,
+                                  "model '" + name + "' is not loaded");
+        }
+        const auto& cfg = *mi.config;
         response->set_name(name);
         response->set_version(cfg.metadata.version.empty() ? "unknown" : cfg.metadata.version);
         // A compact human-readable summary of the model configuration.
@@ -364,6 +388,68 @@ int GrpcServer::port() const {
         bytesToContents(out, *o->mutable_contents());
     }
     return ::grpc::Status::OK;
+}
+
+::grpc::Status GrpcServer::RepositoryIndex(::grpc::ServerContext*,
+                                           const inference::RepositoryIndexRequest* request,
+                                           inference::RepositoryIndexResponse* response) {
+    (void)request->repository_name();  // single-repository server
+    for (const auto& e : owner_->repositoryIndex(request->ready())) {
+        auto* mi = response->add_models();
+        mi->set_name(e.name);
+        mi->set_version(e.version);
+        mi->set_state(e.state);
+        mi->set_reason(e.reason);
+    }
+    return ::grpc::Status::OK;
+}
+
+::grpc::Status GrpcServer::RepositoryModelLoad(::grpc::ServerContext*,
+                                               const inference::RepositoryModelLoadRequest* request,
+                                               inference::RepositoryModelLoadResponse*) {
+    const std::string& name = request->model_name();
+    if (name.empty()) {
+        return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
+                              "model name must not be empty");
+    }
+    std::string config_override;
+    for (const auto& kv : request->parameters()) {
+        if (kv.first == "config") {
+            if (!kv.second.has_string_param()) {
+                return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
+                                      "parameter 'config' must be a string");
+            }
+            config_override = kv.second.string_param();
+        } else if (kv.first.rfind("file:", 0) == 0) {
+            return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED,
+                                  "inline file overrides ('" + kv.first +
+                                      "') are not supported by InferLite");
+        }
+        // Unknown parameters are ignored (matches Triton's forward-compatible
+        // handling of unsupported load parameters).
+    }
+    return controlStatusToGrpc(owner_->repositoryLoad(name, config_override));
+}
+
+::grpc::Status GrpcServer::RepositoryModelUnload(::grpc::ServerContext*,
+                                                 const inference::RepositoryModelUnloadRequest* request,
+                                                 inference::RepositoryModelUnloadResponse*) {
+    const std::string& name = request->model_name();
+    if (name.empty()) {
+        return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
+                              "model name must not be empty");
+    }
+    bool unload_dependents = false;
+    for (const auto& kv : request->parameters()) {
+        if (kv.first == "unload_dependents") {
+            if (!kv.second.has_bool_param()) {
+                return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
+                                      "parameter 'unload_dependents' must be a boolean");
+            }
+            unload_dependents = kv.second.bool_param();
+        }
+    }
+    return controlStatusToGrpc(owner_->repositoryUnload(name, unload_dependents));
 }
 
 }  // namespace inferlite

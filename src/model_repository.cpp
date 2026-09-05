@@ -4,6 +4,7 @@
 #include <cctype>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <sstream>
 
 #include "sha256.hpp"
@@ -153,6 +154,63 @@ void validateConfig(const ModelConfig& cfg, const fs::path& model_dir) {
 
 }  // namespace
 
+std::vector<std::string> listRepositoryModelNames(const std::string& root) {
+    std::vector<std::string> names;
+    std::error_code ec;
+    if (!fs::exists(root) || !fs::is_directory(root, ec)) return names;
+    for (const auto& entry : fs::directory_iterator(root, ec)) {
+        if (ec) break;
+        if (!entry.is_directory()) continue;
+        // A folder without config.pbtxt is not a model; skip silently.
+        if (!fs::exists(entry.path() / "config.pbtxt")) continue;
+        names.push_back(entry.path().filename().string());
+    }
+    return names;
+}
+
+LoadedModel loadModelConfig(const std::string& root, const std::string& model_name,
+                            const std::string& override_text) {
+    const fs::path model_dir = fs::path(root) / model_name;
+    const fs::path config_file = model_dir / "config.pbtxt";
+    if (override_text.empty() && !fs::exists(config_file)) {
+        throw RepositoryError("model '" + model_name + "' not found (no config.pbtxt under " +
+                              model_dir.string() + ")");
+    }
+
+    // With an override, the caller-supplied document replaces config.pbtxt; the
+    // on-disk version directory and metadata are still authoritative.
+    std::string text = override_text.empty() ? readTextFile(config_file) : override_text;
+    ModelConfig cfg = parseConfigPbtxt(text);
+
+    // Model name from config must match the directory name.
+    if (cfg.name != model_name) {
+        throw RepositoryError("config name '" + cfg.name + "' does not match directory '" +
+                              model_name + "'");
+    }
+
+    validateConfig(cfg, model_dir);
+
+    fs::path version_dir;
+    int64_t version = -1;
+    highestVersionDir(model_dir, version_dir, version);
+
+    // Load optional metadata.json (FDA model metadata) if present.
+    fs::path meta_file = model_dir / "metadata.json";
+    if (fs::exists(meta_file)) {
+        cfg.metadata = parseMetadataJson(readTextFile(meta_file));
+    }
+
+    // Store the model's repository directory path.
+    cfg.model_path = model_dir.string();
+
+    LoadedModel lm;
+    lm.config = std::make_shared<ModelConfig>(std::move(cfg));
+    lm.version_path = version_dir.string();
+    lm.version = version;
+    lm.config_hash = hexEncode(sha256(text));
+    return lm;
+}
+
 std::vector<LoadedModel> scanRepository(const std::string& root) {
     std::error_code ec;
     if (!fs::exists(root) || !fs::is_directory(root, ec)) {
@@ -160,54 +218,58 @@ std::vector<LoadedModel> scanRepository(const std::string& root) {
     }
 
     std::vector<LoadedModel> models;
-    for (const auto& entry : fs::directory_iterator(root, ec)) {
-        if (ec) break;
-        if (!entry.is_directory()) continue;
-
-        const fs::path model_dir = entry.path();
-        const std::string model_name = model_dir.filename().string();
-        const fs::path config_file = model_dir / "config.pbtxt";
-        if (!fs::exists(config_file)) {
-            // A folder without config.pbtxt is not a model; skip silently.
-            continue;
-        }
-
-        std::string text = readTextFile(config_file);
-        ModelConfig cfg = parseConfigPbtxt(text);
-
-        // Model name from config must match the directory name.
-        if (cfg.name != model_name) {
-            throw RepositoryError("config name '" + cfg.name + "' does not match directory '" +
-                                  model_name + "'");
-        }
-
-        validateConfig(cfg, model_dir);
-
-        fs::path version_dir;
-        int64_t version = -1;
-        highestVersionDir(model_dir, version_dir, version);
-
-        // Load optional metadata.json (FDA model metadata) if present.
-        fs::path meta_file = model_dir / "metadata.json";
-        if (fs::exists(meta_file)) {
-            cfg.metadata = parseMetadataJson(readTextFile(meta_file));
-        }
-
-        // Store the model's repository directory path.
-        cfg.model_path = model_dir.string();
-
-        LoadedModel lm;
-        lm.config = std::make_shared<ModelConfig>(std::move(cfg));
-        lm.version_path = version_dir.string();
-        lm.version = version;
-        lm.config_hash = hexEncode(sha256(text));
-        models.push_back(std::move(lm));
+    for (const auto& name : listRepositoryModelNames(root)) {
+        models.push_back(loadModelConfig(root, name));
     }
 
     if (models.empty()) {
         throw RepositoryError("no valid models found in repository: " + root);
     }
     return models;
+}
+
+std::string highestModelVersionString(const std::string& root, const std::string& model_name) {
+    fs::path version_dir;
+    int64_t version = -1;
+    highestVersionDir(fs::path(root) / model_name, version_dir, version);
+    return version < 0 ? std::string() : std::to_string(version);
+}
+
+std::string fingerprintModelDirectory(const std::string& root, const std::string& model_name) {
+    const fs::path dir = fs::path(root) / model_name;
+    std::error_code ec;
+    if (!fs::is_directory(dir, ec)) return "";
+
+    // Collect (relative path -> "<mtime>:<size>") for every regular file. The
+    // map keys sort entries so the fingerprint is deterministic across runs.
+    std::map<std::string, std::string> parts;
+    fs::recursive_directory_iterator it(dir, fs::directory_options::skip_permission_denied, ec);
+    const fs::recursive_directory_iterator end;
+    for (; it != end; it.increment(ec)) {
+        if (ec) {
+            ec.clear();
+            continue;
+        }
+        std::error_code fec;
+        if (!it->is_regular_file(fec)) continue;
+        std::error_code mec;
+        auto ft = it->last_write_time(mec);
+        std::string stamp = mec ? std::string("?") : std::to_string(ft.time_since_epoch().count());
+        std::error_code sec;
+        uintmax_t size = it->file_size(sec);
+        parts[fs::relative(it->path(), dir).generic_string()] =
+            stamp + ":" + (sec ? std::to_string(0) : std::to_string(size));
+    }
+
+    if (parts.empty()) return "";
+    std::string combined;
+    for (const auto& kv : parts) {
+        combined += kv.first;
+        combined += '|';
+        combined += kv.second;
+        combined += '\n';
+    }
+    return hexEncode(sha256(combined));
 }
 
 }  // namespace inferlite

@@ -8,6 +8,8 @@
 //             [--max-inference-time-ms=N] [--tls-cert=path] [--tls-key=path]
 //             [--max-gpu-memory-mb=N] [--max-concurrent-gpu-instances=N]
 //             [--gpu-device=N]
+//             [--model-control-mode=none|poll|explicit]
+//             [--repository-poll-secs=N] [--load-model=<name>]
 //
 //   Windows service modes (requires an elevated prompt to install/uninstall):
 //     --install-service        Register this exe as a Windows service
@@ -64,6 +66,11 @@ void printUsage(const char* prog) {
         << "  --max-gpu-memory-mb=<n>     Per-model GPU memory cap in MiB (default: 2048)\n"
         << "  --max-concurrent-gpu-instances=<n>  Max concurrent GPU instances (default: 4)\n"
         << "  --gpu-device=<n>            CUDA device index (default: 0, single GPU only)\n"
+        << "  --model-control-mode=<m>    Triton model control mode: none|poll|explicit\n"
+        << "                              (default: none; load/unload API usable only in explicit)\n"
+        << "  --repository-poll-secs=<n>  Repository poll interval in seconds (poll mode; default 15)\n"
+        << "  --load-model=<name>         Model(s) to load at startup in explicit mode; '*' = all\n"
+        << "                              (repeatable; may not combine '*' with explicit names)\n"
 #ifdef _WIN32
         << "  --install-service           Install InferLite as a Windows service (admin)\n"
         << "  --uninstall-service         Remove the InferLite Windows service (admin)\n"
@@ -130,6 +137,14 @@ inferlite::ServerOptions inferlite::parseServerOptions(const std::vector<std::st
                 std::max(1, std::stoi(requireValue(arg, "--max-concurrent-gpu-instances"))));
         } else if (arg.rfind("--gpu-device=", 0) == 0) {
             opts.gpu_device = requireValue(arg, "--gpu-device");
+        } else if (arg.rfind("--model-control-mode=", 0) == 0) {
+            opts.model_control_mode =
+                modelControlModeFromString(requireValue(arg, "--model-control-mode"));
+        } else if (arg.rfind("--repository-poll-secs=", 0) == 0) {
+            opts.repository_poll_secs = static_cast<size_t>(
+                std::max(1, std::stoi(requireValue(arg, "--repository-poll-secs"))));
+        } else if (arg.rfind("--load-model=", 0) == 0) {
+            opts.load_models.push_back(requireValue(arg, "--load-model"));
         } else {
             throw std::runtime_error("unknown option: " + arg);
         }

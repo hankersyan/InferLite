@@ -160,6 +160,132 @@ struct ServerLiveRequestDefaultTypeInternal {
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ServerLiveRequestDefaultTypeInternal _ServerLiveRequest_default_instance_;
+              template <typename>
+PROTOBUF_CONSTEXPR RepositoryModelUnloadResponse::RepositoryModelUnloadResponse(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::internal::ZeroFieldsBase(_class_data_.base()){}
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::internal::ZeroFieldsBase() {
+}
+#endif  // PROTOBUF_CUSTOM_VTABLE
+struct RepositoryModelUnloadResponseDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR RepositoryModelUnloadResponseDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~RepositoryModelUnloadResponseDefaultTypeInternal() {}
+  union {
+    RepositoryModelUnloadResponse _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 RepositoryModelUnloadResponseDefaultTypeInternal _RepositoryModelUnloadResponse_default_instance_;
+              template <typename>
+PROTOBUF_CONSTEXPR RepositoryModelLoadResponse::RepositoryModelLoadResponse(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::internal::ZeroFieldsBase(_class_data_.base()){}
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::internal::ZeroFieldsBase() {
+}
+#endif  // PROTOBUF_CUSTOM_VTABLE
+struct RepositoryModelLoadResponseDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR RepositoryModelLoadResponseDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~RepositoryModelLoadResponseDefaultTypeInternal() {}
+  union {
+    RepositoryModelLoadResponse _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 RepositoryModelLoadResponseDefaultTypeInternal _RepositoryModelLoadResponse_default_instance_;
+
+inline constexpr RepositoryIndexResponse_ModelIndex::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        version_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        state_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        reason_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        _cached_size_{0} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR RepositoryIndexResponse_ModelIndex::RepositoryIndexResponse_ModelIndex(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct RepositoryIndexResponse_ModelIndexDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR RepositoryIndexResponse_ModelIndexDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~RepositoryIndexResponse_ModelIndexDefaultTypeInternal() {}
+  union {
+    RepositoryIndexResponse_ModelIndex _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 RepositoryIndexResponse_ModelIndexDefaultTypeInternal _RepositoryIndexResponse_ModelIndex_default_instance_;
+
+inline constexpr RepositoryIndexRequest::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : repository_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        ready_{false},
+        _cached_size_{0} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR RepositoryIndexRequest::RepositoryIndexRequest(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct RepositoryIndexRequestDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR RepositoryIndexRequestDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~RepositoryIndexRequestDefaultTypeInternal() {}
+  union {
+    RepositoryIndexRequest _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 RepositoryIndexRequestDefaultTypeInternal _RepositoryIndexRequest_default_instance_;
+
+inline constexpr ModelRepositoryParameter::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : parameter_choice_{},
+        _cached_size_{0},
+        _oneof_case_{} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR ModelRepositoryParameter::ModelRepositoryParameter(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct ModelRepositoryParameterDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR ModelRepositoryParameterDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~ModelRepositoryParameterDefaultTypeInternal() {}
+  union {
+    ModelRepositoryParameter _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ModelRepositoryParameterDefaultTypeInternal _ModelRepositoryParameter_default_instance_;
 
 inline constexpr ModelReadyResponse::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
@@ -466,6 +592,67 @@ struct InferTensorContentsDefaultTypeInternal {
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 InferTensorContentsDefaultTypeInternal _InferTensorContents_default_instance_;
+              template <typename>
+PROTOBUF_CONSTEXPR RepositoryModelUnloadRequest_ParametersEntry_DoNotUse::RepositoryModelUnloadRequest_ParametersEntry_DoNotUse(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : RepositoryModelUnloadRequest_ParametersEntry_DoNotUse::MapEntry(_class_data_.base()){}
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : RepositoryModelUnloadRequest_ParametersEntry_DoNotUse::MapEntry() {
+}
+#endif  // PROTOBUF_CUSTOM_VTABLE
+struct RepositoryModelUnloadRequest_ParametersEntry_DoNotUseDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR RepositoryModelUnloadRequest_ParametersEntry_DoNotUseDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~RepositoryModelUnloadRequest_ParametersEntry_DoNotUseDefaultTypeInternal() {}
+  union {
+    RepositoryModelUnloadRequest_ParametersEntry_DoNotUse _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 RepositoryModelUnloadRequest_ParametersEntry_DoNotUseDefaultTypeInternal _RepositoryModelUnloadRequest_ParametersEntry_DoNotUse_default_instance_;
+              template <typename>
+PROTOBUF_CONSTEXPR RepositoryModelLoadRequest_ParametersEntry_DoNotUse::RepositoryModelLoadRequest_ParametersEntry_DoNotUse(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : RepositoryModelLoadRequest_ParametersEntry_DoNotUse::MapEntry(_class_data_.base()){}
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : RepositoryModelLoadRequest_ParametersEntry_DoNotUse::MapEntry() {
+}
+#endif  // PROTOBUF_CUSTOM_VTABLE
+struct RepositoryModelLoadRequest_ParametersEntry_DoNotUseDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR RepositoryModelLoadRequest_ParametersEntry_DoNotUseDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~RepositoryModelLoadRequest_ParametersEntry_DoNotUseDefaultTypeInternal() {}
+  union {
+    RepositoryModelLoadRequest_ParametersEntry_DoNotUse _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 RepositoryModelLoadRequest_ParametersEntry_DoNotUseDefaultTypeInternal _RepositoryModelLoadRequest_ParametersEntry_DoNotUse_default_instance_;
+
+inline constexpr RepositoryIndexResponse::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : models_{},
+        _cached_size_{0} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR RepositoryIndexResponse::RepositoryIndexResponse(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct RepositoryIndexResponseDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR RepositoryIndexResponseDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~RepositoryIndexResponseDefaultTypeInternal() {}
+  union {
+    RepositoryIndexResponse _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 RepositoryIndexResponseDefaultTypeInternal _RepositoryIndexResponse_default_instance_;
 
 inline constexpr ModelMetadataResponse::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
@@ -597,6 +784,68 @@ struct ModelInferRequest_InferInputTensorDefaultTypeInternal {
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ModelInferRequest_InferInputTensorDefaultTypeInternal _ModelInferRequest_InferInputTensor_default_instance_;
+
+inline constexpr RepositoryModelUnloadRequest::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : parameters_{},
+        repository_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        model_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        _cached_size_{0} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR RepositoryModelUnloadRequest::RepositoryModelUnloadRequest(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct RepositoryModelUnloadRequestDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR RepositoryModelUnloadRequestDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~RepositoryModelUnloadRequestDefaultTypeInternal() {}
+  union {
+    RepositoryModelUnloadRequest _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 RepositoryModelUnloadRequestDefaultTypeInternal _RepositoryModelUnloadRequest_default_instance_;
+
+inline constexpr RepositoryModelLoadRequest::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : parameters_{},
+        repository_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        model_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        _cached_size_{0} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR RepositoryModelLoadRequest::RepositoryModelLoadRequest(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct RepositoryModelLoadRequestDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR RepositoryModelLoadRequestDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~RepositoryModelLoadRequestDefaultTypeInternal() {}
+  union {
+    RepositoryModelLoadRequest _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 RepositoryModelLoadRequestDefaultTypeInternal _RepositoryModelLoadRequest_default_instance_;
 
 inline constexpr ModelInferResponse::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
@@ -960,6 +1209,112 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::inference::ModelInferResponse, _impl_.parameters_),
         PROTOBUF_FIELD_OFFSET(::inference::ModelInferResponse, _impl_.outputs_),
         PROTOBUF_FIELD_OFFSET(::inference::ModelInferResponse, _impl_.raw_output_contents_),
+        ~0u,  // no _has_bits_
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryIndexRequest, _internal_metadata_),
+        ~0u,  // no _extensions_
+        ~0u,  // no _oneof_case_
+        ~0u,  // no _weak_field_map_
+        ~0u,  // no _inlined_string_donated_
+        ~0u,  // no _split_
+        ~0u,  // no sizeof(Split)
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryIndexRequest, _impl_.repository_name_),
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryIndexRequest, _impl_.ready_),
+        ~0u,  // no _has_bits_
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryIndexResponse_ModelIndex, _internal_metadata_),
+        ~0u,  // no _extensions_
+        ~0u,  // no _oneof_case_
+        ~0u,  // no _weak_field_map_
+        ~0u,  // no _inlined_string_donated_
+        ~0u,  // no _split_
+        ~0u,  // no sizeof(Split)
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryIndexResponse_ModelIndex, _impl_.name_),
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryIndexResponse_ModelIndex, _impl_.version_),
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryIndexResponse_ModelIndex, _impl_.state_),
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryIndexResponse_ModelIndex, _impl_.reason_),
+        ~0u,  // no _has_bits_
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryIndexResponse, _internal_metadata_),
+        ~0u,  // no _extensions_
+        ~0u,  // no _oneof_case_
+        ~0u,  // no _weak_field_map_
+        ~0u,  // no _inlined_string_donated_
+        ~0u,  // no _split_
+        ~0u,  // no sizeof(Split)
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryIndexResponse, _impl_.models_),
+        ~0u,  // no _has_bits_
+        PROTOBUF_FIELD_OFFSET(::inference::ModelRepositoryParameter, _internal_metadata_),
+        ~0u,  // no _extensions_
+        PROTOBUF_FIELD_OFFSET(::inference::ModelRepositoryParameter, _impl_._oneof_case_[0]),
+        ~0u,  // no _weak_field_map_
+        ~0u,  // no _inlined_string_donated_
+        ~0u,  // no _split_
+        ~0u,  // no sizeof(Split)
+        ::_pbi::kInvalidFieldOffsetTag,
+        ::_pbi::kInvalidFieldOffsetTag,
+        ::_pbi::kInvalidFieldOffsetTag,
+        ::_pbi::kInvalidFieldOffsetTag,
+        PROTOBUF_FIELD_OFFSET(::inference::ModelRepositoryParameter, _impl_.parameter_choice_),
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryModelLoadRequest_ParametersEntry_DoNotUse, _impl_._has_bits_),
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryModelLoadRequest_ParametersEntry_DoNotUse, _internal_metadata_),
+        ~0u,  // no _extensions_
+        ~0u,  // no _oneof_case_
+        ~0u,  // no _weak_field_map_
+        ~0u,  // no _inlined_string_donated_
+        ~0u,  // no _split_
+        ~0u,  // no sizeof(Split)
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryModelLoadRequest_ParametersEntry_DoNotUse, _impl_.key_),
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryModelLoadRequest_ParametersEntry_DoNotUse, _impl_.value_),
+        0,
+        1,
+        ~0u,  // no _has_bits_
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryModelLoadRequest, _internal_metadata_),
+        ~0u,  // no _extensions_
+        ~0u,  // no _oneof_case_
+        ~0u,  // no _weak_field_map_
+        ~0u,  // no _inlined_string_donated_
+        ~0u,  // no _split_
+        ~0u,  // no sizeof(Split)
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryModelLoadRequest, _impl_.repository_name_),
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryModelLoadRequest, _impl_.model_name_),
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryModelLoadRequest, _impl_.parameters_),
+        ~0u,  // no _has_bits_
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryModelLoadResponse, _internal_metadata_),
+        ~0u,  // no _extensions_
+        ~0u,  // no _oneof_case_
+        ~0u,  // no _weak_field_map_
+        ~0u,  // no _inlined_string_donated_
+        ~0u,  // no _split_
+        ~0u,  // no sizeof(Split)
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryModelUnloadRequest_ParametersEntry_DoNotUse, _impl_._has_bits_),
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryModelUnloadRequest_ParametersEntry_DoNotUse, _internal_metadata_),
+        ~0u,  // no _extensions_
+        ~0u,  // no _oneof_case_
+        ~0u,  // no _weak_field_map_
+        ~0u,  // no _inlined_string_donated_
+        ~0u,  // no _split_
+        ~0u,  // no sizeof(Split)
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryModelUnloadRequest_ParametersEntry_DoNotUse, _impl_.key_),
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryModelUnloadRequest_ParametersEntry_DoNotUse, _impl_.value_),
+        0,
+        1,
+        ~0u,  // no _has_bits_
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryModelUnloadRequest, _internal_metadata_),
+        ~0u,  // no _extensions_
+        ~0u,  // no _oneof_case_
+        ~0u,  // no _weak_field_map_
+        ~0u,  // no _inlined_string_donated_
+        ~0u,  // no _split_
+        ~0u,  // no sizeof(Split)
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryModelUnloadRequest, _impl_.repository_name_),
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryModelUnloadRequest, _impl_.model_name_),
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryModelUnloadRequest, _impl_.parameters_),
+        ~0u,  // no _has_bits_
+        PROTOBUF_FIELD_OFFSET(::inference::RepositoryModelUnloadResponse, _internal_metadata_),
+        ~0u,  // no _extensions_
+        ~0u,  // no _oneof_case_
+        ~0u,  // no _weak_field_map_
+        ~0u,  // no _inlined_string_donated_
+        ~0u,  // no _split_
+        ~0u,  // no sizeof(Split)
 };
 
 static const ::_pbi::MigrationSchema
@@ -988,6 +1343,16 @@ static const ::_pbi::MigrationSchema
         {234, 247, -1, sizeof(::inference::ModelInferResponse_InferOutputTensor)},
         {252, 262, -1, sizeof(::inference::ModelInferResponse_ParametersEntry_DoNotUse)},
         {264, -1, -1, sizeof(::inference::ModelInferResponse)},
+        {278, -1, -1, sizeof(::inference::RepositoryIndexRequest)},
+        {288, -1, -1, sizeof(::inference::RepositoryIndexResponse_ModelIndex)},
+        {300, -1, -1, sizeof(::inference::RepositoryIndexResponse)},
+        {309, -1, -1, sizeof(::inference::ModelRepositoryParameter)},
+        {322, 332, -1, sizeof(::inference::RepositoryModelLoadRequest_ParametersEntry_DoNotUse)},
+        {334, -1, -1, sizeof(::inference::RepositoryModelLoadRequest)},
+        {345, -1, -1, sizeof(::inference::RepositoryModelLoadResponse)},
+        {353, 363, -1, sizeof(::inference::RepositoryModelUnloadRequest_ParametersEntry_DoNotUse)},
+        {365, -1, -1, sizeof(::inference::RepositoryModelUnloadRequest)},
+        {376, -1, -1, sizeof(::inference::RepositoryModelUnloadResponse)},
 };
 static const ::_pb::Message* const file_default_instances[] = {
     &::inference::_ServerLiveRequest_default_instance_._instance,
@@ -1014,6 +1379,16 @@ static const ::_pb::Message* const file_default_instances[] = {
     &::inference::_ModelInferResponse_InferOutputTensor_default_instance_._instance,
     &::inference::_ModelInferResponse_ParametersEntry_DoNotUse_default_instance_._instance,
     &::inference::_ModelInferResponse_default_instance_._instance,
+    &::inference::_RepositoryIndexRequest_default_instance_._instance,
+    &::inference::_RepositoryIndexResponse_ModelIndex_default_instance_._instance,
+    &::inference::_RepositoryIndexResponse_default_instance_._instance,
+    &::inference::_ModelRepositoryParameter_default_instance_._instance,
+    &::inference::_RepositoryModelLoadRequest_ParametersEntry_DoNotUse_default_instance_._instance,
+    &::inference::_RepositoryModelLoadRequest_default_instance_._instance,
+    &::inference::_RepositoryModelLoadResponse_default_instance_._instance,
+    &::inference::_RepositoryModelUnloadRequest_ParametersEntry_DoNotUse_default_instance_._instance,
+    &::inference::_RepositoryModelUnloadRequest_default_instance_._instance,
+    &::inference::_RepositoryModelUnloadResponse_default_instance_._instance,
 };
 const char descriptor_table_protodef_grpc_5fservice_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -1075,7 +1450,30 @@ const char descriptor_table_protodef_grpc_5fservice_2eproto[] ABSL_ATTRIBUTE_SEC
     "ntents\030\005 \001(\0132\036.inference.InferTensorCont"
     "ents\0321\n\017ParametersEntry\022\013\n\003key\030\001 \001(\t\022\r\n\005"
     "value\030\002 \001(\t:\0028\001\0321\n\017ParametersEntry\022\013\n\003ke"
-    "y\030\001 \001(\t\022\r\n\005value\030\002 \001(\t:\0028\0012\314\004\n\024GRPCInfer"
+    "y\030\001 \001(\t\022\r\n\005value\030\002 \001(\t:\0028\001\"@\n\026Repository"
+    "IndexRequest\022\027\n\017repository_name\030\001 \001(\t\022\r\n"
+    "\005ready\030\002 \001(\010\"\244\001\n\027RepositoryIndexResponse"
+    "\022=\n\006models\030\001 \003(\0132-.inference.RepositoryI"
+    "ndexResponse.ModelIndex\032J\n\nModelIndex\022\014\n"
+    "\004name\030\001 \001(\t\022\017\n\007version\030\002 \001(\t\022\r\n\005state\030\003 "
+    "\001(\t\022\016\n\006reason\030\004 \001(\t\"\212\001\n\030ModelRepositoryP"
+    "arameter\022\024\n\nbool_param\030\001 \001(\010H\000\022\025\n\013int64_"
+    "param\030\002 \001(\003H\000\022\026\n\014string_param\030\003 \001(\tH\000\022\025\n"
+    "\013bytes_param\030\004 \001(\014H\000B\022\n\020parameter_choice"
+    "\"\354\001\n\032RepositoryModelLoadRequest\022\027\n\017repos"
+    "itory_name\030\001 \001(\t\022\022\n\nmodel_name\030\002 \001(\t\022I\n\n"
+    "parameters\030\003 \003(\01325.inference.RepositoryM"
+    "odelLoadRequest.ParametersEntry\032V\n\017Param"
+    "etersEntry\022\013\n\003key\030\001 \001(\t\0222\n\005value\030\002 \001(\0132#"
+    ".inference.ModelRepositoryParameter:\0028\001\""
+    "\035\n\033RepositoryModelLoadResponse\"\360\001\n\034Repos"
+    "itoryModelUnloadRequest\022\027\n\017repository_na"
+    "me\030\001 \001(\t\022\022\n\nmodel_name\030\002 \001(\t\022K\n\nparamete"
+    "rs\030\003 \003(\01327.inference.RepositoryModelUnlo"
+    "adRequest.ParametersEntry\032V\n\017ParametersE"
+    "ntry\022\013\n\003key\030\001 \001(\t\0222\n\005value\030\002 \001(\0132#.infer"
+    "ence.ModelRepositoryParameter:\0028\001\"\037\n\035Rep"
+    "ositoryModelUnloadResponse2\376\006\n\024GRPCInfer"
     "enceService\022K\n\nServerLive\022\034.inference.Se"
     "rverLiveRequest\032\035.inference.ServerLiveRe"
     "sponse\"\000\022N\n\013ServerReady\022\035.inference.Serv"
@@ -1090,19 +1488,27 @@ const char descriptor_table_protodef_grpc_5fservice_2eproto[] ABSL_ATTRIBUTE_SEC
     "ference.ModelConfigRequest\032\036.inference.M"
     "odelConfigResponse\"\000\022K\n\nModelInfer\022\034.inf"
     "erence.ModelInferRequest\032\035.inference.Mod"
-    "elInferResponse\"\000b\006proto3"
+    "elInferResponse\"\000\022Z\n\017RepositoryIndex\022!.i"
+    "nference.RepositoryIndexRequest\032\".infere"
+    "nce.RepositoryIndexResponse\"\000\022f\n\023Reposit"
+    "oryModelLoad\022%.inference.RepositoryModel"
+    "LoadRequest\032&.inference.RepositoryModelL"
+    "oadResponse\"\000\022l\n\025RepositoryModelUnload\022\'"
+    ".inference.RepositoryModelUnloadRequest\032"
+    "(.inference.RepositoryModelUnloadRespons"
+    "e\"\000b\006proto3"
 };
 static ::absl::once_flag descriptor_table_grpc_5fservice_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_grpc_5fservice_2eproto = {
     false,
     false,
-    2945,
+    4171,
     descriptor_table_protodef_grpc_5fservice_2eproto,
     "grpc_service.proto",
     &descriptor_table_grpc_5fservice_2eproto_once,
     nullptr,
     0,
-    24,
+    34,
     schemas,
     file_default_instances,
     TableStruct_grpc_5fservice_2eproto::offsets,
@@ -7033,6 +7439,2225 @@ void ModelInferResponse::InternalSwap(ModelInferResponse* PROTOBUF_RESTRICT othe
 
 ::google::protobuf::Metadata ModelInferResponse::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class RepositoryIndexRequest::_Internal {
+ public:
+};
+
+RepositoryIndexRequest::RepositoryIndexRequest(::google::protobuf::Arena* arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:inference.RepositoryIndexRequest)
+}
+inline PROTOBUF_NDEBUG_INLINE RepositoryIndexRequest::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility, ::google::protobuf::Arena* arena,
+    const Impl_& from, const ::inference::RepositoryIndexRequest& from_msg)
+      : repository_name_(arena, from.repository_name_),
+        _cached_size_{0} {}
+
+RepositoryIndexRequest::RepositoryIndexRequest(
+    ::google::protobuf::Arena* arena,
+    const RepositoryIndexRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  RepositoryIndexRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.ready_ = from._impl_.ready_;
+
+  // @@protoc_insertion_point(copy_constructor:inference.RepositoryIndexRequest)
+}
+inline PROTOBUF_NDEBUG_INLINE RepositoryIndexRequest::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* arena)
+      : repository_name_(arena),
+        _cached_size_{0} {}
+
+inline void RepositoryIndexRequest::SharedCtor(::_pb::Arena* arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.ready_ = {};
+}
+RepositoryIndexRequest::~RepositoryIndexRequest() {
+  // @@protoc_insertion_point(destructor:inference.RepositoryIndexRequest)
+  SharedDtor(*this);
+}
+inline void RepositoryIndexRequest::SharedDtor(MessageLite& self) {
+  RepositoryIndexRequest& this_ = static_cast<RepositoryIndexRequest&>(self);
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.repository_name_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+inline void* RepositoryIndexRequest::PlacementNew_(const void*, void* mem,
+                                        ::google::protobuf::Arena* arena) {
+  return ::new (mem) RepositoryIndexRequest(arena);
+}
+constexpr auto RepositoryIndexRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(RepositoryIndexRequest),
+                                            alignof(RepositoryIndexRequest));
+}
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataFull RepositoryIndexRequest::_class_data_ = {
+    ::google::protobuf::internal::ClassData{
+        &_RepositoryIndexRequest_default_instance_._instance,
+        &_table_.header,
+        nullptr,  // OnDemandRegisterArenaDtor
+        nullptr,  // IsInitialized
+        &RepositoryIndexRequest::MergeImpl,
+        ::google::protobuf::Message::GetNewImpl<RepositoryIndexRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        &RepositoryIndexRequest::SharedDtor,
+        ::google::protobuf::Message::GetClearImpl<RepositoryIndexRequest>(), &RepositoryIndexRequest::ByteSizeLong,
+            &RepositoryIndexRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+        PROTOBUF_FIELD_OFFSET(RepositoryIndexRequest, _impl_._cached_size_),
+        false,
+    },
+    &RepositoryIndexRequest::kDescriptorMethods,
+    &descriptor_table_grpc_5fservice_2eproto,
+    nullptr,  // tracker
+};
+const ::google::protobuf::internal::ClassData* RepositoryIndexRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(_class_data_.tc_table);
+  return _class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<1, 2, 0, 56, 2> RepositoryIndexRequest::_table_ = {
+  {
+    0,  // no _has_bits_
+    0, // no _extensions_
+    2, 8,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967292,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    2,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    _class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::inference::RepositoryIndexRequest>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // bool ready = 2;
+    {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(RepositoryIndexRequest, _impl_.ready_), 63>(),
+     {16, 63, 0, PROTOBUF_FIELD_OFFSET(RepositoryIndexRequest, _impl_.ready_)}},
+    // string repository_name = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 63, 0, PROTOBUF_FIELD_OFFSET(RepositoryIndexRequest, _impl_.repository_name_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string repository_name = 1;
+    {PROTOBUF_FIELD_OFFSET(RepositoryIndexRequest, _impl_.repository_name_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // bool ready = 2;
+    {PROTOBUF_FIELD_OFFSET(RepositoryIndexRequest, _impl_.ready_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kBool)},
+  }},
+  // no aux_entries
+  {{
+    "\40\17\0\0\0\0\0\0"
+    "inference.RepositoryIndexRequest"
+    "repository_name"
+  }},
+};
+
+PROTOBUF_NOINLINE void RepositoryIndexRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:inference.RepositoryIndexRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.repository_name_.ClearToEmpty();
+  _impl_.ready_ = false;
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        ::uint8_t* RepositoryIndexRequest::_InternalSerialize(
+            const MessageLite& base, ::uint8_t* target,
+            ::google::protobuf::io::EpsCopyOutputStream* stream) {
+          const RepositoryIndexRequest& this_ = static_cast<const RepositoryIndexRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+        ::uint8_t* RepositoryIndexRequest::_InternalSerialize(
+            ::uint8_t* target,
+            ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+          const RepositoryIndexRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          // @@protoc_insertion_point(serialize_to_array_start:inference.RepositoryIndexRequest)
+          ::uint32_t cached_has_bits = 0;
+          (void)cached_has_bits;
+
+          // string repository_name = 1;
+          if (!this_._internal_repository_name().empty()) {
+            const std::string& _s = this_._internal_repository_name();
+            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "inference.RepositoryIndexRequest.repository_name");
+            target = stream->WriteStringMaybeAliased(1, _s, target);
+          }
+
+          // bool ready = 2;
+          if (this_._internal_ready() != 0) {
+            target = stream->EnsureSpace(target);
+            target = ::_pbi::WireFormatLite::WriteBoolToArray(
+                2, this_._internal_ready(), target);
+          }
+
+          if (PROTOBUF_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+            target =
+                ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+                    this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+          }
+          // @@protoc_insertion_point(serialize_to_array_end:inference.RepositoryIndexRequest)
+          return target;
+        }
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        ::size_t RepositoryIndexRequest::ByteSizeLong(const MessageLite& base) {
+          const RepositoryIndexRequest& this_ = static_cast<const RepositoryIndexRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+        ::size_t RepositoryIndexRequest::ByteSizeLong() const {
+          const RepositoryIndexRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          // @@protoc_insertion_point(message_byte_size_start:inference.RepositoryIndexRequest)
+          ::size_t total_size = 0;
+
+          ::uint32_t cached_has_bits = 0;
+          // Prevent compiler warnings about cached_has_bits being unused
+          (void)cached_has_bits;
+
+          ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+           {
+            // string repository_name = 1;
+            if (!this_._internal_repository_name().empty()) {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                              this_._internal_repository_name());
+            }
+            // bool ready = 2;
+            if (this_._internal_ready() != 0) {
+              total_size += 2;
+            }
+          }
+          return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                                     &this_._impl_._cached_size_);
+        }
+
+void RepositoryIndexRequest::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<RepositoryIndexRequest*>(&to_msg);
+  auto& from = static_cast<const RepositoryIndexRequest&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:inference.RepositoryIndexRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_repository_name().empty()) {
+    _this->_internal_set_repository_name(from._internal_repository_name());
+  }
+  if (from._internal_ready() != 0) {
+    _this->_impl_.ready_ = from._impl_.ready_;
+  }
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void RepositoryIndexRequest::CopyFrom(const RepositoryIndexRequest& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:inference.RepositoryIndexRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void RepositoryIndexRequest::InternalSwap(RepositoryIndexRequest* PROTOBUF_RESTRICT other) {
+  using std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.repository_name_, &other->_impl_.repository_name_, arena);
+        swap(_impl_.ready_, other->_impl_.ready_);
+}
+
+::google::protobuf::Metadata RepositoryIndexRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class RepositoryIndexResponse_ModelIndex::_Internal {
+ public:
+};
+
+RepositoryIndexResponse_ModelIndex::RepositoryIndexResponse_ModelIndex(::google::protobuf::Arena* arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:inference.RepositoryIndexResponse.ModelIndex)
+}
+inline PROTOBUF_NDEBUG_INLINE RepositoryIndexResponse_ModelIndex::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility, ::google::protobuf::Arena* arena,
+    const Impl_& from, const ::inference::RepositoryIndexResponse_ModelIndex& from_msg)
+      : name_(arena, from.name_),
+        version_(arena, from.version_),
+        state_(arena, from.state_),
+        reason_(arena, from.reason_),
+        _cached_size_{0} {}
+
+RepositoryIndexResponse_ModelIndex::RepositoryIndexResponse_ModelIndex(
+    ::google::protobuf::Arena* arena,
+    const RepositoryIndexResponse_ModelIndex& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  RepositoryIndexResponse_ModelIndex* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:inference.RepositoryIndexResponse.ModelIndex)
+}
+inline PROTOBUF_NDEBUG_INLINE RepositoryIndexResponse_ModelIndex::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* arena)
+      : name_(arena),
+        version_(arena),
+        state_(arena),
+        reason_(arena),
+        _cached_size_{0} {}
+
+inline void RepositoryIndexResponse_ModelIndex::SharedCtor(::_pb::Arena* arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+RepositoryIndexResponse_ModelIndex::~RepositoryIndexResponse_ModelIndex() {
+  // @@protoc_insertion_point(destructor:inference.RepositoryIndexResponse.ModelIndex)
+  SharedDtor(*this);
+}
+inline void RepositoryIndexResponse_ModelIndex::SharedDtor(MessageLite& self) {
+  RepositoryIndexResponse_ModelIndex& this_ = static_cast<RepositoryIndexResponse_ModelIndex&>(self);
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.name_.Destroy();
+  this_._impl_.version_.Destroy();
+  this_._impl_.state_.Destroy();
+  this_._impl_.reason_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+inline void* RepositoryIndexResponse_ModelIndex::PlacementNew_(const void*, void* mem,
+                                        ::google::protobuf::Arena* arena) {
+  return ::new (mem) RepositoryIndexResponse_ModelIndex(arena);
+}
+constexpr auto RepositoryIndexResponse_ModelIndex::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(RepositoryIndexResponse_ModelIndex),
+                                            alignof(RepositoryIndexResponse_ModelIndex));
+}
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataFull RepositoryIndexResponse_ModelIndex::_class_data_ = {
+    ::google::protobuf::internal::ClassData{
+        &_RepositoryIndexResponse_ModelIndex_default_instance_._instance,
+        &_table_.header,
+        nullptr,  // OnDemandRegisterArenaDtor
+        nullptr,  // IsInitialized
+        &RepositoryIndexResponse_ModelIndex::MergeImpl,
+        ::google::protobuf::Message::GetNewImpl<RepositoryIndexResponse_ModelIndex>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        &RepositoryIndexResponse_ModelIndex::SharedDtor,
+        ::google::protobuf::Message::GetClearImpl<RepositoryIndexResponse_ModelIndex>(), &RepositoryIndexResponse_ModelIndex::ByteSizeLong,
+            &RepositoryIndexResponse_ModelIndex::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+        PROTOBUF_FIELD_OFFSET(RepositoryIndexResponse_ModelIndex, _impl_._cached_size_),
+        false,
+    },
+    &RepositoryIndexResponse_ModelIndex::kDescriptorMethods,
+    &descriptor_table_grpc_5fservice_2eproto,
+    nullptr,  // tracker
+};
+const ::google::protobuf::internal::ClassData* RepositoryIndexResponse_ModelIndex::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(_class_data_.tc_table);
+  return _class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<2, 4, 0, 75, 2> RepositoryIndexResponse_ModelIndex::_table_ = {
+  {
+    0,  // no _has_bits_
+    0, // no _extensions_
+    4, 24,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967280,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    4,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    _class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::inference::RepositoryIndexResponse_ModelIndex>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // string reason = 4;
+    {::_pbi::TcParser::FastUS1,
+     {34, 63, 0, PROTOBUF_FIELD_OFFSET(RepositoryIndexResponse_ModelIndex, _impl_.reason_)}},
+    // string name = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 63, 0, PROTOBUF_FIELD_OFFSET(RepositoryIndexResponse_ModelIndex, _impl_.name_)}},
+    // string version = 2;
+    {::_pbi::TcParser::FastUS1,
+     {18, 63, 0, PROTOBUF_FIELD_OFFSET(RepositoryIndexResponse_ModelIndex, _impl_.version_)}},
+    // string state = 3;
+    {::_pbi::TcParser::FastUS1,
+     {26, 63, 0, PROTOBUF_FIELD_OFFSET(RepositoryIndexResponse_ModelIndex, _impl_.state_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string name = 1;
+    {PROTOBUF_FIELD_OFFSET(RepositoryIndexResponse_ModelIndex, _impl_.name_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string version = 2;
+    {PROTOBUF_FIELD_OFFSET(RepositoryIndexResponse_ModelIndex, _impl_.version_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string state = 3;
+    {PROTOBUF_FIELD_OFFSET(RepositoryIndexResponse_ModelIndex, _impl_.state_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string reason = 4;
+    {PROTOBUF_FIELD_OFFSET(RepositoryIndexResponse_ModelIndex, _impl_.reason_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+  }},
+  // no aux_entries
+  {{
+    "\54\4\7\5\6\0\0\0"
+    "inference.RepositoryIndexResponse.ModelIndex"
+    "name"
+    "version"
+    "state"
+    "reason"
+  }},
+};
+
+PROTOBUF_NOINLINE void RepositoryIndexResponse_ModelIndex::Clear() {
+// @@protoc_insertion_point(message_clear_start:inference.RepositoryIndexResponse.ModelIndex)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.name_.ClearToEmpty();
+  _impl_.version_.ClearToEmpty();
+  _impl_.state_.ClearToEmpty();
+  _impl_.reason_.ClearToEmpty();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        ::uint8_t* RepositoryIndexResponse_ModelIndex::_InternalSerialize(
+            const MessageLite& base, ::uint8_t* target,
+            ::google::protobuf::io::EpsCopyOutputStream* stream) {
+          const RepositoryIndexResponse_ModelIndex& this_ = static_cast<const RepositoryIndexResponse_ModelIndex&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+        ::uint8_t* RepositoryIndexResponse_ModelIndex::_InternalSerialize(
+            ::uint8_t* target,
+            ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+          const RepositoryIndexResponse_ModelIndex& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          // @@protoc_insertion_point(serialize_to_array_start:inference.RepositoryIndexResponse.ModelIndex)
+          ::uint32_t cached_has_bits = 0;
+          (void)cached_has_bits;
+
+          // string name = 1;
+          if (!this_._internal_name().empty()) {
+            const std::string& _s = this_._internal_name();
+            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "inference.RepositoryIndexResponse.ModelIndex.name");
+            target = stream->WriteStringMaybeAliased(1, _s, target);
+          }
+
+          // string version = 2;
+          if (!this_._internal_version().empty()) {
+            const std::string& _s = this_._internal_version();
+            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "inference.RepositoryIndexResponse.ModelIndex.version");
+            target = stream->WriteStringMaybeAliased(2, _s, target);
+          }
+
+          // string state = 3;
+          if (!this_._internal_state().empty()) {
+            const std::string& _s = this_._internal_state();
+            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "inference.RepositoryIndexResponse.ModelIndex.state");
+            target = stream->WriteStringMaybeAliased(3, _s, target);
+          }
+
+          // string reason = 4;
+          if (!this_._internal_reason().empty()) {
+            const std::string& _s = this_._internal_reason();
+            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "inference.RepositoryIndexResponse.ModelIndex.reason");
+            target = stream->WriteStringMaybeAliased(4, _s, target);
+          }
+
+          if (PROTOBUF_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+            target =
+                ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+                    this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+          }
+          // @@protoc_insertion_point(serialize_to_array_end:inference.RepositoryIndexResponse.ModelIndex)
+          return target;
+        }
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        ::size_t RepositoryIndexResponse_ModelIndex::ByteSizeLong(const MessageLite& base) {
+          const RepositoryIndexResponse_ModelIndex& this_ = static_cast<const RepositoryIndexResponse_ModelIndex&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+        ::size_t RepositoryIndexResponse_ModelIndex::ByteSizeLong() const {
+          const RepositoryIndexResponse_ModelIndex& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          // @@protoc_insertion_point(message_byte_size_start:inference.RepositoryIndexResponse.ModelIndex)
+          ::size_t total_size = 0;
+
+          ::uint32_t cached_has_bits = 0;
+          // Prevent compiler warnings about cached_has_bits being unused
+          (void)cached_has_bits;
+
+          ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+           {
+            // string name = 1;
+            if (!this_._internal_name().empty()) {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                              this_._internal_name());
+            }
+            // string version = 2;
+            if (!this_._internal_version().empty()) {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                              this_._internal_version());
+            }
+            // string state = 3;
+            if (!this_._internal_state().empty()) {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                              this_._internal_state());
+            }
+            // string reason = 4;
+            if (!this_._internal_reason().empty()) {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                              this_._internal_reason());
+            }
+          }
+          return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                                     &this_._impl_._cached_size_);
+        }
+
+void RepositoryIndexResponse_ModelIndex::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<RepositoryIndexResponse_ModelIndex*>(&to_msg);
+  auto& from = static_cast<const RepositoryIndexResponse_ModelIndex&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:inference.RepositoryIndexResponse.ModelIndex)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_name().empty()) {
+    _this->_internal_set_name(from._internal_name());
+  }
+  if (!from._internal_version().empty()) {
+    _this->_internal_set_version(from._internal_version());
+  }
+  if (!from._internal_state().empty()) {
+    _this->_internal_set_state(from._internal_state());
+  }
+  if (!from._internal_reason().empty()) {
+    _this->_internal_set_reason(from._internal_reason());
+  }
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void RepositoryIndexResponse_ModelIndex::CopyFrom(const RepositoryIndexResponse_ModelIndex& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:inference.RepositoryIndexResponse.ModelIndex)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void RepositoryIndexResponse_ModelIndex::InternalSwap(RepositoryIndexResponse_ModelIndex* PROTOBUF_RESTRICT other) {
+  using std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.version_, &other->_impl_.version_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.state_, &other->_impl_.state_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.reason_, &other->_impl_.reason_, arena);
+}
+
+::google::protobuf::Metadata RepositoryIndexResponse_ModelIndex::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class RepositoryIndexResponse::_Internal {
+ public:
+};
+
+RepositoryIndexResponse::RepositoryIndexResponse(::google::protobuf::Arena* arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:inference.RepositoryIndexResponse)
+}
+inline PROTOBUF_NDEBUG_INLINE RepositoryIndexResponse::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility, ::google::protobuf::Arena* arena,
+    const Impl_& from, const ::inference::RepositoryIndexResponse& from_msg)
+      : models_{visibility, arena, from.models_},
+        _cached_size_{0} {}
+
+RepositoryIndexResponse::RepositoryIndexResponse(
+    ::google::protobuf::Arena* arena,
+    const RepositoryIndexResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  RepositoryIndexResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:inference.RepositoryIndexResponse)
+}
+inline PROTOBUF_NDEBUG_INLINE RepositoryIndexResponse::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* arena)
+      : models_{visibility, arena},
+        _cached_size_{0} {}
+
+inline void RepositoryIndexResponse::SharedCtor(::_pb::Arena* arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+RepositoryIndexResponse::~RepositoryIndexResponse() {
+  // @@protoc_insertion_point(destructor:inference.RepositoryIndexResponse)
+  SharedDtor(*this);
+}
+inline void RepositoryIndexResponse::SharedDtor(MessageLite& self) {
+  RepositoryIndexResponse& this_ = static_cast<RepositoryIndexResponse&>(self);
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+inline void* RepositoryIndexResponse::PlacementNew_(const void*, void* mem,
+                                        ::google::protobuf::Arena* arena) {
+  return ::new (mem) RepositoryIndexResponse(arena);
+}
+constexpr auto RepositoryIndexResponse::InternalNewImpl_() {
+  constexpr auto arena_bits = ::google::protobuf::internal::EncodePlacementArenaOffsets({
+      PROTOBUF_FIELD_OFFSET(RepositoryIndexResponse, _impl_.models_) +
+          decltype(RepositoryIndexResponse::_impl_.models_)::
+              InternalGetArenaOffset(
+                  ::google::protobuf::Message::internal_visibility()),
+  });
+  if (arena_bits.has_value()) {
+    return ::google::protobuf::internal::MessageCreator::ZeroInit(
+        sizeof(RepositoryIndexResponse), alignof(RepositoryIndexResponse), *arena_bits);
+  } else {
+    return ::google::protobuf::internal::MessageCreator(&RepositoryIndexResponse::PlacementNew_,
+                                 sizeof(RepositoryIndexResponse),
+                                 alignof(RepositoryIndexResponse));
+  }
+}
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataFull RepositoryIndexResponse::_class_data_ = {
+    ::google::protobuf::internal::ClassData{
+        &_RepositoryIndexResponse_default_instance_._instance,
+        &_table_.header,
+        nullptr,  // OnDemandRegisterArenaDtor
+        nullptr,  // IsInitialized
+        &RepositoryIndexResponse::MergeImpl,
+        ::google::protobuf::Message::GetNewImpl<RepositoryIndexResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        &RepositoryIndexResponse::SharedDtor,
+        ::google::protobuf::Message::GetClearImpl<RepositoryIndexResponse>(), &RepositoryIndexResponse::ByteSizeLong,
+            &RepositoryIndexResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+        PROTOBUF_FIELD_OFFSET(RepositoryIndexResponse, _impl_._cached_size_),
+        false,
+    },
+    &RepositoryIndexResponse::kDescriptorMethods,
+    &descriptor_table_grpc_5fservice_2eproto,
+    nullptr,  // tracker
+};
+const ::google::protobuf::internal::ClassData* RepositoryIndexResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(_class_data_.tc_table);
+  return _class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<0, 1, 1, 0, 2> RepositoryIndexResponse::_table_ = {
+  {
+    0,  // no _has_bits_
+    0, // no _extensions_
+    1, 0,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967294,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    1,  // num_field_entries
+    1,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
+    _class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::inference::RepositoryIndexResponse>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // repeated .inference.RepositoryIndexResponse.ModelIndex models = 1;
+    {::_pbi::TcParser::FastMtR1,
+     {10, 63, 0, PROTOBUF_FIELD_OFFSET(RepositoryIndexResponse, _impl_.models_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // repeated .inference.RepositoryIndexResponse.ModelIndex models = 1;
+    {PROTOBUF_FIELD_OFFSET(RepositoryIndexResponse, _impl_.models_), 0, 0,
+    (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+  }}, {{
+    {::_pbi::TcParser::GetTable<::inference::RepositoryIndexResponse_ModelIndex>()},
+  }}, {{
+  }},
+};
+
+PROTOBUF_NOINLINE void RepositoryIndexResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:inference.RepositoryIndexResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.models_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        ::uint8_t* RepositoryIndexResponse::_InternalSerialize(
+            const MessageLite& base, ::uint8_t* target,
+            ::google::protobuf::io::EpsCopyOutputStream* stream) {
+          const RepositoryIndexResponse& this_ = static_cast<const RepositoryIndexResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+        ::uint8_t* RepositoryIndexResponse::_InternalSerialize(
+            ::uint8_t* target,
+            ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+          const RepositoryIndexResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          // @@protoc_insertion_point(serialize_to_array_start:inference.RepositoryIndexResponse)
+          ::uint32_t cached_has_bits = 0;
+          (void)cached_has_bits;
+
+          // repeated .inference.RepositoryIndexResponse.ModelIndex models = 1;
+          for (unsigned i = 0, n = static_cast<unsigned>(
+                                   this_._internal_models_size());
+               i < n; i++) {
+            const auto& repfield = this_._internal_models().Get(i);
+            target =
+                ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+                    1, repfield, repfield.GetCachedSize(),
+                    target, stream);
+          }
+
+          if (PROTOBUF_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+            target =
+                ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+                    this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+          }
+          // @@protoc_insertion_point(serialize_to_array_end:inference.RepositoryIndexResponse)
+          return target;
+        }
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        ::size_t RepositoryIndexResponse::ByteSizeLong(const MessageLite& base) {
+          const RepositoryIndexResponse& this_ = static_cast<const RepositoryIndexResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+        ::size_t RepositoryIndexResponse::ByteSizeLong() const {
+          const RepositoryIndexResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          // @@protoc_insertion_point(message_byte_size_start:inference.RepositoryIndexResponse)
+          ::size_t total_size = 0;
+
+          ::uint32_t cached_has_bits = 0;
+          // Prevent compiler warnings about cached_has_bits being unused
+          (void)cached_has_bits;
+
+          ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+           {
+            // repeated .inference.RepositoryIndexResponse.ModelIndex models = 1;
+            {
+              total_size += 1UL * this_._internal_models_size();
+              for (const auto& msg : this_._internal_models()) {
+                total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+              }
+            }
+          }
+          return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                                     &this_._impl_._cached_size_);
+        }
+
+void RepositoryIndexResponse::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<RepositoryIndexResponse*>(&to_msg);
+  auto& from = static_cast<const RepositoryIndexResponse&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:inference.RepositoryIndexResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  _this->_internal_mutable_models()->MergeFrom(
+      from._internal_models());
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void RepositoryIndexResponse::CopyFrom(const RepositoryIndexResponse& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:inference.RepositoryIndexResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void RepositoryIndexResponse::InternalSwap(RepositoryIndexResponse* PROTOBUF_RESTRICT other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  _impl_.models_.InternalSwap(&other->_impl_.models_);
+}
+
+::google::protobuf::Metadata RepositoryIndexResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class ModelRepositoryParameter::_Internal {
+ public:
+  static constexpr ::int32_t kOneofCaseOffset =
+      PROTOBUF_FIELD_OFFSET(::inference::ModelRepositoryParameter, _impl_._oneof_case_);
+};
+
+ModelRepositoryParameter::ModelRepositoryParameter(::google::protobuf::Arena* arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:inference.ModelRepositoryParameter)
+}
+inline PROTOBUF_NDEBUG_INLINE ModelRepositoryParameter::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility, ::google::protobuf::Arena* arena,
+    const Impl_& from, const ::inference::ModelRepositoryParameter& from_msg)
+      : parameter_choice_{},
+        _cached_size_{0},
+        _oneof_case_{from._oneof_case_[0]} {}
+
+ModelRepositoryParameter::ModelRepositoryParameter(
+    ::google::protobuf::Arena* arena,
+    const ModelRepositoryParameter& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ModelRepositoryParameter* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  switch (parameter_choice_case()) {
+    case PARAMETER_CHOICE_NOT_SET:
+      break;
+      case kBoolParam:
+        _impl_.parameter_choice_.bool_param_ = from._impl_.parameter_choice_.bool_param_;
+        break;
+      case kInt64Param:
+        _impl_.parameter_choice_.int64_param_ = from._impl_.parameter_choice_.int64_param_;
+        break;
+      case kStringParam:
+        new (&_impl_.parameter_choice_.string_param_) decltype(_impl_.parameter_choice_.string_param_){arena, from._impl_.parameter_choice_.string_param_};
+        break;
+      case kBytesParam:
+        new (&_impl_.parameter_choice_.bytes_param_) decltype(_impl_.parameter_choice_.bytes_param_){arena, from._impl_.parameter_choice_.bytes_param_};
+        break;
+  }
+
+  // @@protoc_insertion_point(copy_constructor:inference.ModelRepositoryParameter)
+}
+inline PROTOBUF_NDEBUG_INLINE ModelRepositoryParameter::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* arena)
+      : parameter_choice_{},
+        _cached_size_{0},
+        _oneof_case_{} {}
+
+inline void ModelRepositoryParameter::SharedCtor(::_pb::Arena* arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+ModelRepositoryParameter::~ModelRepositoryParameter() {
+  // @@protoc_insertion_point(destructor:inference.ModelRepositoryParameter)
+  SharedDtor(*this);
+}
+inline void ModelRepositoryParameter::SharedDtor(MessageLite& self) {
+  ModelRepositoryParameter& this_ = static_cast<ModelRepositoryParameter&>(self);
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  if (this_.has_parameter_choice()) {
+    this_.clear_parameter_choice();
+  }
+  this_._impl_.~Impl_();
+}
+
+void ModelRepositoryParameter::clear_parameter_choice() {
+// @@protoc_insertion_point(one_of_clear_start:inference.ModelRepositoryParameter)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  switch (parameter_choice_case()) {
+    case kBoolParam: {
+      // No need to clear
+      break;
+    }
+    case kInt64Param: {
+      // No need to clear
+      break;
+    }
+    case kStringParam: {
+      _impl_.parameter_choice_.string_param_.Destroy();
+      break;
+    }
+    case kBytesParam: {
+      _impl_.parameter_choice_.bytes_param_.Destroy();
+      break;
+    }
+    case PARAMETER_CHOICE_NOT_SET: {
+      break;
+    }
+  }
+  _impl_._oneof_case_[0] = PARAMETER_CHOICE_NOT_SET;
+}
+
+
+inline void* ModelRepositoryParameter::PlacementNew_(const void*, void* mem,
+                                        ::google::protobuf::Arena* arena) {
+  return ::new (mem) ModelRepositoryParameter(arena);
+}
+constexpr auto ModelRepositoryParameter::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ModelRepositoryParameter),
+                                            alignof(ModelRepositoryParameter));
+}
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataFull ModelRepositoryParameter::_class_data_ = {
+    ::google::protobuf::internal::ClassData{
+        &_ModelRepositoryParameter_default_instance_._instance,
+        &_table_.header,
+        nullptr,  // OnDemandRegisterArenaDtor
+        nullptr,  // IsInitialized
+        &ModelRepositoryParameter::MergeImpl,
+        ::google::protobuf::Message::GetNewImpl<ModelRepositoryParameter>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        &ModelRepositoryParameter::SharedDtor,
+        ::google::protobuf::Message::GetClearImpl<ModelRepositoryParameter>(), &ModelRepositoryParameter::ByteSizeLong,
+            &ModelRepositoryParameter::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+        PROTOBUF_FIELD_OFFSET(ModelRepositoryParameter, _impl_._cached_size_),
+        false,
+    },
+    &ModelRepositoryParameter::kDescriptorMethods,
+    &descriptor_table_grpc_5fservice_2eproto,
+    nullptr,  // tracker
+};
+const ::google::protobuf::internal::ClassData* ModelRepositoryParameter::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(_class_data_.tc_table);
+  return _class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<0, 4, 0, 55, 2> ModelRepositoryParameter::_table_ = {
+  {
+    0,  // no _has_bits_
+    0, // no _extensions_
+    4, 0,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967280,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    4,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    _class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::inference::ModelRepositoryParameter>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // bool bool_param = 1;
+    {PROTOBUF_FIELD_OFFSET(ModelRepositoryParameter, _impl_.parameter_choice_.bool_param_), _Internal::kOneofCaseOffset + 0, 0,
+    (0 | ::_fl::kFcOneof | ::_fl::kBool)},
+    // int64 int64_param = 2;
+    {PROTOBUF_FIELD_OFFSET(ModelRepositoryParameter, _impl_.parameter_choice_.int64_param_), _Internal::kOneofCaseOffset + 0, 0,
+    (0 | ::_fl::kFcOneof | ::_fl::kInt64)},
+    // string string_param = 3;
+    {PROTOBUF_FIELD_OFFSET(ModelRepositoryParameter, _impl_.parameter_choice_.string_param_), _Internal::kOneofCaseOffset + 0, 0,
+    (0 | ::_fl::kFcOneof | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // bytes bytes_param = 4;
+    {PROTOBUF_FIELD_OFFSET(ModelRepositoryParameter, _impl_.parameter_choice_.bytes_param_), _Internal::kOneofCaseOffset + 0, 0,
+    (0 | ::_fl::kFcOneof | ::_fl::kBytes | ::_fl::kRepAString)},
+  }},
+  // no aux_entries
+  {{
+    "\42\0\0\14\0\0\0\0"
+    "inference.ModelRepositoryParameter"
+    "string_param"
+  }},
+};
+
+PROTOBUF_NOINLINE void ModelRepositoryParameter::Clear() {
+// @@protoc_insertion_point(message_clear_start:inference.ModelRepositoryParameter)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  clear_parameter_choice();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        ::uint8_t* ModelRepositoryParameter::_InternalSerialize(
+            const MessageLite& base, ::uint8_t* target,
+            ::google::protobuf::io::EpsCopyOutputStream* stream) {
+          const ModelRepositoryParameter& this_ = static_cast<const ModelRepositoryParameter&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+        ::uint8_t* ModelRepositoryParameter::_InternalSerialize(
+            ::uint8_t* target,
+            ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+          const ModelRepositoryParameter& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          // @@protoc_insertion_point(serialize_to_array_start:inference.ModelRepositoryParameter)
+          ::uint32_t cached_has_bits = 0;
+          (void)cached_has_bits;
+
+          switch (this_.parameter_choice_case()) {
+            case kBoolParam: {
+              target = stream->EnsureSpace(target);
+              target = ::_pbi::WireFormatLite::WriteBoolToArray(
+                  1, this_._internal_bool_param(), target);
+              break;
+            }
+            case kInt64Param: {
+              target = ::google::protobuf::internal::WireFormatLite::
+                  WriteInt64ToArrayWithField<2>(
+                      stream, this_._internal_int64_param(), target);
+              break;
+            }
+            case kStringParam: {
+              const std::string& _s = this_._internal_string_param();
+              ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                  _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "inference.ModelRepositoryParameter.string_param");
+              target = stream->WriteStringMaybeAliased(3, _s, target);
+              break;
+            }
+            case kBytesParam: {
+              const std::string& _s = this_._internal_bytes_param();
+              target = stream->WriteBytesMaybeAliased(4, _s, target);
+              break;
+            }
+            default:
+              break;
+          }
+          if (PROTOBUF_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+            target =
+                ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+                    this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+          }
+          // @@protoc_insertion_point(serialize_to_array_end:inference.ModelRepositoryParameter)
+          return target;
+        }
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        ::size_t ModelRepositoryParameter::ByteSizeLong(const MessageLite& base) {
+          const ModelRepositoryParameter& this_ = static_cast<const ModelRepositoryParameter&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+        ::size_t ModelRepositoryParameter::ByteSizeLong() const {
+          const ModelRepositoryParameter& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          // @@protoc_insertion_point(message_byte_size_start:inference.ModelRepositoryParameter)
+          ::size_t total_size = 0;
+
+          ::uint32_t cached_has_bits = 0;
+          // Prevent compiler warnings about cached_has_bits being unused
+          (void)cached_has_bits;
+
+          switch (this_.parameter_choice_case()) {
+            // bool bool_param = 1;
+            case kBoolParam: {
+              total_size += 2;
+              break;
+            }
+            // int64 int64_param = 2;
+            case kInt64Param: {
+              total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+                  this_._internal_int64_param());
+              break;
+            }
+            // string string_param = 3;
+            case kStringParam: {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                              this_._internal_string_param());
+              break;
+            }
+            // bytes bytes_param = 4;
+            case kBytesParam: {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
+                                              this_._internal_bytes_param());
+              break;
+            }
+            case PARAMETER_CHOICE_NOT_SET: {
+              break;
+            }
+          }
+          return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                                     &this_._impl_._cached_size_);
+        }
+
+void ModelRepositoryParameter::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<ModelRepositoryParameter*>(&to_msg);
+  auto& from = static_cast<const ModelRepositoryParameter&>(from_msg);
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:inference.ModelRepositoryParameter)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (const uint32_t oneof_from_case = from._impl_._oneof_case_[0]) {
+    const uint32_t oneof_to_case = _this->_impl_._oneof_case_[0];
+    const bool oneof_needs_init = oneof_to_case != oneof_from_case;
+    if (oneof_needs_init) {
+      if (oneof_to_case != 0) {
+        _this->clear_parameter_choice();
+      }
+      _this->_impl_._oneof_case_[0] = oneof_from_case;
+    }
+
+    switch (oneof_from_case) {
+      case kBoolParam: {
+        _this->_impl_.parameter_choice_.bool_param_ = from._impl_.parameter_choice_.bool_param_;
+        break;
+      }
+      case kInt64Param: {
+        _this->_impl_.parameter_choice_.int64_param_ = from._impl_.parameter_choice_.int64_param_;
+        break;
+      }
+      case kStringParam: {
+        if (oneof_needs_init) {
+          _this->_impl_.parameter_choice_.string_param_.InitDefault();
+        }
+        _this->_impl_.parameter_choice_.string_param_.Set(from._internal_string_param(), arena);
+        break;
+      }
+      case kBytesParam: {
+        if (oneof_needs_init) {
+          _this->_impl_.parameter_choice_.bytes_param_.InitDefault();
+        }
+        _this->_impl_.parameter_choice_.bytes_param_.Set(from._internal_bytes_param(), arena);
+        break;
+      }
+      case PARAMETER_CHOICE_NOT_SET:
+        break;
+    }
+  }
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void ModelRepositoryParameter::CopyFrom(const ModelRepositoryParameter& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:inference.ModelRepositoryParameter)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ModelRepositoryParameter::InternalSwap(ModelRepositoryParameter* PROTOBUF_RESTRICT other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_.parameter_choice_, other->_impl_.parameter_choice_);
+  swap(_impl_._oneof_case_[0], other->_impl_._oneof_case_[0]);
+}
+
+::google::protobuf::Metadata ModelRepositoryParameter::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+              RepositoryModelLoadRequest_ParametersEntry_DoNotUse::RepositoryModelLoadRequest_ParametersEntry_DoNotUse() : SuperType(_class_data_.base()) {}
+              RepositoryModelLoadRequest_ParametersEntry_DoNotUse::RepositoryModelLoadRequest_ParametersEntry_DoNotUse(::google::protobuf::Arena* arena)
+                  : SuperType(arena, _class_data_.base()) {}
+#else   // PROTOBUF_CUSTOM_VTABLE
+              RepositoryModelLoadRequest_ParametersEntry_DoNotUse::RepositoryModelLoadRequest_ParametersEntry_DoNotUse() : SuperType() {}
+              RepositoryModelLoadRequest_ParametersEntry_DoNotUse::RepositoryModelLoadRequest_ParametersEntry_DoNotUse(::google::protobuf::Arena* arena) : SuperType(arena) {}
+#endif  // PROTOBUF_CUSTOM_VTABLE
+              inline void* RepositoryModelLoadRequest_ParametersEntry_DoNotUse::PlacementNew_(const void*, void* mem,
+                                                      ::google::protobuf::Arena* arena) {
+                return ::new (mem) RepositoryModelLoadRequest_ParametersEntry_DoNotUse(arena);
+              }
+              constexpr auto RepositoryModelLoadRequest_ParametersEntry_DoNotUse::InternalNewImpl_() {
+                return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(RepositoryModelLoadRequest_ParametersEntry_DoNotUse),
+                                                          alignof(RepositoryModelLoadRequest_ParametersEntry_DoNotUse));
+              }
+              PROTOBUF_CONSTINIT
+              PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+              const ::google::protobuf::internal::ClassDataFull RepositoryModelLoadRequest_ParametersEntry_DoNotUse::_class_data_ = {
+                  ::google::protobuf::internal::ClassData{
+                      &_RepositoryModelLoadRequest_ParametersEntry_DoNotUse_default_instance_._instance,
+                      &_table_.header,
+                      nullptr,  // OnDemandRegisterArenaDtor
+                      nullptr,  // IsInitialized
+                      &RepositoryModelLoadRequest_ParametersEntry_DoNotUse::MergeImpl,
+                      ::google::protobuf::Message::GetNewImpl<RepositoryModelLoadRequest_ParametersEntry_DoNotUse>(),
+              #if defined(PROTOBUF_CUSTOM_VTABLE)
+                      &RepositoryModelLoadRequest_ParametersEntry_DoNotUse::SharedDtor,
+                      static_cast<void (::google::protobuf::MessageLite::*)()>(
+                          &RepositoryModelLoadRequest_ParametersEntry_DoNotUse::ClearImpl),
+                          ::google::protobuf::Message::ByteSizeLongImpl, ::google::protobuf::Message::_InternalSerializeImpl
+                          ,
+              #endif  // PROTOBUF_CUSTOM_VTABLE
+                      PROTOBUF_FIELD_OFFSET(RepositoryModelLoadRequest_ParametersEntry_DoNotUse, _impl_._cached_size_),
+                      false,
+                  },
+                  &RepositoryModelLoadRequest_ParametersEntry_DoNotUse::kDescriptorMethods,
+                  &descriptor_table_grpc_5fservice_2eproto,
+                  nullptr,  // tracker
+              };
+              const ::google::protobuf::internal::ClassData* RepositoryModelLoadRequest_ParametersEntry_DoNotUse::GetClassData() const {
+                ::google::protobuf::internal::PrefetchToLocalCache(&_class_data_);
+                ::google::protobuf::internal::PrefetchToLocalCache(_class_data_.tc_table);
+                return _class_data_.base();
+              }
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<1, 2, 1, 64, 2> RepositoryModelLoadRequest_ParametersEntry_DoNotUse::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(RepositoryModelLoadRequest_ParametersEntry_DoNotUse, _impl_._has_bits_),
+    0, // no _extensions_
+    2, 8,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967292,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    2,  // num_field_entries
+    1,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
+    _class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::DiscardEverythingFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::inference::RepositoryModelLoadRequest_ParametersEntry_DoNotUse>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // .inference.ModelRepositoryParameter value = 2;
+    {::_pbi::TcParser::FastMtS1,
+     {18, 0, 0, PROTOBUF_FIELD_OFFSET(RepositoryModelLoadRequest_ParametersEntry_DoNotUse, _impl_.value_)}},
+    // string key = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 63, 0, PROTOBUF_FIELD_OFFSET(RepositoryModelLoadRequest_ParametersEntry_DoNotUse, _impl_.key_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string key = 1;
+    {PROTOBUF_FIELD_OFFSET(RepositoryModelLoadRequest_ParametersEntry_DoNotUse, _impl_.key_), -1, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // .inference.ModelRepositoryParameter value = 2;
+    {PROTOBUF_FIELD_OFFSET(RepositoryModelLoadRequest_ParametersEntry_DoNotUse, _impl_.value_), _Internal::kHasBitsOffset + 0, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+  }}, {{
+    {::_pbi::TcParser::GetTable<::inference::ModelRepositoryParameter>()},
+  }}, {{
+    "\64\3\0\0\0\0\0\0"
+    "inference.RepositoryModelLoadRequest.ParametersEntry"
+    "key"
+  }},
+};
+
+// ===================================================================
+
+class RepositoryModelLoadRequest::_Internal {
+ public:
+};
+
+RepositoryModelLoadRequest::RepositoryModelLoadRequest(::google::protobuf::Arena* arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:inference.RepositoryModelLoadRequest)
+}
+inline PROTOBUF_NDEBUG_INLINE RepositoryModelLoadRequest::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility, ::google::protobuf::Arena* arena,
+    const Impl_& from, const ::inference::RepositoryModelLoadRequest& from_msg)
+      : parameters_{visibility, arena, from.parameters_},
+        repository_name_(arena, from.repository_name_),
+        model_name_(arena, from.model_name_),
+        _cached_size_{0} {}
+
+RepositoryModelLoadRequest::RepositoryModelLoadRequest(
+    ::google::protobuf::Arena* arena,
+    const RepositoryModelLoadRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  RepositoryModelLoadRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:inference.RepositoryModelLoadRequest)
+}
+inline PROTOBUF_NDEBUG_INLINE RepositoryModelLoadRequest::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* arena)
+      : parameters_{visibility, arena},
+        repository_name_(arena),
+        model_name_(arena),
+        _cached_size_{0} {}
+
+inline void RepositoryModelLoadRequest::SharedCtor(::_pb::Arena* arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+RepositoryModelLoadRequest::~RepositoryModelLoadRequest() {
+  // @@protoc_insertion_point(destructor:inference.RepositoryModelLoadRequest)
+  SharedDtor(*this);
+}
+inline void RepositoryModelLoadRequest::SharedDtor(MessageLite& self) {
+  RepositoryModelLoadRequest& this_ = static_cast<RepositoryModelLoadRequest&>(self);
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.repository_name_.Destroy();
+  this_._impl_.model_name_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+inline void* RepositoryModelLoadRequest::PlacementNew_(const void*, void* mem,
+                                        ::google::protobuf::Arena* arena) {
+  return ::new (mem) RepositoryModelLoadRequest(arena);
+}
+constexpr auto RepositoryModelLoadRequest::InternalNewImpl_() {
+  constexpr auto arena_bits = ::google::protobuf::internal::EncodePlacementArenaOffsets({
+      PROTOBUF_FIELD_OFFSET(RepositoryModelLoadRequest, _impl_.parameters_) +
+          decltype(RepositoryModelLoadRequest::_impl_.parameters_)::
+              InternalGetArenaOffset(
+                  ::google::protobuf::Message::internal_visibility()),
+      PROTOBUF_FIELD_OFFSET(RepositoryModelLoadRequest, _impl_.parameters_) +
+          decltype(RepositoryModelLoadRequest::_impl_.parameters_)::
+              InternalGetArenaOffsetAlt(
+                  ::google::protobuf::Message::internal_visibility()),
+  });
+  if (arena_bits.has_value()) {
+    return ::google::protobuf::internal::MessageCreator::CopyInit(
+        sizeof(RepositoryModelLoadRequest), alignof(RepositoryModelLoadRequest), *arena_bits);
+  } else {
+    return ::google::protobuf::internal::MessageCreator(&RepositoryModelLoadRequest::PlacementNew_,
+                                 sizeof(RepositoryModelLoadRequest),
+                                 alignof(RepositoryModelLoadRequest));
+  }
+}
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataFull RepositoryModelLoadRequest::_class_data_ = {
+    ::google::protobuf::internal::ClassData{
+        &_RepositoryModelLoadRequest_default_instance_._instance,
+        &_table_.header,
+        nullptr,  // OnDemandRegisterArenaDtor
+        nullptr,  // IsInitialized
+        &RepositoryModelLoadRequest::MergeImpl,
+        ::google::protobuf::Message::GetNewImpl<RepositoryModelLoadRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        &RepositoryModelLoadRequest::SharedDtor,
+        ::google::protobuf::Message::GetClearImpl<RepositoryModelLoadRequest>(), &RepositoryModelLoadRequest::ByteSizeLong,
+            &RepositoryModelLoadRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+        PROTOBUF_FIELD_OFFSET(RepositoryModelLoadRequest, _impl_._cached_size_),
+        false,
+    },
+    &RepositoryModelLoadRequest::kDescriptorMethods,
+    &descriptor_table_grpc_5fservice_2eproto,
+    nullptr,  // tracker
+};
+const ::google::protobuf::internal::ClassData* RepositoryModelLoadRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(_class_data_.tc_table);
+  return _class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<1, 3, 2, 80, 2> RepositoryModelLoadRequest::_table_ = {
+  {
+    0,  // no _has_bits_
+    0, // no _extensions_
+    3, 8,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967288,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    3,  // num_field_entries
+    2,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
+    _class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::inference::RepositoryModelLoadRequest>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // string model_name = 2;
+    {::_pbi::TcParser::FastUS1,
+     {18, 63, 0, PROTOBUF_FIELD_OFFSET(RepositoryModelLoadRequest, _impl_.model_name_)}},
+    // string repository_name = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 63, 0, PROTOBUF_FIELD_OFFSET(RepositoryModelLoadRequest, _impl_.repository_name_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string repository_name = 1;
+    {PROTOBUF_FIELD_OFFSET(RepositoryModelLoadRequest, _impl_.repository_name_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string model_name = 2;
+    {PROTOBUF_FIELD_OFFSET(RepositoryModelLoadRequest, _impl_.model_name_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // map<string, .inference.ModelRepositoryParameter> parameters = 3;
+    {PROTOBUF_FIELD_OFFSET(RepositoryModelLoadRequest, _impl_.parameters_), 0, 0,
+    (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+  }}, {{
+    {::_pbi::TcParser::GetMapAuxInfo<
+        decltype(RepositoryModelLoadRequest()._impl_.parameters_)>(
+        1, 0, 0, 9,
+        11)},
+    {::_pbi::TcParser::GetTable<::inference::ModelRepositoryParameter>()},
+  }}, {{
+    "\44\17\12\12\0\0\0\0"
+    "inference.RepositoryModelLoadRequest"
+    "repository_name"
+    "model_name"
+    "parameters"
+  }},
+};
+
+PROTOBUF_NOINLINE void RepositoryModelLoadRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:inference.RepositoryModelLoadRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.parameters_.Clear();
+  _impl_.repository_name_.ClearToEmpty();
+  _impl_.model_name_.ClearToEmpty();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        ::uint8_t* RepositoryModelLoadRequest::_InternalSerialize(
+            const MessageLite& base, ::uint8_t* target,
+            ::google::protobuf::io::EpsCopyOutputStream* stream) {
+          const RepositoryModelLoadRequest& this_ = static_cast<const RepositoryModelLoadRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+        ::uint8_t* RepositoryModelLoadRequest::_InternalSerialize(
+            ::uint8_t* target,
+            ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+          const RepositoryModelLoadRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          // @@protoc_insertion_point(serialize_to_array_start:inference.RepositoryModelLoadRequest)
+          ::uint32_t cached_has_bits = 0;
+          (void)cached_has_bits;
+
+          // string repository_name = 1;
+          if (!this_._internal_repository_name().empty()) {
+            const std::string& _s = this_._internal_repository_name();
+            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "inference.RepositoryModelLoadRequest.repository_name");
+            target = stream->WriteStringMaybeAliased(1, _s, target);
+          }
+
+          // string model_name = 2;
+          if (!this_._internal_model_name().empty()) {
+            const std::string& _s = this_._internal_model_name();
+            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "inference.RepositoryModelLoadRequest.model_name");
+            target = stream->WriteStringMaybeAliased(2, _s, target);
+          }
+
+          // map<string, .inference.ModelRepositoryParameter> parameters = 3;
+          if (!this_._internal_parameters().empty()) {
+            using MapType = ::google::protobuf::Map<std::string, ::inference::ModelRepositoryParameter>;
+            using WireHelper = _pbi::MapEntryFuncs<std::string, ::inference::ModelRepositoryParameter,
+                                           _pbi::WireFormatLite::TYPE_STRING,
+                                           _pbi::WireFormatLite::TYPE_MESSAGE>;
+            const auto& field = this_._internal_parameters();
+
+            if (stream->IsSerializationDeterministic() && field.size() > 1) {
+              for (const auto& entry : ::google::protobuf::internal::MapSorterPtr<MapType>(field)) {
+                target = WireHelper::InternalSerialize(
+                    3, entry.first, entry.second, target, stream);
+                ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                    entry.first.data(), static_cast<int>(entry.first.length()),
+ ::google::protobuf::internal::WireFormatLite::SERIALIZE, "inference.RepositoryModelLoadRequest.parameters");
+              }
+            } else {
+              for (const auto& entry : field) {
+                target = WireHelper::InternalSerialize(
+                    3, entry.first, entry.second, target, stream);
+                ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                    entry.first.data(), static_cast<int>(entry.first.length()),
+ ::google::protobuf::internal::WireFormatLite::SERIALIZE, "inference.RepositoryModelLoadRequest.parameters");
+              }
+            }
+          }
+
+          if (PROTOBUF_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+            target =
+                ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+                    this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+          }
+          // @@protoc_insertion_point(serialize_to_array_end:inference.RepositoryModelLoadRequest)
+          return target;
+        }
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        ::size_t RepositoryModelLoadRequest::ByteSizeLong(const MessageLite& base) {
+          const RepositoryModelLoadRequest& this_ = static_cast<const RepositoryModelLoadRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+        ::size_t RepositoryModelLoadRequest::ByteSizeLong() const {
+          const RepositoryModelLoadRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          // @@protoc_insertion_point(message_byte_size_start:inference.RepositoryModelLoadRequest)
+          ::size_t total_size = 0;
+
+          ::uint32_t cached_has_bits = 0;
+          // Prevent compiler warnings about cached_has_bits being unused
+          (void)cached_has_bits;
+
+          ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+           {
+            // map<string, .inference.ModelRepositoryParameter> parameters = 3;
+            {
+              total_size +=
+                  1 * ::google::protobuf::internal::FromIntSize(this_._internal_parameters_size());
+              for (const auto& entry : this_._internal_parameters()) {
+                total_size += _pbi::MapEntryFuncs<std::string, ::inference::ModelRepositoryParameter,
+                                               _pbi::WireFormatLite::TYPE_STRING,
+                                               _pbi::WireFormatLite::TYPE_MESSAGE>::ByteSizeLong(entry.first, entry.second);
+              }
+            }
+          }
+           {
+            // string repository_name = 1;
+            if (!this_._internal_repository_name().empty()) {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                              this_._internal_repository_name());
+            }
+            // string model_name = 2;
+            if (!this_._internal_model_name().empty()) {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                              this_._internal_model_name());
+            }
+          }
+          return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                                     &this_._impl_._cached_size_);
+        }
+
+void RepositoryModelLoadRequest::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<RepositoryModelLoadRequest*>(&to_msg);
+  auto& from = static_cast<const RepositoryModelLoadRequest&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:inference.RepositoryModelLoadRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  _this->_impl_.parameters_.MergeFrom(from._impl_.parameters_);
+  if (!from._internal_repository_name().empty()) {
+    _this->_internal_set_repository_name(from._internal_repository_name());
+  }
+  if (!from._internal_model_name().empty()) {
+    _this->_internal_set_model_name(from._internal_model_name());
+  }
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void RepositoryModelLoadRequest::CopyFrom(const RepositoryModelLoadRequest& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:inference.RepositoryModelLoadRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void RepositoryModelLoadRequest::InternalSwap(RepositoryModelLoadRequest* PROTOBUF_RESTRICT other) {
+  using std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  _impl_.parameters_.InternalSwap(&other->_impl_.parameters_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.repository_name_, &other->_impl_.repository_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.model_name_, &other->_impl_.model_name_, arena);
+}
+
+::google::protobuf::Metadata RepositoryModelLoadRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class RepositoryModelLoadResponse::_Internal {
+ public:
+};
+
+RepositoryModelLoadResponse::RepositoryModelLoadResponse(::google::protobuf::Arena* arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::internal::ZeroFieldsBase(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::internal::ZeroFieldsBase(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(arena_constructor:inference.RepositoryModelLoadResponse)
+}
+RepositoryModelLoadResponse::RepositoryModelLoadResponse(
+    ::google::protobuf::Arena* arena,
+    const RepositoryModelLoadResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::internal::ZeroFieldsBase(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::internal::ZeroFieldsBase(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  RepositoryModelLoadResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+
+  // @@protoc_insertion_point(copy_constructor:inference.RepositoryModelLoadResponse)
+}
+
+inline void* RepositoryModelLoadResponse::PlacementNew_(const void*, void* mem,
+                                        ::google::protobuf::Arena* arena) {
+  return ::new (mem) RepositoryModelLoadResponse(arena);
+}
+constexpr auto RepositoryModelLoadResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(RepositoryModelLoadResponse),
+                                            alignof(RepositoryModelLoadResponse));
+}
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataFull RepositoryModelLoadResponse::_class_data_ = {
+    ::google::protobuf::internal::ClassData{
+        &_RepositoryModelLoadResponse_default_instance_._instance,
+        &_table_.header,
+        nullptr,  // OnDemandRegisterArenaDtor
+        nullptr,  // IsInitialized
+        &RepositoryModelLoadResponse::MergeImpl,
+        ::google::protobuf::internal::ZeroFieldsBase::GetNewImpl<RepositoryModelLoadResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        &RepositoryModelLoadResponse::SharedDtor,
+        ::google::protobuf::internal::ZeroFieldsBase::GetClearImpl<RepositoryModelLoadResponse>(), &RepositoryModelLoadResponse::ByteSizeLong,
+            &RepositoryModelLoadResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+        PROTOBUF_FIELD_OFFSET(RepositoryModelLoadResponse, _impl_._cached_size_),
+        false,
+    },
+    &RepositoryModelLoadResponse::kDescriptorMethods,
+    &descriptor_table_grpc_5fservice_2eproto,
+    nullptr,  // tracker
+};
+const ::google::protobuf::internal::ClassData* RepositoryModelLoadResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(_class_data_.tc_table);
+  return _class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<0, 0, 0, 0, 2> RepositoryModelLoadResponse::_table_ = {
+  {
+    0,  // no _has_bits_
+    0, // no _extensions_
+    0, 0,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967295,  // skipmap
+    offsetof(decltype(_table_), field_names),  // no field_entries
+    0,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    _class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::inference::RepositoryModelLoadResponse>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+  }}, {{
+    65535, 65535
+  }},
+  // no field_entries, or aux_entries
+  {{
+  }},
+};
+
+
+
+
+
+
+
+
+::google::protobuf::Metadata RepositoryModelLoadResponse::GetMetadata() const {
+  return ::google::protobuf::internal::ZeroFieldsBase::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+              RepositoryModelUnloadRequest_ParametersEntry_DoNotUse::RepositoryModelUnloadRequest_ParametersEntry_DoNotUse() : SuperType(_class_data_.base()) {}
+              RepositoryModelUnloadRequest_ParametersEntry_DoNotUse::RepositoryModelUnloadRequest_ParametersEntry_DoNotUse(::google::protobuf::Arena* arena)
+                  : SuperType(arena, _class_data_.base()) {}
+#else   // PROTOBUF_CUSTOM_VTABLE
+              RepositoryModelUnloadRequest_ParametersEntry_DoNotUse::RepositoryModelUnloadRequest_ParametersEntry_DoNotUse() : SuperType() {}
+              RepositoryModelUnloadRequest_ParametersEntry_DoNotUse::RepositoryModelUnloadRequest_ParametersEntry_DoNotUse(::google::protobuf::Arena* arena) : SuperType(arena) {}
+#endif  // PROTOBUF_CUSTOM_VTABLE
+              inline void* RepositoryModelUnloadRequest_ParametersEntry_DoNotUse::PlacementNew_(const void*, void* mem,
+                                                      ::google::protobuf::Arena* arena) {
+                return ::new (mem) RepositoryModelUnloadRequest_ParametersEntry_DoNotUse(arena);
+              }
+              constexpr auto RepositoryModelUnloadRequest_ParametersEntry_DoNotUse::InternalNewImpl_() {
+                return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(RepositoryModelUnloadRequest_ParametersEntry_DoNotUse),
+                                                          alignof(RepositoryModelUnloadRequest_ParametersEntry_DoNotUse));
+              }
+              PROTOBUF_CONSTINIT
+              PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+              const ::google::protobuf::internal::ClassDataFull RepositoryModelUnloadRequest_ParametersEntry_DoNotUse::_class_data_ = {
+                  ::google::protobuf::internal::ClassData{
+                      &_RepositoryModelUnloadRequest_ParametersEntry_DoNotUse_default_instance_._instance,
+                      &_table_.header,
+                      nullptr,  // OnDemandRegisterArenaDtor
+                      nullptr,  // IsInitialized
+                      &RepositoryModelUnloadRequest_ParametersEntry_DoNotUse::MergeImpl,
+                      ::google::protobuf::Message::GetNewImpl<RepositoryModelUnloadRequest_ParametersEntry_DoNotUse>(),
+              #if defined(PROTOBUF_CUSTOM_VTABLE)
+                      &RepositoryModelUnloadRequest_ParametersEntry_DoNotUse::SharedDtor,
+                      static_cast<void (::google::protobuf::MessageLite::*)()>(
+                          &RepositoryModelUnloadRequest_ParametersEntry_DoNotUse::ClearImpl),
+                          ::google::protobuf::Message::ByteSizeLongImpl, ::google::protobuf::Message::_InternalSerializeImpl
+                          ,
+              #endif  // PROTOBUF_CUSTOM_VTABLE
+                      PROTOBUF_FIELD_OFFSET(RepositoryModelUnloadRequest_ParametersEntry_DoNotUse, _impl_._cached_size_),
+                      false,
+                  },
+                  &RepositoryModelUnloadRequest_ParametersEntry_DoNotUse::kDescriptorMethods,
+                  &descriptor_table_grpc_5fservice_2eproto,
+                  nullptr,  // tracker
+              };
+              const ::google::protobuf::internal::ClassData* RepositoryModelUnloadRequest_ParametersEntry_DoNotUse::GetClassData() const {
+                ::google::protobuf::internal::PrefetchToLocalCache(&_class_data_);
+                ::google::protobuf::internal::PrefetchToLocalCache(_class_data_.tc_table);
+                return _class_data_.base();
+              }
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<1, 2, 1, 66, 2> RepositoryModelUnloadRequest_ParametersEntry_DoNotUse::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(RepositoryModelUnloadRequest_ParametersEntry_DoNotUse, _impl_._has_bits_),
+    0, // no _extensions_
+    2, 8,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967292,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    2,  // num_field_entries
+    1,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
+    _class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::DiscardEverythingFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::inference::RepositoryModelUnloadRequest_ParametersEntry_DoNotUse>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // .inference.ModelRepositoryParameter value = 2;
+    {::_pbi::TcParser::FastMtS1,
+     {18, 0, 0, PROTOBUF_FIELD_OFFSET(RepositoryModelUnloadRequest_ParametersEntry_DoNotUse, _impl_.value_)}},
+    // string key = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 63, 0, PROTOBUF_FIELD_OFFSET(RepositoryModelUnloadRequest_ParametersEntry_DoNotUse, _impl_.key_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string key = 1;
+    {PROTOBUF_FIELD_OFFSET(RepositoryModelUnloadRequest_ParametersEntry_DoNotUse, _impl_.key_), -1, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // .inference.ModelRepositoryParameter value = 2;
+    {PROTOBUF_FIELD_OFFSET(RepositoryModelUnloadRequest_ParametersEntry_DoNotUse, _impl_.value_), _Internal::kHasBitsOffset + 0, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+  }}, {{
+    {::_pbi::TcParser::GetTable<::inference::ModelRepositoryParameter>()},
+  }}, {{
+    "\66\3\0\0\0\0\0\0"
+    "inference.RepositoryModelUnloadRequest.ParametersEntry"
+    "key"
+  }},
+};
+
+// ===================================================================
+
+class RepositoryModelUnloadRequest::_Internal {
+ public:
+};
+
+RepositoryModelUnloadRequest::RepositoryModelUnloadRequest(::google::protobuf::Arena* arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:inference.RepositoryModelUnloadRequest)
+}
+inline PROTOBUF_NDEBUG_INLINE RepositoryModelUnloadRequest::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility, ::google::protobuf::Arena* arena,
+    const Impl_& from, const ::inference::RepositoryModelUnloadRequest& from_msg)
+      : parameters_{visibility, arena, from.parameters_},
+        repository_name_(arena, from.repository_name_),
+        model_name_(arena, from.model_name_),
+        _cached_size_{0} {}
+
+RepositoryModelUnloadRequest::RepositoryModelUnloadRequest(
+    ::google::protobuf::Arena* arena,
+    const RepositoryModelUnloadRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  RepositoryModelUnloadRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:inference.RepositoryModelUnloadRequest)
+}
+inline PROTOBUF_NDEBUG_INLINE RepositoryModelUnloadRequest::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* arena)
+      : parameters_{visibility, arena},
+        repository_name_(arena),
+        model_name_(arena),
+        _cached_size_{0} {}
+
+inline void RepositoryModelUnloadRequest::SharedCtor(::_pb::Arena* arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+RepositoryModelUnloadRequest::~RepositoryModelUnloadRequest() {
+  // @@protoc_insertion_point(destructor:inference.RepositoryModelUnloadRequest)
+  SharedDtor(*this);
+}
+inline void RepositoryModelUnloadRequest::SharedDtor(MessageLite& self) {
+  RepositoryModelUnloadRequest& this_ = static_cast<RepositoryModelUnloadRequest&>(self);
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.repository_name_.Destroy();
+  this_._impl_.model_name_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+inline void* RepositoryModelUnloadRequest::PlacementNew_(const void*, void* mem,
+                                        ::google::protobuf::Arena* arena) {
+  return ::new (mem) RepositoryModelUnloadRequest(arena);
+}
+constexpr auto RepositoryModelUnloadRequest::InternalNewImpl_() {
+  constexpr auto arena_bits = ::google::protobuf::internal::EncodePlacementArenaOffsets({
+      PROTOBUF_FIELD_OFFSET(RepositoryModelUnloadRequest, _impl_.parameters_) +
+          decltype(RepositoryModelUnloadRequest::_impl_.parameters_)::
+              InternalGetArenaOffset(
+                  ::google::protobuf::Message::internal_visibility()),
+      PROTOBUF_FIELD_OFFSET(RepositoryModelUnloadRequest, _impl_.parameters_) +
+          decltype(RepositoryModelUnloadRequest::_impl_.parameters_)::
+              InternalGetArenaOffsetAlt(
+                  ::google::protobuf::Message::internal_visibility()),
+  });
+  if (arena_bits.has_value()) {
+    return ::google::protobuf::internal::MessageCreator::CopyInit(
+        sizeof(RepositoryModelUnloadRequest), alignof(RepositoryModelUnloadRequest), *arena_bits);
+  } else {
+    return ::google::protobuf::internal::MessageCreator(&RepositoryModelUnloadRequest::PlacementNew_,
+                                 sizeof(RepositoryModelUnloadRequest),
+                                 alignof(RepositoryModelUnloadRequest));
+  }
+}
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataFull RepositoryModelUnloadRequest::_class_data_ = {
+    ::google::protobuf::internal::ClassData{
+        &_RepositoryModelUnloadRequest_default_instance_._instance,
+        &_table_.header,
+        nullptr,  // OnDemandRegisterArenaDtor
+        nullptr,  // IsInitialized
+        &RepositoryModelUnloadRequest::MergeImpl,
+        ::google::protobuf::Message::GetNewImpl<RepositoryModelUnloadRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        &RepositoryModelUnloadRequest::SharedDtor,
+        ::google::protobuf::Message::GetClearImpl<RepositoryModelUnloadRequest>(), &RepositoryModelUnloadRequest::ByteSizeLong,
+            &RepositoryModelUnloadRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+        PROTOBUF_FIELD_OFFSET(RepositoryModelUnloadRequest, _impl_._cached_size_),
+        false,
+    },
+    &RepositoryModelUnloadRequest::kDescriptorMethods,
+    &descriptor_table_grpc_5fservice_2eproto,
+    nullptr,  // tracker
+};
+const ::google::protobuf::internal::ClassData* RepositoryModelUnloadRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(_class_data_.tc_table);
+  return _class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<1, 3, 2, 82, 2> RepositoryModelUnloadRequest::_table_ = {
+  {
+    0,  // no _has_bits_
+    0, // no _extensions_
+    3, 8,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967288,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    3,  // num_field_entries
+    2,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
+    _class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::inference::RepositoryModelUnloadRequest>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // string model_name = 2;
+    {::_pbi::TcParser::FastUS1,
+     {18, 63, 0, PROTOBUF_FIELD_OFFSET(RepositoryModelUnloadRequest, _impl_.model_name_)}},
+    // string repository_name = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 63, 0, PROTOBUF_FIELD_OFFSET(RepositoryModelUnloadRequest, _impl_.repository_name_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string repository_name = 1;
+    {PROTOBUF_FIELD_OFFSET(RepositoryModelUnloadRequest, _impl_.repository_name_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string model_name = 2;
+    {PROTOBUF_FIELD_OFFSET(RepositoryModelUnloadRequest, _impl_.model_name_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // map<string, .inference.ModelRepositoryParameter> parameters = 3;
+    {PROTOBUF_FIELD_OFFSET(RepositoryModelUnloadRequest, _impl_.parameters_), 0, 0,
+    (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+  }}, {{
+    {::_pbi::TcParser::GetMapAuxInfo<
+        decltype(RepositoryModelUnloadRequest()._impl_.parameters_)>(
+        1, 0, 0, 9,
+        11)},
+    {::_pbi::TcParser::GetTable<::inference::ModelRepositoryParameter>()},
+  }}, {{
+    "\46\17\12\12\0\0\0\0"
+    "inference.RepositoryModelUnloadRequest"
+    "repository_name"
+    "model_name"
+    "parameters"
+  }},
+};
+
+PROTOBUF_NOINLINE void RepositoryModelUnloadRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:inference.RepositoryModelUnloadRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.parameters_.Clear();
+  _impl_.repository_name_.ClearToEmpty();
+  _impl_.model_name_.ClearToEmpty();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        ::uint8_t* RepositoryModelUnloadRequest::_InternalSerialize(
+            const MessageLite& base, ::uint8_t* target,
+            ::google::protobuf::io::EpsCopyOutputStream* stream) {
+          const RepositoryModelUnloadRequest& this_ = static_cast<const RepositoryModelUnloadRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+        ::uint8_t* RepositoryModelUnloadRequest::_InternalSerialize(
+            ::uint8_t* target,
+            ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+          const RepositoryModelUnloadRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          // @@protoc_insertion_point(serialize_to_array_start:inference.RepositoryModelUnloadRequest)
+          ::uint32_t cached_has_bits = 0;
+          (void)cached_has_bits;
+
+          // string repository_name = 1;
+          if (!this_._internal_repository_name().empty()) {
+            const std::string& _s = this_._internal_repository_name();
+            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "inference.RepositoryModelUnloadRequest.repository_name");
+            target = stream->WriteStringMaybeAliased(1, _s, target);
+          }
+
+          // string model_name = 2;
+          if (!this_._internal_model_name().empty()) {
+            const std::string& _s = this_._internal_model_name();
+            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "inference.RepositoryModelUnloadRequest.model_name");
+            target = stream->WriteStringMaybeAliased(2, _s, target);
+          }
+
+          // map<string, .inference.ModelRepositoryParameter> parameters = 3;
+          if (!this_._internal_parameters().empty()) {
+            using MapType = ::google::protobuf::Map<std::string, ::inference::ModelRepositoryParameter>;
+            using WireHelper = _pbi::MapEntryFuncs<std::string, ::inference::ModelRepositoryParameter,
+                                           _pbi::WireFormatLite::TYPE_STRING,
+                                           _pbi::WireFormatLite::TYPE_MESSAGE>;
+            const auto& field = this_._internal_parameters();
+
+            if (stream->IsSerializationDeterministic() && field.size() > 1) {
+              for (const auto& entry : ::google::protobuf::internal::MapSorterPtr<MapType>(field)) {
+                target = WireHelper::InternalSerialize(
+                    3, entry.first, entry.second, target, stream);
+                ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                    entry.first.data(), static_cast<int>(entry.first.length()),
+ ::google::protobuf::internal::WireFormatLite::SERIALIZE, "inference.RepositoryModelUnloadRequest.parameters");
+              }
+            } else {
+              for (const auto& entry : field) {
+                target = WireHelper::InternalSerialize(
+                    3, entry.first, entry.second, target, stream);
+                ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                    entry.first.data(), static_cast<int>(entry.first.length()),
+ ::google::protobuf::internal::WireFormatLite::SERIALIZE, "inference.RepositoryModelUnloadRequest.parameters");
+              }
+            }
+          }
+
+          if (PROTOBUF_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+            target =
+                ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+                    this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+          }
+          // @@protoc_insertion_point(serialize_to_array_end:inference.RepositoryModelUnloadRequest)
+          return target;
+        }
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        ::size_t RepositoryModelUnloadRequest::ByteSizeLong(const MessageLite& base) {
+          const RepositoryModelUnloadRequest& this_ = static_cast<const RepositoryModelUnloadRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+        ::size_t RepositoryModelUnloadRequest::ByteSizeLong() const {
+          const RepositoryModelUnloadRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          // @@protoc_insertion_point(message_byte_size_start:inference.RepositoryModelUnloadRequest)
+          ::size_t total_size = 0;
+
+          ::uint32_t cached_has_bits = 0;
+          // Prevent compiler warnings about cached_has_bits being unused
+          (void)cached_has_bits;
+
+          ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+           {
+            // map<string, .inference.ModelRepositoryParameter> parameters = 3;
+            {
+              total_size +=
+                  1 * ::google::protobuf::internal::FromIntSize(this_._internal_parameters_size());
+              for (const auto& entry : this_._internal_parameters()) {
+                total_size += _pbi::MapEntryFuncs<std::string, ::inference::ModelRepositoryParameter,
+                                               _pbi::WireFormatLite::TYPE_STRING,
+                                               _pbi::WireFormatLite::TYPE_MESSAGE>::ByteSizeLong(entry.first, entry.second);
+              }
+            }
+          }
+           {
+            // string repository_name = 1;
+            if (!this_._internal_repository_name().empty()) {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                              this_._internal_repository_name());
+            }
+            // string model_name = 2;
+            if (!this_._internal_model_name().empty()) {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                              this_._internal_model_name());
+            }
+          }
+          return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                                     &this_._impl_._cached_size_);
+        }
+
+void RepositoryModelUnloadRequest::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<RepositoryModelUnloadRequest*>(&to_msg);
+  auto& from = static_cast<const RepositoryModelUnloadRequest&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:inference.RepositoryModelUnloadRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  _this->_impl_.parameters_.MergeFrom(from._impl_.parameters_);
+  if (!from._internal_repository_name().empty()) {
+    _this->_internal_set_repository_name(from._internal_repository_name());
+  }
+  if (!from._internal_model_name().empty()) {
+    _this->_internal_set_model_name(from._internal_model_name());
+  }
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void RepositoryModelUnloadRequest::CopyFrom(const RepositoryModelUnloadRequest& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:inference.RepositoryModelUnloadRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void RepositoryModelUnloadRequest::InternalSwap(RepositoryModelUnloadRequest* PROTOBUF_RESTRICT other) {
+  using std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  _impl_.parameters_.InternalSwap(&other->_impl_.parameters_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.repository_name_, &other->_impl_.repository_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.model_name_, &other->_impl_.model_name_, arena);
+}
+
+::google::protobuf::Metadata RepositoryModelUnloadRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class RepositoryModelUnloadResponse::_Internal {
+ public:
+};
+
+RepositoryModelUnloadResponse::RepositoryModelUnloadResponse(::google::protobuf::Arena* arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::internal::ZeroFieldsBase(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::internal::ZeroFieldsBase(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(arena_constructor:inference.RepositoryModelUnloadResponse)
+}
+RepositoryModelUnloadResponse::RepositoryModelUnloadResponse(
+    ::google::protobuf::Arena* arena,
+    const RepositoryModelUnloadResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::internal::ZeroFieldsBase(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::internal::ZeroFieldsBase(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  RepositoryModelUnloadResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+
+  // @@protoc_insertion_point(copy_constructor:inference.RepositoryModelUnloadResponse)
+}
+
+inline void* RepositoryModelUnloadResponse::PlacementNew_(const void*, void* mem,
+                                        ::google::protobuf::Arena* arena) {
+  return ::new (mem) RepositoryModelUnloadResponse(arena);
+}
+constexpr auto RepositoryModelUnloadResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(RepositoryModelUnloadResponse),
+                                            alignof(RepositoryModelUnloadResponse));
+}
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataFull RepositoryModelUnloadResponse::_class_data_ = {
+    ::google::protobuf::internal::ClassData{
+        &_RepositoryModelUnloadResponse_default_instance_._instance,
+        &_table_.header,
+        nullptr,  // OnDemandRegisterArenaDtor
+        nullptr,  // IsInitialized
+        &RepositoryModelUnloadResponse::MergeImpl,
+        ::google::protobuf::internal::ZeroFieldsBase::GetNewImpl<RepositoryModelUnloadResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        &RepositoryModelUnloadResponse::SharedDtor,
+        ::google::protobuf::internal::ZeroFieldsBase::GetClearImpl<RepositoryModelUnloadResponse>(), &RepositoryModelUnloadResponse::ByteSizeLong,
+            &RepositoryModelUnloadResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+        PROTOBUF_FIELD_OFFSET(RepositoryModelUnloadResponse, _impl_._cached_size_),
+        false,
+    },
+    &RepositoryModelUnloadResponse::kDescriptorMethods,
+    &descriptor_table_grpc_5fservice_2eproto,
+    nullptr,  // tracker
+};
+const ::google::protobuf::internal::ClassData* RepositoryModelUnloadResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(_class_data_.tc_table);
+  return _class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<0, 0, 0, 0, 2> RepositoryModelUnloadResponse::_table_ = {
+  {
+    0,  // no _has_bits_
+    0, // no _extensions_
+    0, 0,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967295,  // skipmap
+    offsetof(decltype(_table_), field_names),  // no field_entries
+    0,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    _class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::inference::RepositoryModelUnloadResponse>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+  }}, {{
+    65535, 65535
+  }},
+  // no field_entries, or aux_entries
+  {{
+  }},
+};
+
+
+
+
+
+
+
+
+::google::protobuf::Metadata RepositoryModelUnloadResponse::GetMetadata() const {
+  return ::google::protobuf::internal::ZeroFieldsBase::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)
 }  // namespace inference

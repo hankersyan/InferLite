@@ -110,6 +110,36 @@ extern ModelReadyRequestDefaultTypeInternal _ModelReadyRequest_default_instance_
 class ModelReadyResponse;
 struct ModelReadyResponseDefaultTypeInternal;
 extern ModelReadyResponseDefaultTypeInternal _ModelReadyResponse_default_instance_;
+class ModelRepositoryParameter;
+struct ModelRepositoryParameterDefaultTypeInternal;
+extern ModelRepositoryParameterDefaultTypeInternal _ModelRepositoryParameter_default_instance_;
+class RepositoryIndexRequest;
+struct RepositoryIndexRequestDefaultTypeInternal;
+extern RepositoryIndexRequestDefaultTypeInternal _RepositoryIndexRequest_default_instance_;
+class RepositoryIndexResponse;
+struct RepositoryIndexResponseDefaultTypeInternal;
+extern RepositoryIndexResponseDefaultTypeInternal _RepositoryIndexResponse_default_instance_;
+class RepositoryIndexResponse_ModelIndex;
+struct RepositoryIndexResponse_ModelIndexDefaultTypeInternal;
+extern RepositoryIndexResponse_ModelIndexDefaultTypeInternal _RepositoryIndexResponse_ModelIndex_default_instance_;
+class RepositoryModelLoadRequest;
+struct RepositoryModelLoadRequestDefaultTypeInternal;
+extern RepositoryModelLoadRequestDefaultTypeInternal _RepositoryModelLoadRequest_default_instance_;
+class RepositoryModelLoadRequest_ParametersEntry_DoNotUse;
+struct RepositoryModelLoadRequest_ParametersEntry_DoNotUseDefaultTypeInternal;
+extern RepositoryModelLoadRequest_ParametersEntry_DoNotUseDefaultTypeInternal _RepositoryModelLoadRequest_ParametersEntry_DoNotUse_default_instance_;
+class RepositoryModelLoadResponse;
+struct RepositoryModelLoadResponseDefaultTypeInternal;
+extern RepositoryModelLoadResponseDefaultTypeInternal _RepositoryModelLoadResponse_default_instance_;
+class RepositoryModelUnloadRequest;
+struct RepositoryModelUnloadRequestDefaultTypeInternal;
+extern RepositoryModelUnloadRequestDefaultTypeInternal _RepositoryModelUnloadRequest_default_instance_;
+class RepositoryModelUnloadRequest_ParametersEntry_DoNotUse;
+struct RepositoryModelUnloadRequest_ParametersEntry_DoNotUseDefaultTypeInternal;
+extern RepositoryModelUnloadRequest_ParametersEntry_DoNotUseDefaultTypeInternal _RepositoryModelUnloadRequest_ParametersEntry_DoNotUse_default_instance_;
+class RepositoryModelUnloadResponse;
+struct RepositoryModelUnloadResponseDefaultTypeInternal;
+extern RepositoryModelUnloadResponseDefaultTypeInternal _RepositoryModelUnloadResponse_default_instance_;
 class ServerLiveRequest;
 struct ServerLiveRequestDefaultTypeInternal;
 extern ServerLiveRequestDefaultTypeInternal _ServerLiveRequest_default_instance_;
@@ -1196,6 +1226,1021 @@ class ServerLiveRequest final
                           const ServerLiveRequest& from_msg);
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
+  friend struct ::TableStruct_grpc_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class RepositoryModelUnloadResponse final
+    : public ::google::protobuf::internal::ZeroFieldsBase
+/* @@protoc_insertion_point(class_definition:inference.RepositoryModelUnloadResponse) */ {
+ public:
+  inline RepositoryModelUnloadResponse() : RepositoryModelUnloadResponse(nullptr) {}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RepositoryModelUnloadResponse* msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RepositoryModelUnloadResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR RepositoryModelUnloadResponse(
+      ::google::protobuf::internal::ConstantInitialized);
+
+  inline RepositoryModelUnloadResponse(const RepositoryModelUnloadResponse& from) : RepositoryModelUnloadResponse(nullptr, from) {}
+  inline RepositoryModelUnloadResponse(RepositoryModelUnloadResponse&& from) noexcept
+      : RepositoryModelUnloadResponse(nullptr, std::move(from)) {}
+  inline RepositoryModelUnloadResponse& operator=(const RepositoryModelUnloadResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RepositoryModelUnloadResponse& operator=(RepositoryModelUnloadResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const RepositoryModelUnloadResponse& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const RepositoryModelUnloadResponse* internal_default_instance() {
+    return reinterpret_cast<const RepositoryModelUnloadResponse*>(
+        &_RepositoryModelUnloadResponse_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 33;
+  friend void swap(RepositoryModelUnloadResponse& a, RepositoryModelUnloadResponse& b) { a.Swap(&b); }
+  inline void Swap(RepositoryModelUnloadResponse* other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RepositoryModelUnloadResponse* other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  RepositoryModelUnloadResponse* New(::google::protobuf::Arena* arena = nullptr) const {
+    return ::google::protobuf::internal::ZeroFieldsBase::DefaultConstruct<RepositoryModelUnloadResponse>(arena);
+  }
+  using ::google::protobuf::internal::ZeroFieldsBase::CopyFrom;
+  inline void CopyFrom(const RepositoryModelUnloadResponse& from) {
+    ::google::protobuf::internal::ZeroFieldsBase::CopyImpl(*this, from);
+  }
+  using ::google::protobuf::internal::ZeroFieldsBase::MergeFrom;
+  void MergeFrom(const RepositoryModelUnloadResponse& from) {
+    ::google::protobuf::internal::ZeroFieldsBase::MergeImpl(*this, from);
+  }
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+ private:
+  template <typename T>
+  friend ::absl::string_view(
+      ::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "inference.RepositoryModelUnloadResponse"; }
+
+ protected:
+  explicit RepositoryModelUnloadResponse(::google::protobuf::Arena* arena);
+  RepositoryModelUnloadResponse(::google::protobuf::Arena* arena, const RepositoryModelUnloadResponse& from);
+  RepositoryModelUnloadResponse(::google::protobuf::Arena* arena, RepositoryModelUnloadResponse&& from) noexcept
+      : RepositoryModelUnloadResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
+  static void* PlacementNew_(const void*, void* mem,
+                             ::google::protobuf::Arena* arena);
+  static constexpr auto InternalNewImpl_();
+  static const ::google::protobuf::internal::ClassDataFull _class_data_;
+
+ public:
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  // @@protoc_insertion_point(class_scope:inference.RepositoryModelUnloadResponse)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<
+      0, 0, 0,
+      0, 2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(
+        ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena);
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena, const Impl_& from,
+                          const RepositoryModelUnloadResponse& from_msg);
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  friend struct ::TableStruct_grpc_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class RepositoryModelLoadResponse final
+    : public ::google::protobuf::internal::ZeroFieldsBase
+/* @@protoc_insertion_point(class_definition:inference.RepositoryModelLoadResponse) */ {
+ public:
+  inline RepositoryModelLoadResponse() : RepositoryModelLoadResponse(nullptr) {}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RepositoryModelLoadResponse* msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RepositoryModelLoadResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR RepositoryModelLoadResponse(
+      ::google::protobuf::internal::ConstantInitialized);
+
+  inline RepositoryModelLoadResponse(const RepositoryModelLoadResponse& from) : RepositoryModelLoadResponse(nullptr, from) {}
+  inline RepositoryModelLoadResponse(RepositoryModelLoadResponse&& from) noexcept
+      : RepositoryModelLoadResponse(nullptr, std::move(from)) {}
+  inline RepositoryModelLoadResponse& operator=(const RepositoryModelLoadResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RepositoryModelLoadResponse& operator=(RepositoryModelLoadResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const RepositoryModelLoadResponse& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const RepositoryModelLoadResponse* internal_default_instance() {
+    return reinterpret_cast<const RepositoryModelLoadResponse*>(
+        &_RepositoryModelLoadResponse_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 30;
+  friend void swap(RepositoryModelLoadResponse& a, RepositoryModelLoadResponse& b) { a.Swap(&b); }
+  inline void Swap(RepositoryModelLoadResponse* other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RepositoryModelLoadResponse* other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  RepositoryModelLoadResponse* New(::google::protobuf::Arena* arena = nullptr) const {
+    return ::google::protobuf::internal::ZeroFieldsBase::DefaultConstruct<RepositoryModelLoadResponse>(arena);
+  }
+  using ::google::protobuf::internal::ZeroFieldsBase::CopyFrom;
+  inline void CopyFrom(const RepositoryModelLoadResponse& from) {
+    ::google::protobuf::internal::ZeroFieldsBase::CopyImpl(*this, from);
+  }
+  using ::google::protobuf::internal::ZeroFieldsBase::MergeFrom;
+  void MergeFrom(const RepositoryModelLoadResponse& from) {
+    ::google::protobuf::internal::ZeroFieldsBase::MergeImpl(*this, from);
+  }
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+ private:
+  template <typename T>
+  friend ::absl::string_view(
+      ::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "inference.RepositoryModelLoadResponse"; }
+
+ protected:
+  explicit RepositoryModelLoadResponse(::google::protobuf::Arena* arena);
+  RepositoryModelLoadResponse(::google::protobuf::Arena* arena, const RepositoryModelLoadResponse& from);
+  RepositoryModelLoadResponse(::google::protobuf::Arena* arena, RepositoryModelLoadResponse&& from) noexcept
+      : RepositoryModelLoadResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
+  static void* PlacementNew_(const void*, void* mem,
+                             ::google::protobuf::Arena* arena);
+  static constexpr auto InternalNewImpl_();
+  static const ::google::protobuf::internal::ClassDataFull _class_data_;
+
+ public:
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  // @@protoc_insertion_point(class_scope:inference.RepositoryModelLoadResponse)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<
+      0, 0, 0,
+      0, 2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(
+        ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena);
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena, const Impl_& from,
+                          const RepositoryModelLoadResponse& from_msg);
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  friend struct ::TableStruct_grpc_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class RepositoryIndexResponse_ModelIndex final
+    : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:inference.RepositoryIndexResponse.ModelIndex) */ {
+ public:
+  inline RepositoryIndexResponse_ModelIndex() : RepositoryIndexResponse_ModelIndex(nullptr) {}
+  ~RepositoryIndexResponse_ModelIndex() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RepositoryIndexResponse_ModelIndex* msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RepositoryIndexResponse_ModelIndex));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR RepositoryIndexResponse_ModelIndex(
+      ::google::protobuf::internal::ConstantInitialized);
+
+  inline RepositoryIndexResponse_ModelIndex(const RepositoryIndexResponse_ModelIndex& from) : RepositoryIndexResponse_ModelIndex(nullptr, from) {}
+  inline RepositoryIndexResponse_ModelIndex(RepositoryIndexResponse_ModelIndex&& from) noexcept
+      : RepositoryIndexResponse_ModelIndex(nullptr, std::move(from)) {}
+  inline RepositoryIndexResponse_ModelIndex& operator=(const RepositoryIndexResponse_ModelIndex& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RepositoryIndexResponse_ModelIndex& operator=(RepositoryIndexResponse_ModelIndex&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const RepositoryIndexResponse_ModelIndex& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const RepositoryIndexResponse_ModelIndex* internal_default_instance() {
+    return reinterpret_cast<const RepositoryIndexResponse_ModelIndex*>(
+        &_RepositoryIndexResponse_ModelIndex_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 25;
+  friend void swap(RepositoryIndexResponse_ModelIndex& a, RepositoryIndexResponse_ModelIndex& b) { a.Swap(&b); }
+  inline void Swap(RepositoryIndexResponse_ModelIndex* other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RepositoryIndexResponse_ModelIndex* other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  RepositoryIndexResponse_ModelIndex* New(::google::protobuf::Arena* arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RepositoryIndexResponse_ModelIndex>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RepositoryIndexResponse_ModelIndex& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RepositoryIndexResponse_ModelIndex& from) { RepositoryIndexResponse_ModelIndex::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(
+      ::google::protobuf::MessageLite& to_msg,
+      const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* _InternalSerialize(
+      const MessageLite& msg, ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RepositoryIndexResponse_ModelIndex* other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(
+      ::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "inference.RepositoryIndexResponse.ModelIndex"; }
+
+ protected:
+  explicit RepositoryIndexResponse_ModelIndex(::google::protobuf::Arena* arena);
+  RepositoryIndexResponse_ModelIndex(::google::protobuf::Arena* arena, const RepositoryIndexResponse_ModelIndex& from);
+  RepositoryIndexResponse_ModelIndex(::google::protobuf::Arena* arena, RepositoryIndexResponse_ModelIndex&& from) noexcept
+      : RepositoryIndexResponse_ModelIndex(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
+  static void* PlacementNew_(const void*, void* mem,
+                             ::google::protobuf::Arena* arena);
+  static constexpr auto InternalNewImpl_();
+  static const ::google::protobuf::internal::ClassDataFull _class_data_;
+
+ public:
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kNameFieldNumber = 1,
+    kVersionFieldNumber = 2,
+    kStateFieldNumber = 3,
+    kReasonFieldNumber = 4,
+  };
+  // string name = 1;
+  void clear_name() ;
+  const std::string& name() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_name(Arg_&& arg, Args_... args);
+  std::string* mutable_name();
+  PROTOBUF_NODISCARD std::string* release_name();
+  void set_allocated_name(std::string* value);
+
+  private:
+  const std::string& _internal_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_name(
+      const std::string& value);
+  std::string* _internal_mutable_name();
+
+  public:
+  // string version = 2;
+  void clear_version() ;
+  const std::string& version() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_version(Arg_&& arg, Args_... args);
+  std::string* mutable_version();
+  PROTOBUF_NODISCARD std::string* release_version();
+  void set_allocated_version(std::string* value);
+
+  private:
+  const std::string& _internal_version() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_version(
+      const std::string& value);
+  std::string* _internal_mutable_version();
+
+  public:
+  // string state = 3;
+  void clear_state() ;
+  const std::string& state() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_state(Arg_&& arg, Args_... args);
+  std::string* mutable_state();
+  PROTOBUF_NODISCARD std::string* release_state();
+  void set_allocated_state(std::string* value);
+
+  private:
+  const std::string& _internal_state() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_state(
+      const std::string& value);
+  std::string* _internal_mutable_state();
+
+  public:
+  // string reason = 4;
+  void clear_reason() ;
+  const std::string& reason() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_reason(Arg_&& arg, Args_... args);
+  std::string* mutable_reason();
+  PROTOBUF_NODISCARD std::string* release_reason();
+  void set_allocated_reason(std::string* value);
+
+  private:
+  const std::string& _internal_reason() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_reason(
+      const std::string& value);
+  std::string* _internal_mutable_reason();
+
+  public:
+  // @@protoc_insertion_point(class_scope:inference.RepositoryIndexResponse.ModelIndex)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<
+      2, 4, 0,
+      75, 2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(
+        ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena);
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena, const Impl_& from,
+                          const RepositoryIndexResponse_ModelIndex& from_msg);
+    ::google::protobuf::internal::ArenaStringPtr name_;
+    ::google::protobuf::internal::ArenaStringPtr version_;
+    ::google::protobuf::internal::ArenaStringPtr state_;
+    ::google::protobuf::internal::ArenaStringPtr reason_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_grpc_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class RepositoryIndexRequest final
+    : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:inference.RepositoryIndexRequest) */ {
+ public:
+  inline RepositoryIndexRequest() : RepositoryIndexRequest(nullptr) {}
+  ~RepositoryIndexRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RepositoryIndexRequest* msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RepositoryIndexRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR RepositoryIndexRequest(
+      ::google::protobuf::internal::ConstantInitialized);
+
+  inline RepositoryIndexRequest(const RepositoryIndexRequest& from) : RepositoryIndexRequest(nullptr, from) {}
+  inline RepositoryIndexRequest(RepositoryIndexRequest&& from) noexcept
+      : RepositoryIndexRequest(nullptr, std::move(from)) {}
+  inline RepositoryIndexRequest& operator=(const RepositoryIndexRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RepositoryIndexRequest& operator=(RepositoryIndexRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const RepositoryIndexRequest& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const RepositoryIndexRequest* internal_default_instance() {
+    return reinterpret_cast<const RepositoryIndexRequest*>(
+        &_RepositoryIndexRequest_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 24;
+  friend void swap(RepositoryIndexRequest& a, RepositoryIndexRequest& b) { a.Swap(&b); }
+  inline void Swap(RepositoryIndexRequest* other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RepositoryIndexRequest* other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  RepositoryIndexRequest* New(::google::protobuf::Arena* arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RepositoryIndexRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RepositoryIndexRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RepositoryIndexRequest& from) { RepositoryIndexRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(
+      ::google::protobuf::MessageLite& to_msg,
+      const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* _InternalSerialize(
+      const MessageLite& msg, ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RepositoryIndexRequest* other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(
+      ::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "inference.RepositoryIndexRequest"; }
+
+ protected:
+  explicit RepositoryIndexRequest(::google::protobuf::Arena* arena);
+  RepositoryIndexRequest(::google::protobuf::Arena* arena, const RepositoryIndexRequest& from);
+  RepositoryIndexRequest(::google::protobuf::Arena* arena, RepositoryIndexRequest&& from) noexcept
+      : RepositoryIndexRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
+  static void* PlacementNew_(const void*, void* mem,
+                             ::google::protobuf::Arena* arena);
+  static constexpr auto InternalNewImpl_();
+  static const ::google::protobuf::internal::ClassDataFull _class_data_;
+
+ public:
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kRepositoryNameFieldNumber = 1,
+    kReadyFieldNumber = 2,
+  };
+  // string repository_name = 1;
+  void clear_repository_name() ;
+  const std::string& repository_name() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_repository_name(Arg_&& arg, Args_... args);
+  std::string* mutable_repository_name();
+  PROTOBUF_NODISCARD std::string* release_repository_name();
+  void set_allocated_repository_name(std::string* value);
+
+  private:
+  const std::string& _internal_repository_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_repository_name(
+      const std::string& value);
+  std::string* _internal_mutable_repository_name();
+
+  public:
+  // bool ready = 2;
+  void clear_ready() ;
+  bool ready() const;
+  void set_ready(bool value);
+
+  private:
+  bool _internal_ready() const;
+  void _internal_set_ready(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:inference.RepositoryIndexRequest)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<
+      1, 2, 0,
+      56, 2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(
+        ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena);
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena, const Impl_& from,
+                          const RepositoryIndexRequest& from_msg);
+    ::google::protobuf::internal::ArenaStringPtr repository_name_;
+    bool ready_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_grpc_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class ModelRepositoryParameter final
+    : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:inference.ModelRepositoryParameter) */ {
+ public:
+  inline ModelRepositoryParameter() : ModelRepositoryParameter(nullptr) {}
+  ~ModelRepositoryParameter() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ModelRepositoryParameter* msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ModelRepositoryParameter));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR ModelRepositoryParameter(
+      ::google::protobuf::internal::ConstantInitialized);
+
+  inline ModelRepositoryParameter(const ModelRepositoryParameter& from) : ModelRepositoryParameter(nullptr, from) {}
+  inline ModelRepositoryParameter(ModelRepositoryParameter&& from) noexcept
+      : ModelRepositoryParameter(nullptr, std::move(from)) {}
+  inline ModelRepositoryParameter& operator=(const ModelRepositoryParameter& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ModelRepositoryParameter& operator=(ModelRepositoryParameter&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const ModelRepositoryParameter& default_instance() {
+    return *internal_default_instance();
+  }
+  enum ParameterChoiceCase {
+    kBoolParam = 1,
+    kInt64Param = 2,
+    kStringParam = 3,
+    kBytesParam = 4,
+    PARAMETER_CHOICE_NOT_SET = 0,
+  };
+  static inline const ModelRepositoryParameter* internal_default_instance() {
+    return reinterpret_cast<const ModelRepositoryParameter*>(
+        &_ModelRepositoryParameter_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 27;
+  friend void swap(ModelRepositoryParameter& a, ModelRepositoryParameter& b) { a.Swap(&b); }
+  inline void Swap(ModelRepositoryParameter* other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ModelRepositoryParameter* other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  ModelRepositoryParameter* New(::google::protobuf::Arena* arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ModelRepositoryParameter>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ModelRepositoryParameter& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ModelRepositoryParameter& from) { ModelRepositoryParameter::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(
+      ::google::protobuf::MessageLite& to_msg,
+      const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* _InternalSerialize(
+      const MessageLite& msg, ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ModelRepositoryParameter* other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(
+      ::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "inference.ModelRepositoryParameter"; }
+
+ protected:
+  explicit ModelRepositoryParameter(::google::protobuf::Arena* arena);
+  ModelRepositoryParameter(::google::protobuf::Arena* arena, const ModelRepositoryParameter& from);
+  ModelRepositoryParameter(::google::protobuf::Arena* arena, ModelRepositoryParameter&& from) noexcept
+      : ModelRepositoryParameter(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
+  static void* PlacementNew_(const void*, void* mem,
+                             ::google::protobuf::Arena* arena);
+  static constexpr auto InternalNewImpl_();
+  static const ::google::protobuf::internal::ClassDataFull _class_data_;
+
+ public:
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kBoolParamFieldNumber = 1,
+    kInt64ParamFieldNumber = 2,
+    kStringParamFieldNumber = 3,
+    kBytesParamFieldNumber = 4,
+  };
+  // bool bool_param = 1;
+  bool has_bool_param() const;
+  void clear_bool_param() ;
+  bool bool_param() const;
+  void set_bool_param(bool value);
+
+  private:
+  bool _internal_bool_param() const;
+  void _internal_set_bool_param(bool value);
+
+  public:
+  // int64 int64_param = 2;
+  bool has_int64_param() const;
+  void clear_int64_param() ;
+  ::int64_t int64_param() const;
+  void set_int64_param(::int64_t value);
+
+  private:
+  ::int64_t _internal_int64_param() const;
+  void _internal_set_int64_param(::int64_t value);
+
+  public:
+  // string string_param = 3;
+  bool has_string_param() const;
+  void clear_string_param() ;
+  const std::string& string_param() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_string_param(Arg_&& arg, Args_... args);
+  std::string* mutable_string_param();
+  PROTOBUF_NODISCARD std::string* release_string_param();
+  void set_allocated_string_param(std::string* value);
+
+  private:
+  const std::string& _internal_string_param() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_string_param(
+      const std::string& value);
+  std::string* _internal_mutable_string_param();
+
+  public:
+  // bytes bytes_param = 4;
+  bool has_bytes_param() const;
+  void clear_bytes_param() ;
+  const std::string& bytes_param() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_bytes_param(Arg_&& arg, Args_... args);
+  std::string* mutable_bytes_param();
+  PROTOBUF_NODISCARD std::string* release_bytes_param();
+  void set_allocated_bytes_param(std::string* value);
+
+  private:
+  const std::string& _internal_bytes_param() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_bytes_param(
+      const std::string& value);
+  std::string* _internal_mutable_bytes_param();
+
+  public:
+  void clear_parameter_choice();
+  ParameterChoiceCase parameter_choice_case() const;
+  // @@protoc_insertion_point(class_scope:inference.ModelRepositoryParameter)
+ private:
+  class _Internal;
+  void set_has_bool_param();
+  void set_has_int64_param();
+  void set_has_string_param();
+  void set_has_bytes_param();
+  inline bool has_parameter_choice() const;
+  inline void clear_has_parameter_choice();
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<
+      0, 4, 0,
+      55, 2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(
+        ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena);
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena, const Impl_& from,
+                          const ModelRepositoryParameter& from_msg);
+    union ParameterChoiceUnion {
+      constexpr ParameterChoiceUnion() : _constinit_{} {}
+      ::google::protobuf::internal::ConstantInitialized _constinit_;
+      bool bool_param_;
+      ::int64_t int64_param_;
+      ::google::protobuf::internal::ArenaStringPtr string_param_;
+      ::google::protobuf::internal::ArenaStringPtr bytes_param_;
+    } parameter_choice_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t _oneof_case_[1];
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
   friend struct ::TableStruct_grpc_5fservice_2eproto;
 };
 // -------------------------------------------------------------------
@@ -3047,6 +4092,283 @@ class InferTensorContents final
 };
 // -------------------------------------------------------------------
 
+class RepositoryModelUnloadRequest_ParametersEntry_DoNotUse final
+    : public ::google::protobuf::internal::MapEntry<
+          std::string, ::google::protobuf::Message,
+          ::google::protobuf::internal::WireFormatLite::TYPE_STRING,
+          ::google::protobuf::internal::WireFormatLite::TYPE_MESSAGE> {
+ public:
+  using SuperType = ::google::protobuf::internal::MapEntry<
+      std::string, ::google::protobuf::Message,
+      ::google::protobuf::internal::WireFormatLite::TYPE_STRING,
+      ::google::protobuf::internal::WireFormatLite::TYPE_MESSAGE>;
+  RepositoryModelUnloadRequest_ParametersEntry_DoNotUse();
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR RepositoryModelUnloadRequest_ParametersEntry_DoNotUse(
+      ::google::protobuf::internal::ConstantInitialized);
+  explicit RepositoryModelUnloadRequest_ParametersEntry_DoNotUse(::google::protobuf::Arena* arena);
+  static const RepositoryModelUnloadRequest_ParametersEntry_DoNotUse* internal_default_instance() {
+    return reinterpret_cast<const RepositoryModelUnloadRequest_ParametersEntry_DoNotUse*>(
+        &_RepositoryModelUnloadRequest_ParametersEntry_DoNotUse_default_instance_);
+  }
+
+
+ private:
+  friend class ::google::protobuf::MessageLite;
+  friend struct ::TableStruct_grpc_5fservice_2eproto;
+
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<
+      1, 2, 1,
+      66, 2>
+      _table_;
+
+  const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
+  static void* PlacementNew_(const void*, void* mem,
+                             ::google::protobuf::Arena* arena);
+  static constexpr auto InternalNewImpl_();
+  static const ::google::protobuf::internal::ClassDataFull _class_data_;
+};
+// -------------------------------------------------------------------
+
+class RepositoryModelLoadRequest_ParametersEntry_DoNotUse final
+    : public ::google::protobuf::internal::MapEntry<
+          std::string, ::google::protobuf::Message,
+          ::google::protobuf::internal::WireFormatLite::TYPE_STRING,
+          ::google::protobuf::internal::WireFormatLite::TYPE_MESSAGE> {
+ public:
+  using SuperType = ::google::protobuf::internal::MapEntry<
+      std::string, ::google::protobuf::Message,
+      ::google::protobuf::internal::WireFormatLite::TYPE_STRING,
+      ::google::protobuf::internal::WireFormatLite::TYPE_MESSAGE>;
+  RepositoryModelLoadRequest_ParametersEntry_DoNotUse();
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR RepositoryModelLoadRequest_ParametersEntry_DoNotUse(
+      ::google::protobuf::internal::ConstantInitialized);
+  explicit RepositoryModelLoadRequest_ParametersEntry_DoNotUse(::google::protobuf::Arena* arena);
+  static const RepositoryModelLoadRequest_ParametersEntry_DoNotUse* internal_default_instance() {
+    return reinterpret_cast<const RepositoryModelLoadRequest_ParametersEntry_DoNotUse*>(
+        &_RepositoryModelLoadRequest_ParametersEntry_DoNotUse_default_instance_);
+  }
+
+
+ private:
+  friend class ::google::protobuf::MessageLite;
+  friend struct ::TableStruct_grpc_5fservice_2eproto;
+
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<
+      1, 2, 1,
+      64, 2>
+      _table_;
+
+  const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
+  static void* PlacementNew_(const void*, void* mem,
+                             ::google::protobuf::Arena* arena);
+  static constexpr auto InternalNewImpl_();
+  static const ::google::protobuf::internal::ClassDataFull _class_data_;
+};
+// -------------------------------------------------------------------
+
+class RepositoryIndexResponse final
+    : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:inference.RepositoryIndexResponse) */ {
+ public:
+  inline RepositoryIndexResponse() : RepositoryIndexResponse(nullptr) {}
+  ~RepositoryIndexResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RepositoryIndexResponse* msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RepositoryIndexResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR RepositoryIndexResponse(
+      ::google::protobuf::internal::ConstantInitialized);
+
+  inline RepositoryIndexResponse(const RepositoryIndexResponse& from) : RepositoryIndexResponse(nullptr, from) {}
+  inline RepositoryIndexResponse(RepositoryIndexResponse&& from) noexcept
+      : RepositoryIndexResponse(nullptr, std::move(from)) {}
+  inline RepositoryIndexResponse& operator=(const RepositoryIndexResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RepositoryIndexResponse& operator=(RepositoryIndexResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const RepositoryIndexResponse& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const RepositoryIndexResponse* internal_default_instance() {
+    return reinterpret_cast<const RepositoryIndexResponse*>(
+        &_RepositoryIndexResponse_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 26;
+  friend void swap(RepositoryIndexResponse& a, RepositoryIndexResponse& b) { a.Swap(&b); }
+  inline void Swap(RepositoryIndexResponse* other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RepositoryIndexResponse* other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  RepositoryIndexResponse* New(::google::protobuf::Arena* arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RepositoryIndexResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RepositoryIndexResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RepositoryIndexResponse& from) { RepositoryIndexResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(
+      ::google::protobuf::MessageLite& to_msg,
+      const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* _InternalSerialize(
+      const MessageLite& msg, ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RepositoryIndexResponse* other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(
+      ::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "inference.RepositoryIndexResponse"; }
+
+ protected:
+  explicit RepositoryIndexResponse(::google::protobuf::Arena* arena);
+  RepositoryIndexResponse(::google::protobuf::Arena* arena, const RepositoryIndexResponse& from);
+  RepositoryIndexResponse(::google::protobuf::Arena* arena, RepositoryIndexResponse&& from) noexcept
+      : RepositoryIndexResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
+  static void* PlacementNew_(const void*, void* mem,
+                             ::google::protobuf::Arena* arena);
+  static constexpr auto InternalNewImpl_();
+  static const ::google::protobuf::internal::ClassDataFull _class_data_;
+
+ public:
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+  using ModelIndex = RepositoryIndexResponse_ModelIndex;
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kModelsFieldNumber = 1,
+  };
+  // repeated .inference.RepositoryIndexResponse.ModelIndex models = 1;
+  int models_size() const;
+  private:
+  int _internal_models_size() const;
+
+  public:
+  void clear_models() ;
+  ::inference::RepositoryIndexResponse_ModelIndex* mutable_models(int index);
+  ::google::protobuf::RepeatedPtrField<::inference::RepositoryIndexResponse_ModelIndex>* mutable_models();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::inference::RepositoryIndexResponse_ModelIndex>& _internal_models() const;
+  ::google::protobuf::RepeatedPtrField<::inference::RepositoryIndexResponse_ModelIndex>* _internal_mutable_models();
+  public:
+  const ::inference::RepositoryIndexResponse_ModelIndex& models(int index) const;
+  ::inference::RepositoryIndexResponse_ModelIndex* add_models();
+  const ::google::protobuf::RepeatedPtrField<::inference::RepositoryIndexResponse_ModelIndex>& models() const;
+  // @@protoc_insertion_point(class_scope:inference.RepositoryIndexResponse)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<
+      0, 1, 1,
+      0, 2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(
+        ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena);
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena, const Impl_& from,
+                          const RepositoryIndexResponse& from_msg);
+    ::google::protobuf::RepeatedPtrField< ::inference::RepositoryIndexResponse_ModelIndex > models_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_grpc_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
 class ModelMetadataResponse final
     : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:inference.ModelMetadataResponse) */ {
@@ -4077,6 +5399,476 @@ class ModelInferRequest_InferInputTensor final
     ::google::protobuf::internal::ArenaStringPtr name_;
     ::google::protobuf::internal::ArenaStringPtr datatype_;
     ::inference::InferTensorContents* contents_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_grpc_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class RepositoryModelUnloadRequest final
+    : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:inference.RepositoryModelUnloadRequest) */ {
+ public:
+  inline RepositoryModelUnloadRequest() : RepositoryModelUnloadRequest(nullptr) {}
+  ~RepositoryModelUnloadRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RepositoryModelUnloadRequest* msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RepositoryModelUnloadRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR RepositoryModelUnloadRequest(
+      ::google::protobuf::internal::ConstantInitialized);
+
+  inline RepositoryModelUnloadRequest(const RepositoryModelUnloadRequest& from) : RepositoryModelUnloadRequest(nullptr, from) {}
+  inline RepositoryModelUnloadRequest(RepositoryModelUnloadRequest&& from) noexcept
+      : RepositoryModelUnloadRequest(nullptr, std::move(from)) {}
+  inline RepositoryModelUnloadRequest& operator=(const RepositoryModelUnloadRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RepositoryModelUnloadRequest& operator=(RepositoryModelUnloadRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const RepositoryModelUnloadRequest& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const RepositoryModelUnloadRequest* internal_default_instance() {
+    return reinterpret_cast<const RepositoryModelUnloadRequest*>(
+        &_RepositoryModelUnloadRequest_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 32;
+  friend void swap(RepositoryModelUnloadRequest& a, RepositoryModelUnloadRequest& b) { a.Swap(&b); }
+  inline void Swap(RepositoryModelUnloadRequest* other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RepositoryModelUnloadRequest* other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  RepositoryModelUnloadRequest* New(::google::protobuf::Arena* arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RepositoryModelUnloadRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RepositoryModelUnloadRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RepositoryModelUnloadRequest& from) { RepositoryModelUnloadRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(
+      ::google::protobuf::MessageLite& to_msg,
+      const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* _InternalSerialize(
+      const MessageLite& msg, ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RepositoryModelUnloadRequest* other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(
+      ::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "inference.RepositoryModelUnloadRequest"; }
+
+ protected:
+  explicit RepositoryModelUnloadRequest(::google::protobuf::Arena* arena);
+  RepositoryModelUnloadRequest(::google::protobuf::Arena* arena, const RepositoryModelUnloadRequest& from);
+  RepositoryModelUnloadRequest(::google::protobuf::Arena* arena, RepositoryModelUnloadRequest&& from) noexcept
+      : RepositoryModelUnloadRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
+  static void* PlacementNew_(const void*, void* mem,
+                             ::google::protobuf::Arena* arena);
+  static constexpr auto InternalNewImpl_();
+  static const ::google::protobuf::internal::ClassDataFull _class_data_;
+
+ public:
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kParametersFieldNumber = 3,
+    kRepositoryNameFieldNumber = 1,
+    kModelNameFieldNumber = 2,
+  };
+  // map<string, .inference.ModelRepositoryParameter> parameters = 3;
+  int parameters_size() const;
+  private:
+  int _internal_parameters_size() const;
+
+  public:
+  void clear_parameters() ;
+  const ::google::protobuf::Map<std::string, ::inference::ModelRepositoryParameter>& parameters() const;
+  ::google::protobuf::Map<std::string, ::inference::ModelRepositoryParameter>* mutable_parameters();
+
+  private:
+  const ::google::protobuf::Map<std::string, ::inference::ModelRepositoryParameter>& _internal_parameters() const;
+  ::google::protobuf::Map<std::string, ::inference::ModelRepositoryParameter>* _internal_mutable_parameters();
+
+  public:
+  // string repository_name = 1;
+  void clear_repository_name() ;
+  const std::string& repository_name() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_repository_name(Arg_&& arg, Args_... args);
+  std::string* mutable_repository_name();
+  PROTOBUF_NODISCARD std::string* release_repository_name();
+  void set_allocated_repository_name(std::string* value);
+
+  private:
+  const std::string& _internal_repository_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_repository_name(
+      const std::string& value);
+  std::string* _internal_mutable_repository_name();
+
+  public:
+  // string model_name = 2;
+  void clear_model_name() ;
+  const std::string& model_name() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_model_name(Arg_&& arg, Args_... args);
+  std::string* mutable_model_name();
+  PROTOBUF_NODISCARD std::string* release_model_name();
+  void set_allocated_model_name(std::string* value);
+
+  private:
+  const std::string& _internal_model_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_model_name(
+      const std::string& value);
+  std::string* _internal_mutable_model_name();
+
+  public:
+  // @@protoc_insertion_point(class_scope:inference.RepositoryModelUnloadRequest)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<
+      1, 3, 2,
+      82, 2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(
+        ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena);
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena, const Impl_& from,
+                          const RepositoryModelUnloadRequest& from_msg);
+    ::google::protobuf::internal::MapField<RepositoryModelUnloadRequest_ParametersEntry_DoNotUse, std::string, ::inference::ModelRepositoryParameter,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_STRING,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_MESSAGE>
+        parameters_;
+    ::google::protobuf::internal::ArenaStringPtr repository_name_;
+    ::google::protobuf::internal::ArenaStringPtr model_name_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_grpc_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class RepositoryModelLoadRequest final
+    : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:inference.RepositoryModelLoadRequest) */ {
+ public:
+  inline RepositoryModelLoadRequest() : RepositoryModelLoadRequest(nullptr) {}
+  ~RepositoryModelLoadRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RepositoryModelLoadRequest* msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RepositoryModelLoadRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR RepositoryModelLoadRequest(
+      ::google::protobuf::internal::ConstantInitialized);
+
+  inline RepositoryModelLoadRequest(const RepositoryModelLoadRequest& from) : RepositoryModelLoadRequest(nullptr, from) {}
+  inline RepositoryModelLoadRequest(RepositoryModelLoadRequest&& from) noexcept
+      : RepositoryModelLoadRequest(nullptr, std::move(from)) {}
+  inline RepositoryModelLoadRequest& operator=(const RepositoryModelLoadRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RepositoryModelLoadRequest& operator=(RepositoryModelLoadRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const RepositoryModelLoadRequest& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const RepositoryModelLoadRequest* internal_default_instance() {
+    return reinterpret_cast<const RepositoryModelLoadRequest*>(
+        &_RepositoryModelLoadRequest_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 29;
+  friend void swap(RepositoryModelLoadRequest& a, RepositoryModelLoadRequest& b) { a.Swap(&b); }
+  inline void Swap(RepositoryModelLoadRequest* other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RepositoryModelLoadRequest* other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  RepositoryModelLoadRequest* New(::google::protobuf::Arena* arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RepositoryModelLoadRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RepositoryModelLoadRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RepositoryModelLoadRequest& from) { RepositoryModelLoadRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(
+      ::google::protobuf::MessageLite& to_msg,
+      const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* _InternalSerialize(
+      const MessageLite& msg, ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RepositoryModelLoadRequest* other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(
+      ::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "inference.RepositoryModelLoadRequest"; }
+
+ protected:
+  explicit RepositoryModelLoadRequest(::google::protobuf::Arena* arena);
+  RepositoryModelLoadRequest(::google::protobuf::Arena* arena, const RepositoryModelLoadRequest& from);
+  RepositoryModelLoadRequest(::google::protobuf::Arena* arena, RepositoryModelLoadRequest&& from) noexcept
+      : RepositoryModelLoadRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
+  static void* PlacementNew_(const void*, void* mem,
+                             ::google::protobuf::Arena* arena);
+  static constexpr auto InternalNewImpl_();
+  static const ::google::protobuf::internal::ClassDataFull _class_data_;
+
+ public:
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kParametersFieldNumber = 3,
+    kRepositoryNameFieldNumber = 1,
+    kModelNameFieldNumber = 2,
+  };
+  // map<string, .inference.ModelRepositoryParameter> parameters = 3;
+  int parameters_size() const;
+  private:
+  int _internal_parameters_size() const;
+
+  public:
+  void clear_parameters() ;
+  const ::google::protobuf::Map<std::string, ::inference::ModelRepositoryParameter>& parameters() const;
+  ::google::protobuf::Map<std::string, ::inference::ModelRepositoryParameter>* mutable_parameters();
+
+  private:
+  const ::google::protobuf::Map<std::string, ::inference::ModelRepositoryParameter>& _internal_parameters() const;
+  ::google::protobuf::Map<std::string, ::inference::ModelRepositoryParameter>* _internal_mutable_parameters();
+
+  public:
+  // string repository_name = 1;
+  void clear_repository_name() ;
+  const std::string& repository_name() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_repository_name(Arg_&& arg, Args_... args);
+  std::string* mutable_repository_name();
+  PROTOBUF_NODISCARD std::string* release_repository_name();
+  void set_allocated_repository_name(std::string* value);
+
+  private:
+  const std::string& _internal_repository_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_repository_name(
+      const std::string& value);
+  std::string* _internal_mutable_repository_name();
+
+  public:
+  // string model_name = 2;
+  void clear_model_name() ;
+  const std::string& model_name() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_model_name(Arg_&& arg, Args_... args);
+  std::string* mutable_model_name();
+  PROTOBUF_NODISCARD std::string* release_model_name();
+  void set_allocated_model_name(std::string* value);
+
+  private:
+  const std::string& _internal_model_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_model_name(
+      const std::string& value);
+  std::string* _internal_mutable_model_name();
+
+  public:
+  // @@protoc_insertion_point(class_scope:inference.RepositoryModelLoadRequest)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<
+      1, 3, 2,
+      80, 2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(
+        ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena);
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena, const Impl_& from,
+                          const RepositoryModelLoadRequest& from_msg);
+    ::google::protobuf::internal::MapField<RepositoryModelLoadRequest_ParametersEntry_DoNotUse, std::string, ::inference::ModelRepositoryParameter,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_STRING,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_MESSAGE>
+        parameters_;
+    ::google::protobuf::internal::ArenaStringPtr repository_name_;
+    ::google::protobuf::internal::ArenaStringPtr model_name_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7395,6 +9187,846 @@ inline void ModelInferResponse::set_allocated_raw_output_contents(std::string* v
   }
   // @@protoc_insertion_point(field_set_allocated:inference.ModelInferResponse.raw_output_contents)
 }
+
+// -------------------------------------------------------------------
+
+// RepositoryIndexRequest
+
+// string repository_name = 1;
+inline void RepositoryIndexRequest::clear_repository_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.repository_name_.ClearToEmpty();
+}
+inline const std::string& RepositoryIndexRequest::repository_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:inference.RepositoryIndexRequest.repository_name)
+  return _internal_repository_name();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void RepositoryIndexRequest::set_repository_name(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.repository_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:inference.RepositoryIndexRequest.repository_name)
+}
+inline std::string* RepositoryIndexRequest::mutable_repository_name() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_repository_name();
+  // @@protoc_insertion_point(field_mutable:inference.RepositoryIndexRequest.repository_name)
+  return _s;
+}
+inline const std::string& RepositoryIndexRequest::_internal_repository_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.repository_name_.Get();
+}
+inline void RepositoryIndexRequest::_internal_set_repository_name(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.repository_name_.Set(value, GetArena());
+}
+inline std::string* RepositoryIndexRequest::_internal_mutable_repository_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.repository_name_.Mutable( GetArena());
+}
+inline std::string* RepositoryIndexRequest::release_repository_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:inference.RepositoryIndexRequest.repository_name)
+  return _impl_.repository_name_.Release();
+}
+inline void RepositoryIndexRequest::set_allocated_repository_name(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.repository_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.repository_name_.IsDefault()) {
+    _impl_.repository_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:inference.RepositoryIndexRequest.repository_name)
+}
+
+// bool ready = 2;
+inline void RepositoryIndexRequest::clear_ready() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ready_ = false;
+}
+inline bool RepositoryIndexRequest::ready() const {
+  // @@protoc_insertion_point(field_get:inference.RepositoryIndexRequest.ready)
+  return _internal_ready();
+}
+inline void RepositoryIndexRequest::set_ready(bool value) {
+  _internal_set_ready(value);
+  // @@protoc_insertion_point(field_set:inference.RepositoryIndexRequest.ready)
+}
+inline bool RepositoryIndexRequest::_internal_ready() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ready_;
+}
+inline void RepositoryIndexRequest::_internal_set_ready(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ready_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// RepositoryIndexResponse_ModelIndex
+
+// string name = 1;
+inline void RepositoryIndexResponse_ModelIndex::clear_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.ClearToEmpty();
+}
+inline const std::string& RepositoryIndexResponse_ModelIndex::name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:inference.RepositoryIndexResponse.ModelIndex.name)
+  return _internal_name();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void RepositoryIndexResponse_ModelIndex::set_name(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:inference.RepositoryIndexResponse.ModelIndex.name)
+}
+inline std::string* RepositoryIndexResponse_ModelIndex::mutable_name() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:inference.RepositoryIndexResponse.ModelIndex.name)
+  return _s;
+}
+inline const std::string& RepositoryIndexResponse_ModelIndex::_internal_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_.Get();
+}
+inline void RepositoryIndexResponse_ModelIndex::_internal_set_name(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.Set(value, GetArena());
+}
+inline std::string* RepositoryIndexResponse_ModelIndex::_internal_mutable_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.name_.Mutable( GetArena());
+}
+inline std::string* RepositoryIndexResponse_ModelIndex::release_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:inference.RepositoryIndexResponse.ModelIndex.name)
+  return _impl_.name_.Release();
+}
+inline void RepositoryIndexResponse_ModelIndex::set_allocated_name(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:inference.RepositoryIndexResponse.ModelIndex.name)
+}
+
+// string version = 2;
+inline void RepositoryIndexResponse_ModelIndex::clear_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.version_.ClearToEmpty();
+}
+inline const std::string& RepositoryIndexResponse_ModelIndex::version() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:inference.RepositoryIndexResponse.ModelIndex.version)
+  return _internal_version();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void RepositoryIndexResponse_ModelIndex::set_version(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.version_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:inference.RepositoryIndexResponse.ModelIndex.version)
+}
+inline std::string* RepositoryIndexResponse_ModelIndex::mutable_version() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_version();
+  // @@protoc_insertion_point(field_mutable:inference.RepositoryIndexResponse.ModelIndex.version)
+  return _s;
+}
+inline const std::string& RepositoryIndexResponse_ModelIndex::_internal_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.version_.Get();
+}
+inline void RepositoryIndexResponse_ModelIndex::_internal_set_version(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.version_.Set(value, GetArena());
+}
+inline std::string* RepositoryIndexResponse_ModelIndex::_internal_mutable_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.version_.Mutable( GetArena());
+}
+inline std::string* RepositoryIndexResponse_ModelIndex::release_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:inference.RepositoryIndexResponse.ModelIndex.version)
+  return _impl_.version_.Release();
+}
+inline void RepositoryIndexResponse_ModelIndex::set_allocated_version(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.version_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.version_.IsDefault()) {
+    _impl_.version_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:inference.RepositoryIndexResponse.ModelIndex.version)
+}
+
+// string state = 3;
+inline void RepositoryIndexResponse_ModelIndex::clear_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_.ClearToEmpty();
+}
+inline const std::string& RepositoryIndexResponse_ModelIndex::state() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:inference.RepositoryIndexResponse.ModelIndex.state)
+  return _internal_state();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void RepositoryIndexResponse_ModelIndex::set_state(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:inference.RepositoryIndexResponse.ModelIndex.state)
+}
+inline std::string* RepositoryIndexResponse_ModelIndex::mutable_state() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_state();
+  // @@protoc_insertion_point(field_mutable:inference.RepositoryIndexResponse.ModelIndex.state)
+  return _s;
+}
+inline const std::string& RepositoryIndexResponse_ModelIndex::_internal_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.state_.Get();
+}
+inline void RepositoryIndexResponse_ModelIndex::_internal_set_state(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_.Set(value, GetArena());
+}
+inline std::string* RepositoryIndexResponse_ModelIndex::_internal_mutable_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.state_.Mutable( GetArena());
+}
+inline std::string* RepositoryIndexResponse_ModelIndex::release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:inference.RepositoryIndexResponse.ModelIndex.state)
+  return _impl_.state_.Release();
+}
+inline void RepositoryIndexResponse_ModelIndex::set_allocated_state(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.state_.IsDefault()) {
+    _impl_.state_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:inference.RepositoryIndexResponse.ModelIndex.state)
+}
+
+// string reason = 4;
+inline void RepositoryIndexResponse_ModelIndex::clear_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_.ClearToEmpty();
+}
+inline const std::string& RepositoryIndexResponse_ModelIndex::reason() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:inference.RepositoryIndexResponse.ModelIndex.reason)
+  return _internal_reason();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void RepositoryIndexResponse_ModelIndex::set_reason(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:inference.RepositoryIndexResponse.ModelIndex.reason)
+}
+inline std::string* RepositoryIndexResponse_ModelIndex::mutable_reason() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_reason();
+  // @@protoc_insertion_point(field_mutable:inference.RepositoryIndexResponse.ModelIndex.reason)
+  return _s;
+}
+inline const std::string& RepositoryIndexResponse_ModelIndex::_internal_reason() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reason_.Get();
+}
+inline void RepositoryIndexResponse_ModelIndex::_internal_set_reason(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_.Set(value, GetArena());
+}
+inline std::string* RepositoryIndexResponse_ModelIndex::_internal_mutable_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.reason_.Mutable( GetArena());
+}
+inline std::string* RepositoryIndexResponse_ModelIndex::release_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:inference.RepositoryIndexResponse.ModelIndex.reason)
+  return _impl_.reason_.Release();
+}
+inline void RepositoryIndexResponse_ModelIndex::set_allocated_reason(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.reason_.IsDefault()) {
+    _impl_.reason_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:inference.RepositoryIndexResponse.ModelIndex.reason)
+}
+
+// -------------------------------------------------------------------
+
+// RepositoryIndexResponse
+
+// repeated .inference.RepositoryIndexResponse.ModelIndex models = 1;
+inline int RepositoryIndexResponse::_internal_models_size() const {
+  return _internal_models().size();
+}
+inline int RepositoryIndexResponse::models_size() const {
+  return _internal_models_size();
+}
+inline void RepositoryIndexResponse::clear_models() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.models_.Clear();
+}
+inline ::inference::RepositoryIndexResponse_ModelIndex* RepositoryIndexResponse::mutable_models(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:inference.RepositoryIndexResponse.models)
+  return _internal_mutable_models()->Mutable(index);
+}
+inline ::google::protobuf::RepeatedPtrField<::inference::RepositoryIndexResponse_ModelIndex>* RepositoryIndexResponse::mutable_models()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_list:inference.RepositoryIndexResponse.models)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_models();
+}
+inline const ::inference::RepositoryIndexResponse_ModelIndex& RepositoryIndexResponse::models(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:inference.RepositoryIndexResponse.models)
+  return _internal_models().Get(index);
+}
+inline ::inference::RepositoryIndexResponse_ModelIndex* RepositoryIndexResponse::add_models() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::inference::RepositoryIndexResponse_ModelIndex* _add = _internal_mutable_models()->Add();
+  // @@protoc_insertion_point(field_add:inference.RepositoryIndexResponse.models)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::inference::RepositoryIndexResponse_ModelIndex>& RepositoryIndexResponse::models() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:inference.RepositoryIndexResponse.models)
+  return _internal_models();
+}
+inline const ::google::protobuf::RepeatedPtrField<::inference::RepositoryIndexResponse_ModelIndex>&
+RepositoryIndexResponse::_internal_models() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.models_;
+}
+inline ::google::protobuf::RepeatedPtrField<::inference::RepositoryIndexResponse_ModelIndex>*
+RepositoryIndexResponse::_internal_mutable_models() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.models_;
+}
+
+// -------------------------------------------------------------------
+
+// ModelRepositoryParameter
+
+// bool bool_param = 1;
+inline bool ModelRepositoryParameter::has_bool_param() const {
+  return parameter_choice_case() == kBoolParam;
+}
+inline void ModelRepositoryParameter::set_has_bool_param() {
+  _impl_._oneof_case_[0] = kBoolParam;
+}
+inline void ModelRepositoryParameter::clear_bool_param() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (parameter_choice_case() == kBoolParam) {
+    _impl_.parameter_choice_.bool_param_ = false;
+    clear_has_parameter_choice();
+  }
+}
+inline bool ModelRepositoryParameter::bool_param() const {
+  // @@protoc_insertion_point(field_get:inference.ModelRepositoryParameter.bool_param)
+  return _internal_bool_param();
+}
+inline void ModelRepositoryParameter::set_bool_param(bool value) {
+  if (parameter_choice_case() != kBoolParam) {
+    clear_parameter_choice();
+    set_has_bool_param();
+  }
+  _impl_.parameter_choice_.bool_param_ = value;
+  // @@protoc_insertion_point(field_set:inference.ModelRepositoryParameter.bool_param)
+}
+inline bool ModelRepositoryParameter::_internal_bool_param() const {
+  if (parameter_choice_case() == kBoolParam) {
+    return _impl_.parameter_choice_.bool_param_;
+  }
+  return false;
+}
+
+// int64 int64_param = 2;
+inline bool ModelRepositoryParameter::has_int64_param() const {
+  return parameter_choice_case() == kInt64Param;
+}
+inline void ModelRepositoryParameter::set_has_int64_param() {
+  _impl_._oneof_case_[0] = kInt64Param;
+}
+inline void ModelRepositoryParameter::clear_int64_param() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (parameter_choice_case() == kInt64Param) {
+    _impl_.parameter_choice_.int64_param_ = ::int64_t{0};
+    clear_has_parameter_choice();
+  }
+}
+inline ::int64_t ModelRepositoryParameter::int64_param() const {
+  // @@protoc_insertion_point(field_get:inference.ModelRepositoryParameter.int64_param)
+  return _internal_int64_param();
+}
+inline void ModelRepositoryParameter::set_int64_param(::int64_t value) {
+  if (parameter_choice_case() != kInt64Param) {
+    clear_parameter_choice();
+    set_has_int64_param();
+  }
+  _impl_.parameter_choice_.int64_param_ = value;
+  // @@protoc_insertion_point(field_set:inference.ModelRepositoryParameter.int64_param)
+}
+inline ::int64_t ModelRepositoryParameter::_internal_int64_param() const {
+  if (parameter_choice_case() == kInt64Param) {
+    return _impl_.parameter_choice_.int64_param_;
+  }
+  return ::int64_t{0};
+}
+
+// string string_param = 3;
+inline bool ModelRepositoryParameter::has_string_param() const {
+  return parameter_choice_case() == kStringParam;
+}
+inline void ModelRepositoryParameter::set_has_string_param() {
+  _impl_._oneof_case_[0] = kStringParam;
+}
+inline void ModelRepositoryParameter::clear_string_param() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (parameter_choice_case() == kStringParam) {
+    _impl_.parameter_choice_.string_param_.Destroy();
+    clear_has_parameter_choice();
+  }
+}
+inline const std::string& ModelRepositoryParameter::string_param() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:inference.ModelRepositoryParameter.string_param)
+  return _internal_string_param();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void ModelRepositoryParameter::set_string_param(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (parameter_choice_case() != kStringParam) {
+    clear_parameter_choice();
+
+    set_has_string_param();
+    _impl_.parameter_choice_.string_param_.InitDefault();
+  }
+  _impl_.parameter_choice_.string_param_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:inference.ModelRepositoryParameter.string_param)
+}
+inline std::string* ModelRepositoryParameter::mutable_string_param() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_string_param();
+  // @@protoc_insertion_point(field_mutable:inference.ModelRepositoryParameter.string_param)
+  return _s;
+}
+inline const std::string& ModelRepositoryParameter::_internal_string_param() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  if (parameter_choice_case() != kStringParam) {
+    return ::google::protobuf::internal::GetEmptyStringAlreadyInited();
+  }
+  return _impl_.parameter_choice_.string_param_.Get();
+}
+inline void ModelRepositoryParameter::_internal_set_string_param(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (parameter_choice_case() != kStringParam) {
+    clear_parameter_choice();
+
+    set_has_string_param();
+    _impl_.parameter_choice_.string_param_.InitDefault();
+  }
+  _impl_.parameter_choice_.string_param_.Set(value, GetArena());
+}
+inline std::string* ModelRepositoryParameter::_internal_mutable_string_param() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (parameter_choice_case() != kStringParam) {
+    clear_parameter_choice();
+
+    set_has_string_param();
+    _impl_.parameter_choice_.string_param_.InitDefault();
+  }
+  return _impl_.parameter_choice_.string_param_.Mutable( GetArena());
+}
+inline std::string* ModelRepositoryParameter::release_string_param() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:inference.ModelRepositoryParameter.string_param)
+  if (parameter_choice_case() != kStringParam) {
+    return nullptr;
+  }
+  clear_has_parameter_choice();
+  return _impl_.parameter_choice_.string_param_.Release();
+}
+inline void ModelRepositoryParameter::set_allocated_string_param(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (has_parameter_choice()) {
+    clear_parameter_choice();
+  }
+  if (value != nullptr) {
+    set_has_string_param();
+    _impl_.parameter_choice_.string_param_.InitAllocated(value, GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:inference.ModelRepositoryParameter.string_param)
+}
+
+// bytes bytes_param = 4;
+inline bool ModelRepositoryParameter::has_bytes_param() const {
+  return parameter_choice_case() == kBytesParam;
+}
+inline void ModelRepositoryParameter::set_has_bytes_param() {
+  _impl_._oneof_case_[0] = kBytesParam;
+}
+inline void ModelRepositoryParameter::clear_bytes_param() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (parameter_choice_case() == kBytesParam) {
+    _impl_.parameter_choice_.bytes_param_.Destroy();
+    clear_has_parameter_choice();
+  }
+}
+inline const std::string& ModelRepositoryParameter::bytes_param() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:inference.ModelRepositoryParameter.bytes_param)
+  return _internal_bytes_param();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void ModelRepositoryParameter::set_bytes_param(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (parameter_choice_case() != kBytesParam) {
+    clear_parameter_choice();
+
+    set_has_bytes_param();
+    _impl_.parameter_choice_.bytes_param_.InitDefault();
+  }
+  _impl_.parameter_choice_.bytes_param_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:inference.ModelRepositoryParameter.bytes_param)
+}
+inline std::string* ModelRepositoryParameter::mutable_bytes_param() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_bytes_param();
+  // @@protoc_insertion_point(field_mutable:inference.ModelRepositoryParameter.bytes_param)
+  return _s;
+}
+inline const std::string& ModelRepositoryParameter::_internal_bytes_param() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  if (parameter_choice_case() != kBytesParam) {
+    return ::google::protobuf::internal::GetEmptyStringAlreadyInited();
+  }
+  return _impl_.parameter_choice_.bytes_param_.Get();
+}
+inline void ModelRepositoryParameter::_internal_set_bytes_param(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (parameter_choice_case() != kBytesParam) {
+    clear_parameter_choice();
+
+    set_has_bytes_param();
+    _impl_.parameter_choice_.bytes_param_.InitDefault();
+  }
+  _impl_.parameter_choice_.bytes_param_.Set(value, GetArena());
+}
+inline std::string* ModelRepositoryParameter::_internal_mutable_bytes_param() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (parameter_choice_case() != kBytesParam) {
+    clear_parameter_choice();
+
+    set_has_bytes_param();
+    _impl_.parameter_choice_.bytes_param_.InitDefault();
+  }
+  return _impl_.parameter_choice_.bytes_param_.Mutable( GetArena());
+}
+inline std::string* ModelRepositoryParameter::release_bytes_param() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:inference.ModelRepositoryParameter.bytes_param)
+  if (parameter_choice_case() != kBytesParam) {
+    return nullptr;
+  }
+  clear_has_parameter_choice();
+  return _impl_.parameter_choice_.bytes_param_.Release();
+}
+inline void ModelRepositoryParameter::set_allocated_bytes_param(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (has_parameter_choice()) {
+    clear_parameter_choice();
+  }
+  if (value != nullptr) {
+    set_has_bytes_param();
+    _impl_.parameter_choice_.bytes_param_.InitAllocated(value, GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:inference.ModelRepositoryParameter.bytes_param)
+}
+
+inline bool ModelRepositoryParameter::has_parameter_choice() const {
+  return parameter_choice_case() != PARAMETER_CHOICE_NOT_SET;
+}
+inline void ModelRepositoryParameter::clear_has_parameter_choice() {
+  _impl_._oneof_case_[0] = PARAMETER_CHOICE_NOT_SET;
+}
+inline ModelRepositoryParameter::ParameterChoiceCase ModelRepositoryParameter::parameter_choice_case() const {
+  return ModelRepositoryParameter::ParameterChoiceCase(_impl_._oneof_case_[0]);
+}
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// RepositoryModelLoadRequest
+
+// string repository_name = 1;
+inline void RepositoryModelLoadRequest::clear_repository_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.repository_name_.ClearToEmpty();
+}
+inline const std::string& RepositoryModelLoadRequest::repository_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:inference.RepositoryModelLoadRequest.repository_name)
+  return _internal_repository_name();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void RepositoryModelLoadRequest::set_repository_name(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.repository_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:inference.RepositoryModelLoadRequest.repository_name)
+}
+inline std::string* RepositoryModelLoadRequest::mutable_repository_name() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_repository_name();
+  // @@protoc_insertion_point(field_mutable:inference.RepositoryModelLoadRequest.repository_name)
+  return _s;
+}
+inline const std::string& RepositoryModelLoadRequest::_internal_repository_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.repository_name_.Get();
+}
+inline void RepositoryModelLoadRequest::_internal_set_repository_name(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.repository_name_.Set(value, GetArena());
+}
+inline std::string* RepositoryModelLoadRequest::_internal_mutable_repository_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.repository_name_.Mutable( GetArena());
+}
+inline std::string* RepositoryModelLoadRequest::release_repository_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:inference.RepositoryModelLoadRequest.repository_name)
+  return _impl_.repository_name_.Release();
+}
+inline void RepositoryModelLoadRequest::set_allocated_repository_name(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.repository_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.repository_name_.IsDefault()) {
+    _impl_.repository_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:inference.RepositoryModelLoadRequest.repository_name)
+}
+
+// string model_name = 2;
+inline void RepositoryModelLoadRequest::clear_model_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.model_name_.ClearToEmpty();
+}
+inline const std::string& RepositoryModelLoadRequest::model_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:inference.RepositoryModelLoadRequest.model_name)
+  return _internal_model_name();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void RepositoryModelLoadRequest::set_model_name(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.model_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:inference.RepositoryModelLoadRequest.model_name)
+}
+inline std::string* RepositoryModelLoadRequest::mutable_model_name() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_model_name();
+  // @@protoc_insertion_point(field_mutable:inference.RepositoryModelLoadRequest.model_name)
+  return _s;
+}
+inline const std::string& RepositoryModelLoadRequest::_internal_model_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.model_name_.Get();
+}
+inline void RepositoryModelLoadRequest::_internal_set_model_name(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.model_name_.Set(value, GetArena());
+}
+inline std::string* RepositoryModelLoadRequest::_internal_mutable_model_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.model_name_.Mutable( GetArena());
+}
+inline std::string* RepositoryModelLoadRequest::release_model_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:inference.RepositoryModelLoadRequest.model_name)
+  return _impl_.model_name_.Release();
+}
+inline void RepositoryModelLoadRequest::set_allocated_model_name(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.model_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.model_name_.IsDefault()) {
+    _impl_.model_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:inference.RepositoryModelLoadRequest.model_name)
+}
+
+// map<string, .inference.ModelRepositoryParameter> parameters = 3;
+inline int RepositoryModelLoadRequest::_internal_parameters_size() const {
+  return _internal_parameters().size();
+}
+inline int RepositoryModelLoadRequest::parameters_size() const {
+  return _internal_parameters_size();
+}
+inline void RepositoryModelLoadRequest::clear_parameters() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.parameters_.Clear();
+}
+inline const ::google::protobuf::Map<std::string, ::inference::ModelRepositoryParameter>& RepositoryModelLoadRequest::_internal_parameters() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.parameters_.GetMap();
+}
+inline const ::google::protobuf::Map<std::string, ::inference::ModelRepositoryParameter>& RepositoryModelLoadRequest::parameters() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_map:inference.RepositoryModelLoadRequest.parameters)
+  return _internal_parameters();
+}
+inline ::google::protobuf::Map<std::string, ::inference::ModelRepositoryParameter>* RepositoryModelLoadRequest::_internal_mutable_parameters() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.parameters_.MutableMap();
+}
+inline ::google::protobuf::Map<std::string, ::inference::ModelRepositoryParameter>* RepositoryModelLoadRequest::mutable_parameters() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_map:inference.RepositoryModelLoadRequest.parameters)
+  return _internal_mutable_parameters();
+}
+
+// -------------------------------------------------------------------
+
+// RepositoryModelLoadResponse
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// RepositoryModelUnloadRequest
+
+// string repository_name = 1;
+inline void RepositoryModelUnloadRequest::clear_repository_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.repository_name_.ClearToEmpty();
+}
+inline const std::string& RepositoryModelUnloadRequest::repository_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:inference.RepositoryModelUnloadRequest.repository_name)
+  return _internal_repository_name();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void RepositoryModelUnloadRequest::set_repository_name(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.repository_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:inference.RepositoryModelUnloadRequest.repository_name)
+}
+inline std::string* RepositoryModelUnloadRequest::mutable_repository_name() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_repository_name();
+  // @@protoc_insertion_point(field_mutable:inference.RepositoryModelUnloadRequest.repository_name)
+  return _s;
+}
+inline const std::string& RepositoryModelUnloadRequest::_internal_repository_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.repository_name_.Get();
+}
+inline void RepositoryModelUnloadRequest::_internal_set_repository_name(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.repository_name_.Set(value, GetArena());
+}
+inline std::string* RepositoryModelUnloadRequest::_internal_mutable_repository_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.repository_name_.Mutable( GetArena());
+}
+inline std::string* RepositoryModelUnloadRequest::release_repository_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:inference.RepositoryModelUnloadRequest.repository_name)
+  return _impl_.repository_name_.Release();
+}
+inline void RepositoryModelUnloadRequest::set_allocated_repository_name(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.repository_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.repository_name_.IsDefault()) {
+    _impl_.repository_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:inference.RepositoryModelUnloadRequest.repository_name)
+}
+
+// string model_name = 2;
+inline void RepositoryModelUnloadRequest::clear_model_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.model_name_.ClearToEmpty();
+}
+inline const std::string& RepositoryModelUnloadRequest::model_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:inference.RepositoryModelUnloadRequest.model_name)
+  return _internal_model_name();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void RepositoryModelUnloadRequest::set_model_name(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.model_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:inference.RepositoryModelUnloadRequest.model_name)
+}
+inline std::string* RepositoryModelUnloadRequest::mutable_model_name() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_model_name();
+  // @@protoc_insertion_point(field_mutable:inference.RepositoryModelUnloadRequest.model_name)
+  return _s;
+}
+inline const std::string& RepositoryModelUnloadRequest::_internal_model_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.model_name_.Get();
+}
+inline void RepositoryModelUnloadRequest::_internal_set_model_name(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.model_name_.Set(value, GetArena());
+}
+inline std::string* RepositoryModelUnloadRequest::_internal_mutable_model_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.model_name_.Mutable( GetArena());
+}
+inline std::string* RepositoryModelUnloadRequest::release_model_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:inference.RepositoryModelUnloadRequest.model_name)
+  return _impl_.model_name_.Release();
+}
+inline void RepositoryModelUnloadRequest::set_allocated_model_name(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.model_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.model_name_.IsDefault()) {
+    _impl_.model_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:inference.RepositoryModelUnloadRequest.model_name)
+}
+
+// map<string, .inference.ModelRepositoryParameter> parameters = 3;
+inline int RepositoryModelUnloadRequest::_internal_parameters_size() const {
+  return _internal_parameters().size();
+}
+inline int RepositoryModelUnloadRequest::parameters_size() const {
+  return _internal_parameters_size();
+}
+inline void RepositoryModelUnloadRequest::clear_parameters() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.parameters_.Clear();
+}
+inline const ::google::protobuf::Map<std::string, ::inference::ModelRepositoryParameter>& RepositoryModelUnloadRequest::_internal_parameters() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.parameters_.GetMap();
+}
+inline const ::google::protobuf::Map<std::string, ::inference::ModelRepositoryParameter>& RepositoryModelUnloadRequest::parameters() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_map:inference.RepositoryModelUnloadRequest.parameters)
+  return _internal_parameters();
+}
+inline ::google::protobuf::Map<std::string, ::inference::ModelRepositoryParameter>* RepositoryModelUnloadRequest::_internal_mutable_parameters() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.parameters_.MutableMap();
+}
+inline ::google::protobuf::Map<std::string, ::inference::ModelRepositoryParameter>* RepositoryModelUnloadRequest::mutable_parameters() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_map:inference.RepositoryModelUnloadRequest.parameters)
+  return _internal_mutable_parameters();
+}
+
+// -------------------------------------------------------------------
+
+// RepositoryModelUnloadResponse
 
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
