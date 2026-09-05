@@ -637,6 +637,39 @@ ModelConfig parseConfigPbtxt(const std::string& text) {
                     }
                 }
             }
+        } else if (field == "dynamic_batching") {
+            require("{", "dynamic_batching");
+            cfg.batching.enabled = true;
+            while (true) {
+                std::string f = lex.next();
+                if (f == "}") break;
+                if (f.empty()) throw PbtxtError("unexpected EOF in dynamic_batching{}");
+                if (f == "preferred_batch_size") {
+                    // Repeated field; accept both `[ 4, 8 ]` and repeated scalar
+                    // occurrences `preferred_batch_size: 4`.
+                    require(":", "dynamic_batching.preferred_batch_size");
+                    auto vals = parseDims(lex);
+                    cfg.batching.preferred_batch_size.insert(
+                        cfg.batching.preferred_batch_size.end(), vals.begin(), vals.end());
+                } else if (f == "max_queue_delay_microseconds") {
+                    require(":", "dynamic_batching.max_queue_delay_microseconds");
+                    cfg.batching.max_queue_delay_us = parseInteger(lex.next());
+                } else {
+                    // Skip unknown scalar/message fields (Triton also defines
+                    // priority_levels / default_priority_level, which InferLite
+                    // does not implement yet).
+                    std::string t = lex.next();
+                    if (t == "{") {
+                        int depth = 1;
+                        while (depth > 0) {
+                            std::string inner = lex.next();
+                            if (inner == "{") ++depth;
+                            else if (inner == "}") --depth;
+                            else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                        }
+                    }
+                }
+            }
         } else if (field == "max_inference_time_ms") {
             require(":", "max_inference_time_ms");
             cfg.max_inference_time_ms = parseInteger(lex.next());

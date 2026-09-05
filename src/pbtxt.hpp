@@ -106,6 +106,32 @@ struct GoldenTest {
     double epsilon = 0.0;  // 0 => bit-for-bit
 };
 
+// Triton-style dynamic batching policy, parsed from a `dynamic_batching {}`
+// block in config.pbtxt (Phase 7 / batching mode). Mirrors NVIDIA Triton's
+// ModelConfig.DynamicBatching message:
+//
+//   dynamic_batching {
+//     preferred_batch_size: [ 4, 8 ]
+//     max_queue_delay_microseconds: 100
+//   }
+//
+// When present (and max_batch_size > 0) the scheduler coalesces multiple
+// queued inference requests into a single backend execution whose batch
+// dimension is the sum of the requests' batch dimensions, up to
+// max_batch_size. preferred_batch_size gives batch sizes the scheduler tries
+// to reach before executing; max_queue_delay_us is how long the oldest request
+// waits for the batch to fill before the scheduler executes anyway.
+struct DynamicBatching {
+    bool enabled = false;
+    // Preferred batch sizes (samples) to form before dispatching. Empty means
+    // no preferred target: the scheduler fills up to max_batch_size within the
+    // delay window. Values must be in [1, max_batch_size].
+    std::vector<int64_t> preferred_batch_size;
+    // Maximum time (microseconds) a request waits for its batch to fill.
+    // 0 (default) dispatches immediately once the queue is drained.
+    int64_t max_queue_delay_us = 0;
+};
+
 // Parsed representation of one model's config.pbtxt.
 struct ModelConfig {
     std::string name;
@@ -114,6 +140,9 @@ struct ModelConfig {
     // >0 enables batching where request tensors carry a leading batch
     // dimension B (1 <= B <= max_batch_size) and config dims are per-request.
     int64_t max_batch_size = 0;
+    // Triton-style dynamic batching scheduler policy (config `dynamic_batching`
+    // block). Requires max_batch_size > 0. See DynamicBatching.
+    DynamicBatching batching;
     std::vector<TensorSpec> inputs;
     std::vector<TensorSpec> outputs;
     InstanceGroup instance_group;

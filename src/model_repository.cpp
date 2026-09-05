@@ -80,6 +80,50 @@ void validateConfig(const ModelConfig& cfg, const fs::path& model_dir) {
                               std::to_string(cfg.instance_group.count));
     }
 
+    // Phase 7 (batching mode): Triton dynamic-batching policy constraints.
+    // Mirror NVIDIA Triton's validation of ModelConfig.dynamic_batching:
+    //   - requires max_batch_size > 0 (batching must be enabled)
+    //   - preferred_batch_size entries must be in [1, max_batch_size]
+    //   - max_queue_delay_microseconds must be >= 0
+    // InferLite additionally restricts the batch scheduler to OpenVINO models
+    // running on a CPU (or AUTO) instance because cross-request batch merging
+    // needs a model that accepts a dynamic batch dimension at runtime
+    // (precompiled NPU/GPU blobs and TensorRT plans are shape-locked here).
+    if (cfg.batching.enabled) {
+        if (cfg.max_batch_size <= 0) {
+            throw RepositoryError("model '" + cfg.name +
+                                  "' enables 'dynamic_batching' but max_batch_size=" +
+                                  std::to_string(cfg.max_batch_size) +
+                                  "; Triton requires max_batch_size > 0 to batch requests");
+        }
+        if (cfg.backend != "openvino") {
+            throw RepositoryError("model '" + cfg.name +
+                                  "' enables 'dynamic_batching' with backend '" +
+                                  cfg.backend +
+                                  "'; only the 'openvino' backend supports dynamic batching");
+        }
+        const DeviceKind dk = cfg.instance_group.device_kind;
+        if (dk != DeviceKind::kCpu && dk != DeviceKind::kAuto) {
+            throw RepositoryError("model '" + cfg.name +
+                                  "' enables 'dynamic_batching' with instance kind '" +
+                                  cfg.instance_group.kind +
+                                  "'; only KIND_CPU / KIND_AUTO instances support it");
+        }
+        for (int64_t b : cfg.batching.preferred_batch_size) {
+            if (b <= 0 || b > cfg.max_batch_size) {
+                throw RepositoryError("model '" + cfg.name +
+                                      "' has preferred_batch_size=" + std::to_string(b) +
+                                      " outside [1, max_batch_size=" +
+                                      std::to_string(cfg.max_batch_size) + "]");
+            }
+        }
+        if (cfg.batching.max_queue_delay_us < 0) {
+            throw RepositoryError("model '" + cfg.name +
+                                  "' has negative max_queue_delay_microseconds=" +
+                                  std::to_string(cfg.batching.max_queue_delay_us));
+        }
+    }
+
     // Phase 4: validate the resolved device kind. For OpenVINO models the
     // accepted kinds are KIND_CPU / KIND_NPU / KIND_GPU_INTEL / KIND_AUTO.
     // NVIDIA GPU (KIND_GPU) is handled by a separate backend and not OpenVINO.

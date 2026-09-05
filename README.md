@@ -35,9 +35,11 @@ provided by the OpenVINO backend and selected through `instance_group.kind`
   parallel.
 - **Zero-copy pipelines** — data is passed by reference between adjacent steps
   on the same device.
-- **Deterministic, low-latency serving** — static graph, no request-combining
-  dynamic batching, no hot reloading, minimal scheduling overhead. Triton-style
-  batch-dimension shapes are supported via `max_batch_size` (see Features).
+- **Deterministic, low-latency serving** — static graph, no hot reloading,
+  minimal scheduling overhead. Batching mode follows NVIDIA Triton: models with
+  `max_batch_size > 0` accept a leading batch dimension, and an optional
+  `dynamic_batching {}` policy lets the scheduler combine concurrent requests
+  into one execution (see Features).
 - **Standard interface** — a compatible, synchronous subset of the reference
   server's request API plus health and JSON metrics.
 
@@ -112,6 +114,16 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
   a model whose IR accepts `[1, 4]` declares `dims: [4]` and clients send/receive
   shape `[1, 4]`. `tools/make_batched_model.py` generates such a model; see
   `scripts/test_batch.ps1`.
+- **Dynamic batching (request-combining)** — a Triton `dynamic_batching {}`
+  block in `config.pbtxt` enables the scheduler to coalesce queued concurrent
+  requests into a single backend execution (total batch `<= max_batch_size`),
+  slicing the merged output back per request. `preferred_batch_size` executes as
+  soon as a batch reaches a listed size; `max_queue_delay_microseconds` is how
+  long the oldest request waits for its batch to fill. Only `openvino` models on
+  `KIND_CPU`/`KIND_AUTO` instances support it, and the model IR must accept a
+  dynamic batch dimension. `tools/make_dynamic_batch_model.py` generates such a
+  model (`dynamic_batch_model`, `max_batch_size: 8`); see
+  `scripts/test_dynamic_batch.ps1`.
 
 - **TensorRT GPU backend** (opt-in) — deserializes approved `model.plan` engine
   files; each instance owns a CUDA stream; `execute()` enqueues on the stream
@@ -134,9 +146,6 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
 ### Not yet implemented
 
 OpenVINO multi-GPU, live model updates, a profiling tool, and gRPC streaming.
-Request-combining dynamic batching is on the roadmap (see **Planned**);
-Triton-style batch-dimension shapes via `max_batch_size` are already
-implemented (see Features).
 
 ### gRPC interface
 
@@ -152,10 +161,6 @@ See `docs/GRPC.md` for details and `scripts/build_grpc.ps1` /
 
 ### Planned
 
-- **Request-combining dynamic batching** — the scheduler collecting queued
-  concurrent requests and executing them as a single combined inference
-  (bounded by `max_batch_size`), then splitting outputs back per request. The
-  batch-dimension shape convention is already implemented.
 - **Live model updates** — reloading or hot-swapping models at runtime.
 - **Profiling tool** — latency and throughput profiling across devices.
 - **In-process API** — embed the engine as a shared library (Triton-style
@@ -206,6 +211,7 @@ scripts/
   gen_grpc*.ps1            # regenerate protobuf/gRPC C++ & Python stubs
   test_*.ps1               # HTTP / GPU / gRPC test suites
   test_batch.ps1           # Triton-style batching (max_batch_size) test
+  test_dynamic_batch.ps1   # dynamic batching (request-combining) test
   service.ps1              # Windows service install/start/stop/status/uninstall
   test_service.ps1         # Windows service + console regression test
 third_party/
@@ -216,6 +222,7 @@ tools/
   make_device_models.py    # generates CPU/NPU/GPU/AUTO device sample models
   make_multi_io_model.py   # generates models/multi_io_model (2-in/2-out array syntax)
   make_batched_model.py    # generates models/batched_model (Triton max_batch_size)
+  make_dynamic_batch_model.py # generates models/dynamic_batch_model (dynamic batching)
   make_manifest.py         # generates models/manifest.json with SHA-256 hashes
   examples/                # reference configs (kind: KIND_NPU / KIND_GPU_INTEL / KIND_AUTO)
   sample_plugin/           # example CPU plugin source (sample_plugin.dll)
@@ -401,6 +408,14 @@ string. The response contains `outputs` (base64 `data`) and a `trace_id`.
 prepended to the per-request config `dims`. With `max_batch_size: 1`, a model
 declaring `dims: [4]` is queried with `shape: [1, 4]`.
 
+When the model config also declares a Triton `dynamic_batching {}` block, the
+scheduler may combine several concurrently queued requests into one backend
+execution whose total batch is the sum of their leading batch dimensions
+(never exceeding `max_batch_size`). Each response still carries only the slice
+that belongs to its request, so callers are unaffected. `/v2/metrics` reports
+`batches_executed`, `batch_samples`, and `average_batch_size` per batched model;
+`/v2/models/<name>/config` reflects the `dynamic_batching` policy.
+
 ### Metrics
 ```
 GET /v2/metrics    -> requests counts, average latency, queue depth, config hash
@@ -464,10 +479,18 @@ The same operations are exposed over gRPC as `RepositoryIndex`,
 - `tools/make_batched_model.py` generates the `batched_model`
   (`max_batch_size: 1`) that exercises Triton-style batch-dimension shapes:
   config `dims: [4]` while clients send/receive `[1, 4]`.
+- `tools/make_dynamic_batch_model.py` generates the `dynamic_batch_model`
+  (`max_batch_size: 8` with a dynamic-batch IR and a Triton `dynamic_batching {}`
+  policy: `preferred_batch_size: [8]`, 150 ms queue delay).
 - `tools/make_manifest.py` generates `models\manifest.json` with SHA-256 hashes.
 - `test_batch.ps1` verifies Triton-style batching: valid `[1, 4]` inference
   returns `[3, 5, 7, 9]`, a shape missing the batch dim (`[4]`) and a batch
   exceeding `max_batch_size` (`[2, 4]`) are both rejected with `INVALID_INPUT`.
+- `test_dynamic_batch.ps1` verifies dynamic batching: a single full-batch
+  request, a `B > max_batch_size` rejection, and two concurrency cases where
+  the scheduler merges requests (8 × `[1,4]`, and 2 × `[4,4]`) into a single
+  backend execution (`batches_executed` +1, `batch_samples` +8) while each
+  response is the correct per-request slice.
 - `test_human_pose_estimation.py` runs the `human-pose-estimation-0001` model
   end-to-end (keypoint detection + skeleton/heatmap rendering) over **HTTP**
   by default; pass `--grpc` (with `--grpc-server 127.0.0.1:8101`) to run the

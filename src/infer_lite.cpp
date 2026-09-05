@@ -1487,6 +1487,17 @@ HttpResponse InferLite::handleConfig(const std::string& name) {
     obj.asObject()["name"] = json::Value(c.name);
     obj.asObject()["backend"] = json::Value(c.backend);
     obj.asObject()["max_batch_size"] = json::Value(c.max_batch_size);
+    if (c.batching.enabled) {
+        json::Value db = json::Value::Object();
+        json::Value prefs = json::Value(json::Value::Array());
+        for (int64_t p : c.batching.preferred_batch_size) {
+            prefs.asArray().push_back(json::Value(p));
+        }
+        db.asObject()["preferred_batch_size"] = std::move(prefs);
+        db.asObject()["max_queue_delay_microseconds"] =
+            json::Value(c.batching.max_queue_delay_us);
+        obj.asObject()["dynamic_batching"] = std::move(db);
+    }
     json::Value ig = json::Value::Object();
     ig.asObject()["count"] = json::Value(static_cast<int64_t>(c.instance_group.count));
     ig.asObject()["kind"] = json::Value(c.instance_group.kind);
@@ -1553,6 +1564,17 @@ HttpResponse InferLite::handleMetrics() {
             mm.asObject()["requests_timed_out"] = json::Value(static_cast<int64_t>(st.requests_timed_out.load()));
             mm.asObject()["average_latency_us"] = json::Value(m.scheduler->averageLatencyUs());
             mm.asObject()["queue_depth"] = json::Value(static_cast<int64_t>(m.scheduler->queueDepth()));
+            if (m.scheduler->batchingEnabled()) {
+                mm.asObject()["batching_enabled"] = json::Value(true);
+                mm.asObject()["max_batch_size"] = json::Value(m.config ? m.config->max_batch_size
+                                                                       : 0);
+                mm.asObject()["batches_executed"] =
+                    json::Value(static_cast<int64_t>(m.scheduler->batchesCompleted()));
+                mm.asObject()["batch_samples"] =
+                    json::Value(static_cast<int64_t>(m.scheduler->samplesCompleted()));
+                mm.asObject()["average_batch_size"] =
+                    json::Value(m.scheduler->averageBatchSize());
+            }
             if (m.device_label == "GPU") {
                 auto it = gpu_usage_bytes_.find(m.name);
                 mm.asObject()["gpu_memory_bytes"] = json::Value(static_cast<int64_t>(
