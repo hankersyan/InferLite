@@ -1,0 +1,25 @@
+name: "priority_batch_model"
+backend: "openvino"
+max_batch_size: 8
+input {
+  name: "input"
+  data_type: TYPE_FP32
+  dims: [ 4 ]
+}
+output {
+  name: "add"
+  data_type: TYPE_FP32
+  dims: [ 4 ]
+}
+instance_group {
+  count: 1
+  kind: KIND_CPU
+}
+dynamic_batching {
+  preferred_batch_size: [ 8 ]
+  max_queue_delay_microseconds: 150000
+  priority_levels: 3
+  default_priority_level: 2
+  preserve_ordering: true
+
+}

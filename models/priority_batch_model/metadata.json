@@ -1,0 +1,7 @@
+{
+  "model_id": "priority_batch_model",
+  "version": "1.0.0",
+  "intended_use": "Test Triton dynamic batching with priorities/ordering: y = 2x + 1; the scheduler merges concurrent requests into batches up to max_batch_size=8",
+  "training_dataset_id": "N/A",
+  "approval_status": "approved"
+}

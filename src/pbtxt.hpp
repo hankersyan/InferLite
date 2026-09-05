@@ -130,6 +130,18 @@ struct DynamicBatching {
     // Maximum time (microseconds) a request waits for its batch to fill.
     // 0 (default) dispatches immediately once the queue is drained.
     int64_t max_queue_delay_us = 0;
+    // Triton priority scheduling: the number of priority levels enabled for the
+    // model. Priority starts at 1 and 1 is the highest priority; requests at
+    // the same level are handled in the order they are received. 0 disables
+    // priority scheduling (a single FIFO queue).
+    int64_t priority_levels = 0;
+    // Priority level used for requests that don't carry a `priority` request
+    // parameter. Must be in [1, priority_levels] when priorities are enabled.
+    int64_t default_priority_level = 1;
+    // Triton preserve_ordering: when true the scheduler returns responses in
+    // the order the requests were received by the scheduler, even though
+    // execution may be reordered (for example by priority). Default false.
+    bool preserve_ordering = false;
 };
 
 // Parsed representation of one model's config.pbtxt.

@@ -31,10 +31,17 @@ through a wrong inference output, a hung request, or resource exhaustion. To
 earn that classification the runtime implements the following **safety
 mechanisms** (traceable to risk controls):
 
-- **Deterministic execution** — static model set, no runtime model loading, no
-  request‑combining batching (identical input + configuration yields identical
-  output); `max_batch_size` only adds a Triton‑style batch dimension to shapes,
-  so inference remains a deterministic 1:1 request→output mapping.
+- **Deterministic execution** — static model set, no runtime model loading.
+  The **default** scheduling mode executes every request independently:
+  identical input + configuration yields identical output, and
+  `max_batch_size` only adds a Triton‑style batch dimension to the wire shape
+  (e.g. `max_batch_size: 1` accepts exactly one sample per request), preserving
+  a deterministic 1:1 request→output mapping. Request‑combining batching
+  (`dynamic_batching {}`) is **opt-in per model and off by default**; for
+  regulated workloads the recommended posture is to leave it disabled or keep
+  `max_batch_size: 1`. When enabled, each member request of a merged batch is
+  still validated, timed, and audited individually, and batching never changes
+  a request's per-sample result.
 - **Model integrity** — approved-model manifest with SHA-256 verification; a
   tampered model file aborts startup (fail-fast), preventing a wrong-model
   scenario.

@@ -38,8 +38,20 @@ Scheduler::Scheduler(BackendPtr backend, std::shared_ptr<const ModelConfig> conf
                                                              : 0;
     if (config_) {
         preferred_batch_size_ = config_->batching.preferred_batch_size;
+        // Triton priority scheduling + response ordering (Phase 7).
+        priority_levels_ = config_->batching.priority_levels;
+        default_priority_level_ =
+            config_->batching.priority_levels > 0 ? config_->batching.default_priority_level : 1;
+        preserve_ordering_ = config_->batching.enabled && config_->batching.preserve_ordering;
     }
     std::sort(preferred_batch_size_.begin(), preferred_batch_size_.end());
+    priority_active_ = priority_levels_ > 0;
+    if (priority_active_) {
+        priority_served_.reserve(static_cast<size_t>(priority_levels_));
+        for (int64_t i = 0; i < priority_levels_; ++i) {
+            priority_served_.push_back(std::make_unique<std::atomic<uint64_t>>(0));
+        }
+    }
 
     worker_count_ = instance_count;
     // Spawn one worker thread per instance. For GPU instances the backend
@@ -91,7 +103,20 @@ std::shared_ptr<InferenceResult> Scheduler::submit(std::shared_ptr<InferenceRequ
                          std::to_string(max_queue_size_) + ")";
             return res;
         }
-        queue_.push_back(req);
+        // Phase 7: assign the arrival sequence (used for priority FIFO stability
+        // and preserve_ordering) and resolve the request priority. An explicit
+        // request priority is honored only when the model enables priority
+        // scheduling; otherwise every request shares priority 1.
+        req->seq = next_seq_++;
+        if (req->priority < 1) {
+            req->priority = priority_active_ ? default_priority_level_ : 1;
+        }
+        if (priority_active_) {
+            if (req->priority > priority_levels_) req->priority = priority_levels_;
+        } else {
+            req->priority = 1;
+        }
+        enqueueLocked(req);
     }
     // notify_all (rather than notify_one) so the worker that is mid-batch and
     // waiting for more requests to join also sees the arrival.
@@ -109,6 +134,11 @@ std::shared_ptr<InferenceResult> Scheduler::submit(std::shared_ptr<InferenceRequ
         req->done = true;
         req->cv.notify_all();
         stats_.requests_timed_out.fetch_add(1, std::memory_order_relaxed);
+        // With preserve_ordering this request is now resolved out of band (its
+        // error response is already on the way); release its place in the
+        // delivery order so later requests are not stalled behind it.
+        lock.unlock();
+        if (preserve_ordering_) orderedNoteSkipped(req->seq);
         return std::make_shared<InferenceResult>(req->result);
     }
     return std::make_shared<InferenceResult>(req->result);
@@ -288,6 +318,133 @@ bool Scheduler::atBatchTarget(int64_t samples) const {
     return isPreferredBatchSize(samples);
 }
 
+void Scheduler::enqueueLocked(const std::shared_ptr<InferenceRequest>& req) {
+    if (priority_active_ && priority_levels_ > 1) {
+        // Keep the queue sorted by (priority asc, arrival asc): every request
+        // with a strictly higher priority (smaller number) is enqueued ahead of
+        // lower-priority work; requests of equal priority keep FIFO order.
+        auto it = queue_.end();
+        while (it != queue_.begin()) {
+            auto prev = std::prev(it);
+            if ((*prev)->priority <= req->priority) break;
+            it = prev;
+        }
+        queue_.insert(it, req);
+    } else {
+        queue_.push_back(req);
+    }
+}
+
+std::vector<uint64_t> Scheduler::priorityServed() const {
+    std::vector<uint64_t> out;
+    if (priority_active_) {
+        out.reserve(priority_served_.size());
+        for (const auto& a : priority_served_) {
+            out.push_back(a->load(std::memory_order_relaxed));
+        }
+    }
+    return out;
+}
+
+// Fill one request's result, update statistics, and wake its submitter. When a
+// request already timed out (submit() delivered an error) the outcome is
+// discarded and nothing is double counted.
+void Scheduler::deliverBatchFinish(const BatchFinish& spec) {
+    std::lock_guard<std::mutex> lock(spec.req->m);
+    if (spec.req->done) return;  // response already returned by submit()
+
+    spec.req->result.inference_us = spec.us;
+    spec.req->result.ok = spec.ok;
+    spec.req->result.error_code = spec.ec;
+    spec.req->result.error = spec.err;
+    spec.req->result.outputs = spec.outputs;
+    spec.req->done = true;
+
+    if (spec.ok) {
+        stats_.requests_completed.fetch_add(1, std::memory_order_relaxed);
+        stats_.samples_completed.fetch_add(static_cast<uint64_t>(spec.req->batch),
+                                           std::memory_order_relaxed);
+        stats_.total_exec_us.fetch_add(static_cast<uint64_t>(spec.us),
+                                       std::memory_order_relaxed);
+        if (priority_active_ && spec.req->priority >= 1 &&
+            spec.req->priority <= priority_levels_) {
+            priority_served_[static_cast<size_t>(spec.req->priority - 1)]
+                ->fetch_add(1, std::memory_order_relaxed);
+        }
+    } else if (spec.ec == ErrorCode::kTimeout) {
+        stats_.requests_timed_out.fetch_add(1, std::memory_order_relaxed);
+    } else {
+        stats_.requests_failed.fetch_add(1, std::memory_order_relaxed);
+    }
+    spec.req->cv.notify_all();
+}
+
+void Scheduler::finishBatchMembers(std::vector<BatchFinish>& specs) {
+    if (!preserve_ordering_) {
+        // Fast path: delivery order does not matter.
+        for (auto& s : specs) deliverBatchFinish(s);
+        return;
+    }
+    // preserve_ordering: hand each outcome to the delivery gate, which runs the
+    // delivery tasks strictly in enqueue-sequence order.
+    for (auto& s : specs) {
+        const uint64_t seq = s.seq;
+        std::function<void()> task = [this, spec = std::move(s)]() mutable {
+            deliverBatchFinish(spec);
+        };
+        orderedNoteFinished(seq, std::move(task));
+    }
+}
+
+void Scheduler::orderedNoteFinished(uint64_t seq, std::function<void()> task) {
+    {
+        std::lock_guard<std::mutex> lk(order_mu_);
+        if (seq >= order_next_) {
+            order_pending_.emplace(seq, std::move(task));
+        } else {
+            // This sequence was already released out of band (e.g. the request
+            // timed out while executing); deliver immediately.
+            task();
+            return;
+        }
+    }
+    orderedRelease();
+}
+
+void Scheduler::orderedNoteSkipped(uint64_t seq) {
+    {
+        std::lock_guard<std::mutex> lk(order_mu_);
+        if (seq < order_next_) return;  // already passed
+        order_skipped_.insert(seq);
+    }
+    orderedRelease();
+}
+
+void Scheduler::orderedRelease() {
+    // Invoke delivery tasks while holding order_mu_ so responses are produced
+    // strictly in sequence. This is deadlock-free because orderedNote*() is
+    // never called while a request lock is held (deliverBatchFinish is the only
+    // place request locks are taken under order_mu_).
+    std::unique_lock<std::mutex> lk(order_mu_);
+    while (true) {
+        auto it = order_pending_.find(order_next_);
+        if (it != order_pending_.end()) {
+            auto task = std::move(it->second);
+            order_pending_.erase(it);
+            ++order_next_;
+            task();  // runs deliverBatchFinish (locks the request)
+            continue;
+        }
+        auto s = order_skipped_.find(order_next_);
+        if (s != order_skipped_.end()) {
+            order_skipped_.erase(s);
+            ++order_next_;
+            continue;
+        }
+        break;
+    }
+}
+
 // Execute one merged batch. `group` holds the requests popped by the assembler
 // (already counted against inflight_); `samples` is their total batch dimension
 // as accumulated. Requests whose submit() already timed out are dropped here.
@@ -301,10 +458,12 @@ void Scheduler::executeBatch(std::vector<std::shared_ptr<InferenceRequest>>& gro
     // executed, so their error result (set by submit) is final.
     std::vector<BatchMember> members;
     members.reserve(group.size());
+    std::vector<uint64_t> dropped_seqs;
     for (auto& req : group) {
         {
             std::lock_guard<std::mutex> lock(req->m);
             if (req->done) {
+                dropped_seqs.push_back(req->seq);
                 {
                     std::lock_guard<std::mutex> ilock(inflight_mu_);
                     --inflight_;
@@ -315,6 +474,11 @@ void Scheduler::executeBatch(std::vector<std::shared_ptr<InferenceRequest>>& gro
         int64_t b = req->batch < 1 ? 1 : req->batch;
         if (b > max_batch_size_) b = max_batch_size_;  // defensive clamp
         members.push_back(BatchMember{req, b});
+    }
+    // Preserve-ordering: a dropped request already got its (timeout) response,
+    // so vacate its place in the delivery order.
+    if (preserve_ordering_) {
+        for (uint64_t s : dropped_seqs) orderedNoteSkipped(s);
     }
     if (members.empty()) return;
 
@@ -331,36 +495,28 @@ void Scheduler::executeBatch(std::vector<std::shared_ptr<InferenceRequest>>& gro
         inflight_ -= slot_count;
     };
 
-    // Fail-everything helper: mark each surviving request failed (skip any that
-    // time out mid-execution, whose submit() already counted the timeout) and
-    // count only the requests this batch actually failed.
-    auto failAll = [&](ErrorCode code, const std::string& msg, bool as_timeout,
-                       int64_t us) {
-        uint64_t n = 0;
+    // Fail every member of the batch with the same error, then hand the batch
+    // outcomes to the (possibly ordered) delivery path.
+    auto failAll = [&](ErrorCode code, const std::string& msg, int64_t us) {
+        std::vector<BatchFinish> specs;
+        specs.reserve(members.size());
         for (auto& m : members) {
-            std::lock_guard<std::mutex> lock(m.req->m);
-            if (m.req->done) continue;
-            m.req->result.inference_us = us;
-            m.req->result.ok = false;
-            m.req->result.error_code = code;
-            m.req->result.error = msg;
-            m.req->done = true;
-            m.req->cv.notify_all();
-            ++n;
+            BatchFinish f;
+            f.seq = m.req->seq;
+            f.req = m.req;
+            f.ok = false;
+            f.ec = code;
+            f.err = msg;
+            f.us = us;
+            specs.push_back(std::move(f));
         }
-        if (n > 0) {
-            if (as_timeout) {
-                stats_.requests_timed_out.fetch_add(n, std::memory_order_relaxed);
-            } else {
-                stats_.requests_failed.fetch_add(n, std::memory_order_relaxed);
-            }
-        }
+        finishBatchMembers(specs);
     };
 
     // Phase 3 fault isolation (same gate as processOne).
     if (quarantined_.load(std::memory_order_acquire)) {
         failAll(ErrorCode::kInternalError, "model instance is quarantined after a CUDA fault",
-                false, 0);
+                0);
         releaseSlots();
         return;
     }
@@ -370,7 +526,7 @@ void Scheduler::executeBatch(std::vector<std::shared_ptr<InferenceRequest>>& gro
     // [total] ++ spec.dims and its payload is the row-major concatenation.
     std::vector<Tensor> merged;
     if (!config_) {
-        failAll(ErrorCode::kInternalError, "scheduler has no model config", false, 0);
+        failAll(ErrorCode::kInternalError, "scheduler has no model config", 0);
         releaseSlots();
         return;
     }
@@ -392,7 +548,7 @@ void Scheduler::executeBatch(std::vector<std::shared_ptr<InferenceRequest>>& gro
                 failAll(ErrorCode::kInternalError,
                         "batched request is missing input tensor '" + spec.name +
                             "' or carries no batch dimension",
-                        false, 0);
+                        0);
                 releaseSlots();
                 return;
             }
@@ -409,7 +565,7 @@ void Scheduler::executeBatch(std::vector<std::shared_ptr<InferenceRequest>>& gro
                     failAll(ErrorCode::kInternalError,
                             "batched requests carry inconsistent per-sample shapes for input '" +
                                 spec.name + "'",
-                            false, 0);
+                            0);
                     releaseSlots();
                     return;
                 }
@@ -417,7 +573,7 @@ void Scheduler::executeBatch(std::vector<std::shared_ptr<InferenceRequest>>& gro
             m.data.insert(m.data.end(), t->data.begin(), t->data.end());
         }
         if (first) {  // no member contributed (defensive; members is non-empty)
-            failAll(ErrorCode::kInternalError, "internal batching error", false, 0);
+            failAll(ErrorCode::kInternalError, "internal batching error", 0);
             releaseSlots();
             return;
         }
@@ -432,7 +588,7 @@ void Scheduler::executeBatch(std::vector<std::shared_ptr<InferenceRequest>>& gro
     try {
         bres = backend_->execute(merged);
     } catch (const std::exception& e) {
-        failAll(ErrorCode::kInternalError, e.what(), false, 0);
+        failAll(ErrorCode::kInternalError, e.what(), 0);
         releaseSlots();
         return;
     }
@@ -448,13 +604,13 @@ void Scheduler::executeBatch(std::vector<std::shared_ptr<InferenceRequest>>& gro
         failAll(ErrorCode::kTimeout,
                 "inference exceeded time limit (" + std::to_string(max_inference_time_ms_) +
                     "ms)",
-                true, us);
+                us);
         releaseSlots();
         return;
     }
 
     if (!bres.ok) {
-        failAll(bres.error_code, bres.error, false, us);
+        failAll(bres.error_code, bres.error, us);
         releaseSlots();
         return;
     }
@@ -502,28 +658,27 @@ void Scheduler::executeBatch(std::vector<std::shared_ptr<InferenceRequest>>& gro
                     "merged output cannot be sliced back into per-request batches "
                     "(the model IR must accept a dynamic batch dimension up to " +
                         std::to_string(max_batch_size_) + ")",
-                    false, us);
+                    us);
             releaseSlots();
             return;
         }
     }
 
-    // Success: complete every member with its slice.
+    // Success: every member gets its slice.
     stats_.batches_completed.fetch_add(1, std::memory_order_relaxed);
+    std::vector<BatchFinish> specs;
+    specs.reserve(members.size());
     for (size_t i = 0; i < members.size(); ++i) {
-        std::lock_guard<std::mutex> lock(members[i].req->m);
-        if (members[i].req->done) continue;  // client gave up during execution
-        members[i].req->result.inference_us = us;
-        members[i].req->result.ok = true;
-        members[i].req->result.error_code = ErrorCode::kNone;
-        members[i].req->result.outputs = std::move(per_req[i]);
-        members[i].req->done = true;
-        members[i].req->cv.notify_all();
-        stats_.requests_completed.fetch_add(1, std::memory_order_relaxed);
-        stats_.samples_completed.fetch_add(static_cast<uint64_t>(members[i].batch),
-                                           std::memory_order_relaxed);
-        stats_.total_exec_us.fetch_add(static_cast<uint64_t>(us), std::memory_order_relaxed);
+        BatchFinish f;
+        f.seq = members[i].req->seq;
+        f.req = members[i].req;
+        f.ok = true;
+        f.ec = ErrorCode::kNone;
+        f.us = us;
+        f.outputs = std::move(per_req[i]);
+        specs.push_back(std::move(f));
     }
+    finishBatchMembers(specs);
     releaseSlots();
 }
 

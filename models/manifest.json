@@ -2,8 +2,23 @@
   "version": "1",
   "models": [
     {
+      "model_id": "batched_model",
+      "version": "1",
+      "sha256": "95b1412d665a783364f116832e6d35e82e97556f73f5cfd19778aec285aa3f92"
+    },
+    {
+      "model_id": "dynamic_batch_model",
+      "version": "1",
+      "sha256": "ba6404ae267d522f6922d0bd3f91d792bcd8f5c32ae6a8138bd4ad23ed2b4ec0"
+    },
+    {
       "model_id": "ensemble_pipeline",
       "version": ""
+    },
+    {
+      "model_id": "human-pose-estimation-0001",
+      "version": "1",
+      "sha256": "2f3b1710b19da240c3280333539afec4f1a81a96b4f39b3b61f173cd3c6d015c"
     },
     {
       "model_id": "intel_auto_model",
@@ -39,6 +54,11 @@
       "model_id": "preprocess_plugin",
       "version": "",
       "plugin_sha256": "b9b555c0ffbb03afa4b8511c4d50f2d3fdc8e5991d7806af24ba9d14cc52a4b1"
+    },
+    {
+      "model_id": "priority_batch_model",
+      "version": "1",
+      "sha256": "401c925759d3c6840363f431e34b3016fc1b08009497819bd9f95d92d2a08431"
     },
     {
       "model_id": "sample_model",

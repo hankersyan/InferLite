@@ -1114,7 +1114,8 @@ void InferLite::pollRepositoryOnce() {
 
 InferenceOutcome InferLite::runInference(const std::string& model_name,
                                          std::vector<Tensor> inputs,
-                                         std::string trace_id) {
+                                         std::string trace_id,
+                                         int64_t priority) {
     InferenceOutcome outcome;
 
     // Locate the model and grab stable references under the lock; the entry may
@@ -1177,9 +1178,24 @@ InferenceOutcome InferLite::runInference(const std::string& model_name,
         input_shape_str = ss.str();
     }
 
+    // Dynamic batching priority (Triton request parameter "priority"). Only
+    // meaningful when the model enables priority scheduling; requests with an
+    // out-of-range explicit priority are rejected before scheduling.
+    if (cfg->batching.enabled && cfg->batching.priority_levels > 0) {
+        if (priority == 0) {
+            priority = cfg->batching.default_priority_level;
+        } else if (priority < 1 || priority > cfg->batching.priority_levels) {
+            return fail(ErrorCode::kInvalidInput,
+                        "priority " + std::to_string(priority) +
+                            " is outside [1, priority_levels=" +
+                            std::to_string(cfg->batching.priority_levels) + "]");
+        }
+    }
+
     auto ireq = std::make_shared<InferenceRequest>();
     ireq->inputs = std::move(inputs);
     ireq->timeout_ms = opts_.request_timeout_ms;
+    ireq->priority = priority;
 
     auto start = std::chrono::steady_clock::now();
     std::shared_ptr<InferenceResult> result;
@@ -1496,6 +1512,10 @@ HttpResponse InferLite::handleConfig(const std::string& name) {
         db.asObject()["preferred_batch_size"] = std::move(prefs);
         db.asObject()["max_queue_delay_microseconds"] =
             json::Value(c.batching.max_queue_delay_us);
+        db.asObject()["priority_levels"] = json::Value(c.batching.priority_levels);
+        db.asObject()["default_priority_level"] =
+            json::Value(c.batching.default_priority_level);
+        db.asObject()["preserve_ordering"] = json::Value(c.batching.preserve_ordering);
         obj.asObject()["dynamic_batching"] = std::move(db);
     }
     json::Value ig = json::Value::Object();
@@ -1574,6 +1594,14 @@ HttpResponse InferLite::handleMetrics() {
                     json::Value(static_cast<int64_t>(m.scheduler->samplesCompleted()));
                 mm.asObject()["average_batch_size"] =
                     json::Value(m.scheduler->averageBatchSize());
+                std::vector<uint64_t> prio = m.scheduler->priorityServed();
+                if (!prio.empty()) {
+                    json::Value arr = json::Value(json::Value::Array());
+                    for (uint64_t n : prio) {
+                        arr.asArray().push_back(json::Value(static_cast<int64_t>(n)));
+                    }
+                    mm.asObject()["priority_completed"] = std::move(arr);
+                }
             }
             if (m.device_label == "GPU") {
                 auto it = gpu_usage_bytes_.find(m.name);
@@ -1624,6 +1652,22 @@ HttpResponse InferLite::handleInfer(const HttpRequest& req, const std::string& m
         doc = json::parse(req.body);
     } catch (const std::exception& e) {
         return makeError(ErrorCode::kInvalidInput, std::string("invalid JSON: ") + e.what());
+    }
+
+    // Optional Triton-style request parameter "priority" (dynamic batching).
+    // Accepted as the plain JSON form {"parameters": {"priority": 3}}.
+    int64_t req_priority = 0;
+    if (const json::Value* params = doc.find("parameters")) {
+        if (!params->isObject()) {
+            return makeError(ErrorCode::kInvalidInput, "'parameters' must be an object");
+        }
+        if (const json::Value* p = params->find("priority")) {
+            if (!p->isNumber()) {
+                return makeError(ErrorCode::kInvalidInput,
+                                 "parameter 'priority' must be an integer");
+            }
+            req_priority = static_cast<int64_t>(p->asDouble());
+        }
     }
 
     const json::Value* inputs_node = doc.find("inputs");
@@ -1687,7 +1731,7 @@ HttpResponse InferLite::handleInfer(const HttpRequest& req, const std::string& m
 
     // Shared inference core: validation + scheduling + audit + outputs.
     InferenceOutcome outcome = runInference(model_name, std::move(input_tensors),
-                                            generateTraceId());
+                                            generateTraceId(), req_priority);
     if (!outcome.ok) {
         return makeError(outcome.error_code, outcome.error);
     }

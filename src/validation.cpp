@@ -6,6 +6,21 @@
 
 namespace inferlite {
 
+namespace {
+// "[1,4,3]" for diagnostics (declared in the anonymous namespace so it does not
+// leak into the public validation API).
+std::string shapeToString(const std::vector<int64_t>& shape) {
+    std::ostringstream ss;
+    ss << '[';
+    for (size_t i = 0; i < shape.size(); ++i) {
+        if (i) ss << ',';
+        ss << shape[i];
+    }
+    ss << ']';
+    return ss.str();
+}
+}  // namespace
+
 bool dimsConform(const std::vector<int64_t>& spec_dims, const std::vector<int64_t>& actual) {
     if (spec_dims.size() != actual.size()) return false;
     for (size_t i = 0; i < spec_dims.size(); ++i) {
@@ -75,6 +90,18 @@ bool validateInputTensor(const TensorSpec& spec, const Tensor& input, size_t max
             ss << "]";
         }
         err_msg = ss.str();
+        return false;
+    }
+    // Deterministic input validation: the payload byte length must exactly match
+    // the declared shape and data type (ISO 14971 risk control). A short or
+    // oversized payload must never reach the backend -- a truncated buffer could
+    // otherwise be read out of bounds inside the runtime.
+    const size_t expected_bytes = tensorByteSize(input.shape, input.type);
+    if (input.data.size() != expected_bytes) {
+        err_msg = "input '" + input.name + "' data length " +
+                  std::to_string(input.data.size()) + " bytes does not match shape [" +
+                  shapeToString(input.shape) + "] " + dataTypeToString(input.type) +
+                  " (expected " + std::to_string(expected_bytes) + " bytes)";
         return false;
     }
     // Enforce deterministic input-size limit.
@@ -234,6 +261,16 @@ bool validateOutput(const TensorSpec& spec, const OutputValidation& rules, const
             err_msg = ss.str();
             return false;
         }
+    }
+    // Deterministic output validation: the produced byte length must exactly
+    // match the declared shape/type before any element is inspected or returned.
+    if (output.data.size() != tensorByteSize(output.shape, output.type)) {
+        err_msg = "output '" + output.name + "' data length " +
+                  std::to_string(output.data.size()) + " bytes does not match shape [" +
+                  shapeToString(output.shape) + "] " + dataTypeToString(output.type) +
+                  " (expected " +
+                  std::to_string(tensorByteSize(output.shape, output.type)) + " bytes)";
+        return false;
     }
     // Scan every element for NaN / Inf and range.
     size_t count = static_cast<size_t>(shapeElementCount(output.shape));

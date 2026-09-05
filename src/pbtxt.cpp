@@ -654,10 +654,28 @@ ModelConfig parseConfigPbtxt(const std::string& text) {
                 } else if (f == "max_queue_delay_microseconds") {
                     require(":", "dynamic_batching.max_queue_delay_microseconds");
                     cfg.batching.max_queue_delay_us = parseInteger(lex.next());
+                } else if (f == "priority_levels") {
+                    require(":", "dynamic_batching.priority_levels");
+                    cfg.batching.priority_levels = parseInteger(lex.next());
+                } else if (f == "default_priority_level") {
+                    require(":", "dynamic_batching.default_priority_level");
+                    cfg.batching.default_priority_level = parseInteger(lex.next());
+                } else if (f == "preserve_ordering") {
+                    require(":", "dynamic_batching.preserve_ordering");
+                    // proto-text booleans: accept true/false and 1/0.
+                    std::string bt = lex.next();
+                    if (bt == "true") {
+                        cfg.batching.preserve_ordering = true;
+                    } else if (bt == "false") {
+                        cfg.batching.preserve_ordering = false;
+                    } else {
+                        cfg.batching.preserve_ordering = parseInteger(bt) != 0;
+                    }
                 } else {
                     // Skip unknown scalar/message fields (Triton also defines
-                    // priority_levels / default_priority_level, which InferLite
-                    // does not implement yet).
+                    // queue policies default_queue_policy /
+                    // priority_queue_policy, which InferLite does not implement
+                    // yet).
                     std::string t = lex.next();
                     if (t == "{") {
                         int depth = 1;

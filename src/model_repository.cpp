@@ -122,6 +122,30 @@ void validateConfig(const ModelConfig& cfg, const fs::path& model_dir) {
                                   "' has negative max_queue_delay_microseconds=" +
                                   std::to_string(cfg.batching.max_queue_delay_us));
         }
+        // Priority scheduling (mirrors Triton): priority levels start at 1 with
+        // 1 the highest priority; default_priority_level must be in
+        // [1, priority_levels] when priorities are enabled.
+        if (cfg.batching.priority_levels < 0) {
+            throw RepositoryError("model '" + cfg.name + "' has negative priority_levels=" +
+                                  std::to_string(cfg.batching.priority_levels));
+        }
+        if (cfg.batching.priority_levels > 0) {
+            if (cfg.batching.default_priority_level < 1 ||
+                cfg.batching.default_priority_level > cfg.batching.priority_levels) {
+                throw RepositoryError("model '" + cfg.name +
+                                      "' has default_priority_level=" +
+                                      std::to_string(cfg.batching.default_priority_level) +
+                                      " outside [1, priority_levels=" +
+                                      std::to_string(cfg.batching.priority_levels) + "]");
+            }
+        } else if (cfg.batching.default_priority_level > 1) {
+            // A default without any priority level is only meaningful when
+            // priority scheduling is configured.
+            throw RepositoryError("model '" + cfg.name +
+                                  "' sets default_priority_level=" +
+                                  std::to_string(cfg.batching.default_priority_level) +
+                                  " but priority_levels is not > 0");
+        }
     }
 
     // Phase 4: validate the resolved device kind. For OpenVINO models the

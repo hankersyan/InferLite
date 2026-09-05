@@ -15,14 +15,26 @@
 // size is reached, the queue can contribute no more fitting requests, or the
 // oldest request in the batch has waited max_queue_delay_microseconds.
 // Outputs of the merged execution are sliced back to each request.
+//
+// Two additional Triton dynamic-batching policies are honored:
+//   * priority_levels / default_priority_level - requests are scheduled by
+//     priority (1 is highest); requests at the same level keep arrival order.
+//     Requests may carry an explicit priority (see InferLite::runInference).
+//   * preserve_ordering - responses are returned in the order the requests
+//     arrived at the scheduler, even when execution reorders them (e.g. a
+//     higher-priority request may execute first but its response still waits
+//     for every earlier request to complete first).
 #pragma once
 
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <deque>
+#include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <thread>
 #include <vector>
 
@@ -44,6 +56,21 @@ struct InferenceResult {
     std::string error;
     std::vector<Tensor> outputs;
     int64_t inference_us = 0;
+};
+
+struct InferenceRequest;
+
+// Outcome of one request within a finished merged batch, queued for delivery.
+// Delivery is immediate unless the model enables preserve_ordering, in which
+// case it happens strictly in `seq` order.
+struct BatchFinish {
+    uint64_t seq = 0;
+    std::shared_ptr<InferenceRequest> req;
+    bool ok = false;
+    ErrorCode ec = ErrorCode::kNone;
+    std::string err;
+    std::vector<Tensor> outputs;
+    int64_t us = 0;
 };
 
 struct SchedulerStats {
@@ -76,6 +103,13 @@ struct InferenceRequest {
     // Time the request entered the scheduler queue. The dynamic-batch delay
     // window is measured from here (the oldest request of a batch).
     std::chrono::steady_clock::time_point enqueued_at{};
+    // Batching mode (priority scheduling): explicit request priority, or 0 when
+    // the caller did not provide one (the scheduler substitutes the model's
+    // default_priority_level). Lower values are higher priority; 1 is highest.
+    int64_t priority = 0;
+    // Scheduler-assigned monotonically increasing enqueue sequence. Used as the
+    // arrival order for priority FIFO stability and for preserve_ordering.
+    uint64_t seq = 0;
 
     // Completion channel.
     std::mutex m;
@@ -134,6 +168,11 @@ public:
         return static_cast<double>(samplesCompleted()) / static_cast<double>(n);
     }
 
+    // Priority scheduling: number of successfully completed requests per
+    // priority level (index 0 == priority 1). Empty when priority scheduling
+    // is not enabled for this model.
+    std::vector<uint64_t> priorityServed() const;
+
 private:
     void workerLoop(size_t idx);
     // One worker iteration. Returns false when the worker must exit (shutdown
@@ -152,6 +191,20 @@ private:
     // Whether the batch is "full enough" to dispatch: a preferred size was
     // reached, or (no preferred sizes) the model's max_batch_size was reached.
     bool atBatchTarget(int64_t samples) const;
+    // Priority-aware queue insertion; queue_mu_ must be held by the caller.
+    void enqueueLocked(const std::shared_ptr<InferenceRequest>& req);
+
+    // Deliver one batch outcome to its request (fills result, stats, notify).
+    void deliverBatchFinish(const BatchFinish& spec);
+    // Complete a finished batch; honors preserve_ordering when enabled.
+    void finishBatchMembers(std::vector<BatchFinish>& specs);
+    // preserve_ordering delivery gate: a request may only be delivered (marked
+    // done) once every request that arrived earlier has been delivered.
+    // `task` performs the delivery (deliverBatchFinish); it is invoked strictly
+    // in enqueue-sequence order. Never call with a request lock held.
+    void orderedNoteFinished(uint64_t seq, std::function<void()> task);
+    void orderedNoteSkipped(uint64_t seq);
+    void orderedRelease();
 
     BackendPtr backend_;
     std::shared_ptr<const ModelConfig> config_;
@@ -167,6 +220,23 @@ private:
     bool batch_mode_ = false;         // dynamic_batching {} policy present
     int64_t batch_delay_us_ = 0;      // max_queue_delay_microseconds
     std::vector<int64_t> preferred_batch_size_;  // sorted ascending
+    // Triton priority scheduling (dynamic_batching.priority_levels).
+    bool priority_active_ = false;
+    int64_t priority_levels_ = 0;
+    int64_t default_priority_level_ = 1;
+    // Successful completions per priority level (index 0 == priority 1).
+    // unique_ptr keeps the (non-copyable) atomics stable in the container.
+    std::vector<std::unique_ptr<std::atomic<uint64_t>>> priority_served_;
+    // Triton preserve_ordering: deliver responses in enqueue order.
+    bool preserve_ordering_ = false;
+    // Monotonic enqueue sequence; guarded by queue_mu_.
+    uint64_t next_seq_ = 1;
+
+    // preserve_ordering delivery gate.
+    mutable std::mutex order_mu_;
+    uint64_t order_next_ = 1;                 // next seq allowed to be delivered
+    std::map<uint64_t, std::function<void()>> order_pending_;   // finished, awaiting delivery
+    std::set<uint64_t> order_skipped_;        // seqs resolved out-of-band (timeouts/drops)
 
     mutable std::mutex queue_mu_;
     std::condition_variable queue_cv_;

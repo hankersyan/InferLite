@@ -184,7 +184,8 @@ public:
     // audit entry (generate with InferLite::newTraceId() if unset).
     InferenceOutcome runInference(const std::string& model_name,
                                   std::vector<Tensor> inputs,
-                                  std::string trace_id);
+                                  std::string trace_id,
+                                  int64_t priority = 0);
 
     // Whether the model with `name` exists and is currently ready to serve.
     bool modelExists(const std::string& name) const;

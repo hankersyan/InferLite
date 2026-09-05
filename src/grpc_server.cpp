@@ -1,6 +1,7 @@
 // grpc_server.cpp - KServe / Triton v2-compatible gRPC interface.
 #include "grpc_server.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
@@ -369,9 +370,28 @@ int GrpcServer::port() const {
         inputs.push_back(std::move(t));
     }
 
+    // Triton request parameter "priority" (dynamic batching). This protocol
+    // carries request parameters as strings, so a numeric priority is given as
+    // e.g. "priority": "2".
+    int64_t req_priority = 0;
+    for (const auto& kv : request->parameters()) {
+        if (kv.first != "priority") continue;  // unknown parameters are ignored
+        try {
+            size_t idx = 0;
+            req_priority = std::stoll(kv.second, &idx, 10);
+            if (idx != kv.second.size()) {
+                return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
+                                      "parameter 'priority' must be an integer");
+            }
+        } catch (...) {
+            return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
+                                  "parameter 'priority' must be an integer");
+        }
+    }
+
     // Shared core: validation + scheduling + audit + outputs.
     InferenceOutcome outcome =
-        owner_->runInference(model_name, std::move(inputs), request->id());
+        owner_->runInference(model_name, std::move(inputs), request->id(), req_priority);
 
     if (!outcome.ok) {
         return ::grpc::Status(errorCodeToGrpc(outcome.error_code), outcome.error);
