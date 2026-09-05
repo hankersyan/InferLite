@@ -58,6 +58,40 @@ struct InstanceGroup {
     DeviceKind device_kind = DeviceKind::kCpu;
 };
 
+// Triton `version_policy` control, parsed from the optional top-level block in
+// config.pbtxt (Phase 0.4 / version policies). Mirrors NVIDIA Triton's
+// ModelConfig.VersionPolicy oneof:
+//
+//   version_policy { latest   { num_versions: N } }   // N most recent (default N=1)
+//   version_policy { specific { versions: [ a, b ] } } // the listed versions
+//   version_policy { all {} }                          // every version present
+//
+// Triton's default policy when the block is absent is `latest` with
+// num_versions=1, so an absent block and `latest { num_versions: 1 }` behave
+// identically. InferLite deviation (single instance per model name): the policy
+// selects the one version directory that is loaded (see
+// model_repository::resolveVersionDir) rather than keeping several versions
+// ready simultaneously as Triton does.
+enum class VersionPolicyKind : int {
+    kLatest,    // load the most recent version directory
+    kSpecific,  // load one of the explicitly listed versions
+    kAll,       // treat every available version as eligible
+    kInvalid,
+};
+
+struct VersionPolicy {
+    VersionPolicyKind kind = VersionPolicyKind::kLatest;
+    // `latest`: how many of the most recent versions are eligible. InferLite
+    // loads only the newest eligible version, so values > 1 behave like 1
+    // (documented deviation from Triton, which would keep N versions ready).
+    int64_t num_versions = 1;
+    // `specific`: the explicit versions to consider (positive, unique).
+    std::vector<int64_t> versions;
+    // True when a `version_policy {}` block appeared in config.pbtxt. Used to
+    // distinguish an explicit `latest` from Triton's implicit default.
+    bool configured = false;
+};
+
 // One step of an ensemble (backend: "ensemble").
 struct EnsembleStep {
     std::string model_name;                 // reference to another model/plugin/ensemble
@@ -249,6 +283,11 @@ struct ModelConfig {
     std::vector<TensorSpec> inputs;
     std::vector<TensorSpec> outputs;
     InstanceGroup instance_group;
+
+    // Triton `version_policy` (specific | latest | all) controlling which model
+    // version directory is loaded. Absent => latest { num_versions: 1 }, i.e.
+    // the highest numeric version directory (the historical default).
+    VersionPolicy version_policy;
 
     // --- Phase 2 additions ---
     // Plugin backend: shared library name (e.g. "libpreprocess_plugin.so").

@@ -56,6 +56,113 @@ bool highestVersionDir(const fs::path& model_dir, fs::path& out, int64_t& versio
     return found;
 }
 
+// All numeric version subdirectories of a model, newest first. Ignores
+// non-numeric directory names.
+std::vector<std::pair<int64_t, fs::path>> numericVersionDirs(const fs::path& model_dir) {
+    std::vector<std::pair<int64_t, fs::path>> out;
+    std::error_code ec;
+    for (const auto& entry : fs::directory_iterator(model_dir, ec)) {
+        if (ec) break;
+        if (!entry.is_directory()) continue;
+        const std::string name = entry.path().filename().string();
+        if (!isAllDigits(name)) continue;
+        out.emplace_back(std::stoll(name), entry.path());
+    }
+    std::sort(out.begin(), out.end(),
+              [](const std::pair<int64_t, fs::path>& a,
+                 const std::pair<int64_t, fs::path>& b) { return a.first > b.first; });
+    return out;
+}
+
+// Resolve the single version directory a model loads, honoring the model's
+// Triton `version_policy` (see pbtxt.hpp). InferLite serves one version per
+// model name at a time (documented deviation from Triton, which can keep
+// several versions ready):
+//   latest / all (and the implicit default) -> the highest numeric version
+//     present. For `latest`, Triton's num_versions > 1 would keep N versions
+//     ready; only the newest eligible one is loaded here.
+//   specific -> the highest listed version that exists on disk. When none of
+//     the listed versions is present, false is returned so loading fails fast
+//     and a stale pin is never silently ignored (the operator must update the
+//     config or the repository).
+// Returns false when no eligible version directory exists.
+bool resolveVersionDir(const ModelConfig& cfg, const fs::path& model_dir, fs::path& out,
+                       int64_t& version) {
+    const auto dirs = numericVersionDirs(model_dir);
+    const VersionPolicy& vp = cfg.version_policy;
+    if (vp.kind == VersionPolicyKind::kSpecific) {
+        for (const auto& dv : dirs) {
+            if (std::find(vp.versions.begin(), vp.versions.end(), dv.first) !=
+                vp.versions.end()) {
+                out = dv.second;
+                version = dv.first;
+                return true;
+            }
+        }
+        return false;
+    }
+    // latest / all (or an absent block): the highest numeric version.
+    if (dirs.empty()) return false;
+    out = dirs.front().second;
+    version = dirs.front().first;
+    return true;
+}
+
+// Comma-joined decimal list helper for diagnostics.
+std::string joinNumbers(const std::vector<int64_t>& v) {
+    std::string s;
+    for (size_t i = 0; i < v.size(); ++i) {
+        if (i) s += ", ";
+        s += std::to_string(v[i]);
+    }
+    return s;
+}
+
+// Validate the Triton version_policy block of a parsed config: syntax and
+// Triton constraints, independent of which versions exist on disk (existence is
+// checked against the resolved directory below). Throws RepositoryError on any
+// violation (fail-fast startup).
+void validateVersionPolicy(const ModelConfig& cfg) {
+    const VersionPolicy& vp = cfg.version_policy;
+    if (!vp.configured) return;  // implicit Triton default: latest { num_versions: 1 }
+    switch (vp.kind) {
+        case VersionPolicyKind::kLatest:
+            if (vp.num_versions < 1) {
+                throw RepositoryError("model '" + cfg.name +
+                                      "' has version_policy.latest num_versions=" +
+                                      std::to_string(vp.num_versions) +
+                                      "; Triton requires num_versions >= 1");
+            }
+            break;
+        case VersionPolicyKind::kSpecific: {
+            if (vp.versions.empty()) {
+                throw RepositoryError("model '" + cfg.name +
+                                      "' has version_policy.specific without any 'versions'");
+            }
+            std::set<int64_t> seen;
+            for (int64_t v : vp.versions) {
+                if (v <= 0) {
+                    throw RepositoryError("model '" + cfg.name +
+                                          "' has version_policy.specific version " +
+                                          std::to_string(v) +
+                                          "; versions must be positive integers");
+                }
+                if (!seen.insert(v).second) {
+                    throw RepositoryError("model '" + cfg.name +
+                                          "' lists version " + std::to_string(v) +
+                                          " more than once in version_policy.specific");
+                }
+            }
+            break;
+        }
+        case VersionPolicyKind::kAll:
+            break;
+        default:
+            throw RepositoryError("model '" + cfg.name +
+                                  "' has an invalid version_policy (internal error)");
+    }
+}
+
 // Validate a config. Throws RepositoryError on any violation (fail-fast
 // startup). Supports openvino, tensorrt, plugin, and ensemble backends.
 // OpenVINO/plugins/ensembles are CPU-only; TensorRT uses KIND_GPU instances.
@@ -66,6 +173,10 @@ void validateConfig(const ModelConfig& cfg, const fs::path& model_dir) {
                               cfg.backend + "' (only 'openvino', 'tensorrt', 'plugin', "
                               "'ensemble' are supported)");
     }
+
+    // Triton version_policy constraints apply to every backend (even
+    // plugin/ensemble configs, whose version directories are not artifacts).
+    validateVersionPolicy(cfg);
     // max_batch_size follows Triton's convention: 0 disables batching; >0
     // enables Triton-style batching where request tensors carry a leading batch
     // dimension (1 <= B <= max_batch_size) and config dims are per-request.
@@ -385,14 +496,30 @@ void validateConfig(const ModelConfig& cfg, const fs::path& model_dir) {
         return;
     }
 
-    // OpenVINO backend: the version directory must contain the model artifacts
-    // required for the configured device. CPU/AUTO need model.xml (AUTO may use
-    // a blob); NPU needs model.npu_blob; Intel GPU needs model.gpu_blob.
-    // TensorRT backend: the version directory must contain model.plan.
+    // OpenVINO backend: the version directory selected by version_policy must
+    // contain the model artifacts required for the configured device. CPU/AUTO
+    // need model.xml (AUTO may use a blob); NPU needs model.npu_blob; Intel GPU
+    // needs model.gpu_blob. TensorRT backend: the selected version directory
+    // must contain model.plan.
     fs::path version_dir;
     int64_t version = -1;
-    if (!highestVersionDir(model_dir, version_dir, version)) {
-        throw RepositoryError("model '" + cfg.name + "' has no numeric version directory");
+    if (!resolveVersionDir(cfg, model_dir, version_dir, version)) {
+        std::string avail;
+        for (const auto& dv : numericVersionDirs(model_dir)) {
+            if (!avail.empty()) avail += ", ";
+            avail += std::to_string(dv.first);
+        }
+        if (cfg.version_policy.configured &&
+            cfg.version_policy.kind == VersionPolicyKind::kSpecific) {
+            throw RepositoryError("model '" + cfg.name +
+                                  "' version_policy.specific requests versions [" +
+                                  joinNumbers(cfg.version_policy.versions) +
+                                  "] but none is present in the repository" +
+                                  (avail.empty() ? " (no numeric version directory)"
+                                                 : " (available versions: " + avail + ")"));
+        }
+        throw RepositoryError("model '" + cfg.name + "' has no numeric version directory" +
+                              (avail.empty() ? "" : " (available versions: " + avail + ")"));
     }
     if (cfg.backend == "tensorrt") {
         if (!fs::exists(version_dir / "model.plan")) {
@@ -458,9 +585,20 @@ LoadedModel loadModelConfig(const std::string& root, const std::string& model_na
 
     validateConfig(cfg, model_dir);
 
+    // Version selection honors the model's version_policy (specific pins an
+    // exact version; latest/all use the highest numeric version). Plugin and
+    // ensemble configs have no per-version artifacts, so they keep the
+    // historical "highest numeric directory" choice for reporting; validateConfig
+    // already threw above for an openvino/tensorrt model with no eligible
+    // version directory, so this is only a defensive error.
     fs::path version_dir;
     int64_t version = -1;
-    highestVersionDir(model_dir, version_dir, version);
+    if (cfg.backend == "plugin" || cfg.backend == "ensemble") {
+        highestVersionDir(model_dir, version_dir, version);
+    } else if (!resolveVersionDir(cfg, model_dir, version_dir, version)) {
+        throw RepositoryError("model '" + model_name +
+                              "' has no version directory matching its version_policy");
+    }
 
     // Load optional metadata.json (FDA model metadata) if present.
     fs::path meta_file = model_dir / "metadata.json";

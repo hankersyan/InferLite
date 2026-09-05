@@ -41,6 +41,25 @@ namespace {
     }
 }
 
+// Parse a Triton model-version string carried by a gRPC request. An empty
+// string means "no version requested" and yields -1 (the server then serves the
+// version selected by the model's version_policy (the loaded one). Returns
+// false when the value is present but is not a positive integer.
+bool parseRequestedVersion(const std::string& s, int64_t& version) {
+    version = -1;
+    if (s.empty()) return true;
+    size_t idx = 0;
+    long long v = 0;
+    try {
+        v = std::stoll(s, &idx);
+    } catch (...) {
+        idx = std::string::npos;
+    }
+    if (idx != s.size() || v <= 0) return false;
+    version = static_cast<int64_t>(v);
+    return true;
+}
+
 // Convert the typed `contents` of a KServe InferInputTensor into a raw
 // little-endian byte payload for the given DataType. Returns false and sets
 // `err` if the contents are missing or inconsistent with the datatype.
@@ -259,19 +278,31 @@ int GrpcServer::port() const {
                                       const inference::ModelReadyRequest* request,
                                       inference::ModelReadyResponse* response) {
     const std::string& name = request->name();
-    bool found = false;
-    bool ready = false;
+    int64_t requested_version = -1;
+    if (!parseRequestedVersion(request->version(), requested_version)) {
+        return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
+                              "model version must be a positive integer, got '" +
+                                  request->version() + "'");
+    }
+    // A version-specific readiness query is answered for the loaded version
+    // only (InferLite serves one version per model name). Requesting any other
+    // version reports ready=false, like Triton does for a version that exists
+    // in the repository but is not loaded.
+    bool name_known = false;
+    bool version_ready = false;
     for (const auto& mi : owner_->modelInfo()) {
         if (mi.name != name) continue;
-        found = true;
-        ready = mi.ready;
-        break;
+        name_known = true;
+        if (requested_version < 0 || mi.version == requested_version) {
+            version_ready = mi.ready;
+            break;
+        }
     }
-    if (!found) {
+    if (!name_known) {
         return ::grpc::Status(::grpc::StatusCode::NOT_FOUND,
                               "model '" + name + "' not found in the repository");
     }
-    response->set_ready(ready);
+    response->set_ready(version_ready);
     return ::grpc::Status::OK;
 }
 
@@ -279,8 +310,21 @@ int GrpcServer::port() const {
                                          const inference::ModelMetadataRequest* request,
                                          inference::ModelMetadataResponse* response) {
     const std::string& name = request->name();
+    int64_t requested_version = -1;
+    if (!parseRequestedVersion(request->version(), requested_version)) {
+        return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
+                              "model version must be a positive integer, got '" +
+                                  request->version() + "'");
+    }
     for (const auto& mi : owner_->modelInfo()) {
         if (mi.name != name) continue;
+        if (requested_version >= 1 && mi.version != requested_version) {
+            return ::grpc::Status(::grpc::StatusCode::NOT_FOUND,
+                                  "model '" + name + "' version " +
+                                      std::to_string(requested_version) +
+                                      " is not loaded (loaded version: " +
+                                      std::to_string(mi.version) + ")");
+        }
         if (!mi.ready || !mi.config) {
             return ::grpc::Status(::grpc::StatusCode::NOT_FOUND,
                                   "model '" + name + "' is not loaded");
@@ -308,8 +352,21 @@ int GrpcServer::port() const {
                                        const inference::ModelConfigRequest* request,
                                        inference::ModelConfigResponse* response) {
     const std::string& name = request->name();
+    int64_t requested_version = -1;
+    if (!parseRequestedVersion(request->version(), requested_version)) {
+        return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
+                              "model version must be a positive integer, got '" +
+                                  request->version() + "'");
+    }
     for (const auto& mi : owner_->modelInfo()) {
         if (mi.name != name) continue;
+        if (requested_version >= 1 && mi.version != requested_version) {
+            return ::grpc::Status(::grpc::StatusCode::NOT_FOUND,
+                                  "model '" + name + "' version " +
+                                      std::to_string(requested_version) +
+                                      " is not loaded (loaded version: " +
+                                      std::to_string(mi.version) + ")");
+        }
         if (!mi.ready || !mi.config) {
             return ::grpc::Status(::grpc::StatusCode::NOT_FOUND,
                                   "model '" + name + "' is not loaded");
@@ -323,6 +380,25 @@ int GrpcServer::port() const {
                         "\ninstance_group: { count: " +
                         std::to_string(cfg.instance_group.count) +
                         ", kind: " + cfg.instance_group.kind + " }\n";
+        // Report the applied version_policy so clients can confirm the pinned
+        // version policy (specific pins an exact version; latest/all select the
+        // newest) of the config that was actually loaded.
+        const auto& vp = cfg.version_policy;
+        if (vp.configured) {
+            s += "version_policy: { ";
+            if (vp.kind == VersionPolicyKind::kSpecific) {
+                s += "specific { versions: ";
+                for (size_t i = 0; i < vp.versions.size(); ++i) {
+                    if (i) s += ", ";
+                    s += std::to_string(vp.versions[i]);
+                }
+                s += " } }\n";
+            } else if (vp.kind == VersionPolicyKind::kAll) {
+                s += "all { } }\n";
+            } else {
+                s += "latest { num_versions: " + std::to_string(vp.num_versions) + " } }\n";
+            }
+        }
         for (const auto& in : cfg.inputs) {
             s += "input: { name: " + in.name + ", datatype: " +
                  dataTypeToString(in.data_type) + " }\n";
@@ -344,7 +420,24 @@ int GrpcServer::port() const {
                                       const inference::ModelInferRequest* request,
                                       inference::ModelInferResponse* response) {
     const std::string& model_name = request->model_name();
-    if (!owner_->modelExists(model_name)) {
+    // Client-requested model version (Triton ModelInferRequest.model_version).
+    // When empty the server serves the version selected by the model's
+    // version_policy (the loaded one); a pinned version must equal the loaded
+    // version or the request is rejected (never silently served from another
+    // version).
+    int64_t requested_version = -1;
+    if (!parseRequestedVersion(request->model_version(), requested_version)) {
+        return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
+                              "model_version must be a positive integer, got '" +
+                                  request->model_version() + "'");
+    }
+    if (!owner_->modelExists(model_name, requested_version)) {
+        if (requested_version >= 1) {
+            return ::grpc::Status(::grpc::StatusCode::NOT_FOUND,
+                                  "model '" + model_name + "' version " +
+                                      std::to_string(requested_version) +
+                                      " is not loaded");
+        }
         return ::grpc::Status(::grpc::StatusCode::NOT_FOUND,
                               "model '" + model_name + "' is not loaded");
     }
@@ -391,7 +484,8 @@ int GrpcServer::port() const {
 
     // Shared core: validation + scheduling + audit + outputs.
     InferenceOutcome outcome =
-        owner_->runInference(model_name, std::move(inputs), request->id(), req_priority);
+        owner_->runInference(model_name, std::move(inputs), request->id(), req_priority,
+                             requested_version);
 
     if (!outcome.ok) {
         return ::grpc::Status(errorCodeToGrpc(outcome.error_code), outcome.error);
@@ -399,6 +493,14 @@ int GrpcServer::port() const {
 
     // Serialize outputs into KServe InferOutputTensor.
     response->set_model_name(model_name);
+    // Echo the version actually served (KServe ModelInferResponse.model_version).
+    // InferLite serves one version per model name, so this is the loaded one.
+    for (const auto& mi : owner_->modelInfo()) {
+        if (mi.name == model_name && mi.ready && mi.version >= 1) {
+            response->set_model_version(std::to_string(mi.version));
+            break;
+        }
+    }
     response->set_id(outcome.trace_id);
     for (const auto& out : outcome.outputs) {
         inference::ModelInferResponse_InferOutputTensor* o = response->add_outputs();

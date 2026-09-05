@@ -228,6 +228,43 @@ std::vector<std::string> parseStringList(Lexer& lex) {
     return out;
 }
 
+// Parse the inner body of one `version_policy` sub-policy (`latest`,
+// `specific`, or `all`). The caller has consumed the sub-policy name and the
+// leading '{'. Fields:
+//   latest   { num_versions: N }      N is how many of the most recent versions
+//                                     are eligible (InferLite loads only the
+//                                     newest eligible one)
+//   specific { versions: [ a, b ] }   repeated int64; also the single-value form
+//                                     `versions: 3` and repeated `versions: 3`
+//   all      { }                      no fields
+void parseVersionPolicyBody(Lexer& lex, VersionPolicy& vp) {
+    while (true) {
+        std::string f = lex.next();
+        if (f == "}") break;
+        if (f.empty()) throw PbtxtError("unexpected EOF in version_policy body");
+        if (f == "num_versions") {
+            requireToken(lex, ":", "version_policy.num_versions");
+            vp.num_versions = parseInteger(lex.next());
+        } else if (f == "versions") {
+            requireToken(lex, ":", "version_policy.versions");
+            auto vals = parseDims(lex);
+            vp.versions.insert(vp.versions.end(), vals.begin(), vals.end());
+        } else {
+            // Skip unknown scalar/message fields.
+            std::string t = lex.next();
+            if (t == "{") {
+                int depth = 1;
+                while (depth > 0) {
+                    std::string inner = lex.next();
+                    if (inner == "{") ++depth;
+                    else if (inner == "}") --depth;
+                    else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                }
+            }
+        }
+    }
+}
+
 // Parse a `self_test` golden-input tensor block:
 //   self_test {
 //     input {
@@ -733,6 +770,64 @@ ModelConfig parseConfigPbtxt(const std::string& text) {
                         }
                     }
                 }
+            }
+        } else if (field == "version_policy") {
+            // Triton version-policy control:
+            //   version_policy { latest   { num_versions: N } }
+            //   version_policy { specific { versions: [ a, b ] } }
+            //   version_policy { all {} }
+            // Exactly one sub-policy is allowed (mirrors Triton's oneof). The
+            // optional ':' after the message-field name (proto text
+            // `version_policy: { ... }`) is accepted too.
+            std::string t = lex.next();
+            if (t == ":") t = lex.next();
+            if (t != "{") {
+                throw PbtxtError("expected '{' for version_policy, got '" + t + "'");
+            }
+            cfg.version_policy.configured = true;
+            std::string subkind;
+            while (true) {
+                std::string f = lex.next();
+                if (f == "}") break;
+                if (f.empty()) throw PbtxtError("unexpected EOF in version_policy{}");
+                if (f == "latest" || f == "specific" || f == "all") {
+                    if (!subkind.empty()) {
+                        throw PbtxtError("version_policy must declare exactly one of "
+                                         "'latest', 'specific', or 'all'");
+                    }
+                    subkind = f;
+                    std::string t = lex.next();
+                    if (t == ":") t = lex.next();
+                    if (t != "{") {
+                        throw PbtxtError("expected '{' for version_policy." + f +
+                                         ", got '" + t + "'");
+                    }
+                    if (f == "latest") {
+                        cfg.version_policy.kind = VersionPolicyKind::kLatest;
+                    } else if (f == "specific") {
+                        cfg.version_policy.kind = VersionPolicyKind::kSpecific;
+                    } else {
+                        cfg.version_policy.kind = VersionPolicyKind::kAll;
+                    }
+                    parseVersionPolicyBody(lex, cfg.version_policy);
+                } else {
+                    // Skip unknown scalar/message fields for forward
+                    // compatibility.
+                    std::string t = lex.next();
+                    if (t == "{") {
+                        int depth = 1;
+                        while (depth > 0) {
+                            std::string inner = lex.next();
+                            if (inner == "{") ++depth;
+                            else if (inner == "}") --depth;
+                            else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                        }
+                    }
+                }
+            }
+            if (subkind.empty()) {
+                throw PbtxtError("version_policy block must declare one of "
+                                 "'latest', 'specific', or 'all'");
             }
         } else if (field == "plugin_library") {
             require(":", "plugin_library");

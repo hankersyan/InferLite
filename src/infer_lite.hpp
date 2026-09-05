@@ -182,13 +182,24 @@ public:
     // records the audit entry, and returns structured outputs/error. `inputs`
     // must already be parsed from the wire format; `trace_id` correlates the
     // audit entry (generate with InferLite::newTraceId() if unset).
+    // `requested_version` is the client-requested model version (a positive
+    // integer), or -1 to use the version selected by the model's version_policy
+    // (i.e. the version that is loaded). Because InferLite serves one version
+    // per model name, a request for any version other than the loaded one is
+    // rejected with MODEL_NOT_FOUND - never silently served from another
+    // version (version-pinning guarantee).
     InferenceOutcome runInference(const std::string& model_name,
                                   std::vector<Tensor> inputs,
                                   std::string trace_id,
-                                  int64_t priority = 0);
+                                  int64_t priority = 0,
+                                  int64_t requested_version = -1);
 
     // Whether the model with `name` exists and is currently ready to serve.
     bool modelExists(const std::string& name) const;
+    // Whether the model with `name` is ready to serve the specific `version`.
+    // A negative version matches any loaded version (same as modelExists(name)).
+    // A positive version matches only when the loaded version equals it.
+    bool modelExists(const std::string& name, int64_t version) const;
     // Resolved device label for a loaded model ("CPU", "NPU", "INTEL_GPU",
     // "AUTO", "GPU"), or empty if the model is unknown / not loaded.
     std::string modelDevice(const std::string& name) const;
@@ -234,8 +245,12 @@ private:
     const ServerOptions& options() const { return opts_; }
 
     HttpResponse handleRequest(const HttpRequest& req);
-    HttpResponse handleInfer(const HttpRequest& req, const std::string& model_name);
-    HttpResponse handleConfig(const std::string& model_name);
+    // `requested_version` is the model version parsed from the URL's optional
+    // `/versions/<v>` segment, or -1 when the client omitted it.
+    HttpResponse handleInfer(const HttpRequest& req, const std::string& model_name,
+                             int64_t requested_version = -1);
+    HttpResponse handleConfig(const std::string& model_name,
+                              int64_t requested_version = -1);
     HttpResponse handleHealthReady();
     HttpResponse handleHealthDetailed();
     HttpResponse handleMetrics();

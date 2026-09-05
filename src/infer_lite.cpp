@@ -95,14 +95,48 @@ std::string base64Encode(const uint8_t* data, size_t len) {
     return out;
 }
 
-// Extract model name from a path like /v2/models/<name>/infer.
-bool extractModelName(const std::string& path, std::string& name) {
+// Parse the head of a /v2/models/<name>[/versions/<version>] request.
+// `head` is the URL path with the action suffix (/infer, /config) already
+// stripped. On success returns true with `name` filled and `version` set to the
+// parsed version (a positive integer per the KServe v2 protocol) or -1 when the
+// client omitted the optional /versions/<v> segment (the loaded/policy-selected
+// version is used). When the head looks like a model path but its version is
+// malformed (empty, non-numeric, or non-positive), returns false and fills
+// `err` (the caller answers 400). For heads that are not /v2/models/... paths
+// at all, returns false with `err` empty (not our route -> 404).
+bool parseModelRequestPath(const std::string& head, std::string& name,
+                           int64_t& version, std::string& err) {
+    version = -1;
+    err.clear();
     const std::string prefix = "/v2/models/";
-    if (path.rfind(prefix, 0) != 0) return false;
-    std::string rest = path.substr(prefix.size());
+    if (head.rfind(prefix, 0) != 0) return false;
+    std::string rest = head.substr(prefix.size());
     size_t slash = rest.find('/');
     name = rest.substr(0, slash);
-    return !name.empty();
+    if (name.empty()) return false;  // e.g. /v2/models//infer -> not our route
+    if (slash == std::string::npos) return true;  // /v2/models/<name>
+    const std::string tail = rest.substr(slash + 1);
+    // /v2/models/<name>/versions/<v> (an empty version is tolerated by Triton
+    // clients as "use the default"; we do the same).
+    if (tail != "versions" && tail.rfind("versions/", 0) != 0) return false;
+    std::string vs = tail.substr(std::string("versions/").size());
+    if (vs.empty()) {
+        err = "missing model version in request path";
+        return false;
+    }
+    size_t idx = 0;
+    long long v = 0;
+    try {
+        v = std::stoll(vs, &idx);
+    } catch (...) {
+        idx = std::string::npos;
+    }
+    if (idx != vs.size() || v <= 0) {
+        err = "model version must be a positive integer, got '" + vs + "'";
+        return false;
+    }
+    version = static_cast<int64_t>(v);
+    return true;
 }
 
 bool endsWith(const std::string& s, const std::string& suffix) {
@@ -752,6 +786,13 @@ bool InferLite::modelExists(const std::string& name) const {
     return e && e->loaded();
 }
 
+bool InferLite::modelExists(const std::string& name, int64_t version) const {
+    std::lock_guard<std::mutex> lock(models_mu_);
+    auto e = findEntryLocked(name);
+    if (!e || !e->loaded()) return false;
+    return version < 0 || e->version == version;
+}
+
 std::string InferLite::modelDevice(const std::string& name) const {
     std::lock_guard<std::mutex> lock(models_mu_);
     auto e = findEntryLocked(name);
@@ -1225,7 +1266,8 @@ void InferLite::pollRepositoryOnce() {
 InferenceOutcome InferLite::runInference(const std::string& model_name,
                                          std::vector<Tensor> inputs,
                                          std::string trace_id,
-                                         int64_t priority) {
+                                         int64_t priority,
+                                         int64_t requested_version) {
     InferenceOutcome outcome;
 
     // Locate the model and grab stable references under the lock; the entry may
@@ -1235,6 +1277,7 @@ InferenceOutcome InferLite::runInference(const std::string& model_name,
     std::shared_ptr<Scheduler> sched;
     std::string entry_name, device_label;
     std::string cfg_hash, model_hash, meta_version;
+    int64_t loaded_version = -1;
     {
         std::lock_guard<std::mutex> lock(models_mu_);
         for (const auto& ep : models_) {
@@ -1243,6 +1286,7 @@ InferenceOutcome InferLite::runInference(const std::string& model_name,
             sched = ep->scheduler;
             entry_name = ep->name;
             device_label = ep->device_label;
+            loaded_version = ep->version;
             meta_version = ep->config ? ep->config->metadata.version : std::string();
             cfg_hash = config_store_->configHash(model_name);
             model_hash = config_store_->modelHash(model_name);
@@ -1252,6 +1296,22 @@ InferenceOutcome InferLite::runInference(const std::string& model_name,
     if (!cfg || !sched) {
         outcome.error_code = ErrorCode::kModelNotFound;
         outcome.error = "MODEL_NOT_FOUND";
+        return outcome;
+    }
+    // Version-pinning guarantee: InferLite serves one version per model name,
+    // so a request that pins a version different from the loaded one is
+    // rejected instead of being silently served from another version. This is
+    // what makes an API-driven rollback trustworthy: a pinned client that has
+    // not been updated to the new version sees 404 (MODEL_NOT_FOUND) rather
+    // than getting results from the wrong model.
+    if (requested_version >= 1 && requested_version != loaded_version) {
+        outcome.error_code = ErrorCode::kModelNotFound;
+        outcome.error = "MODEL_NOT_FOUND: model '" + model_name + "' version " +
+                        std::to_string(requested_version) +
+                        " is not loaded (loaded version: " +
+                        (loaded_version >= 1 ? std::to_string(loaded_version)
+                                             : std::string("<none>")) +
+                        ")";
         return outcome;
     }
 
@@ -1400,19 +1460,31 @@ HttpResponse InferLite::handleRequest(const HttpRequest& req) {
         }
     }
 
+    // Model config (GET /v2/models/<name>/config, with the optional KServe v2
+    // /versions/<v> segment).
     {
         std::string name;
-        if (req.path.rfind("/config") == req.path.size() - 7 &&
-            extractModelName(req.path.substr(0, req.path.size() - 7), name)) {
-            return handleConfig(name);
+        int64_t version = -1;
+        std::string err;
+        if (req.path.rfind("/config") == req.path.size() - 7) {
+            const bool parsed = parseModelRequestPath(
+                req.path.substr(0, req.path.size() - 7), name, version, err);
+            if (!parsed && !err.empty()) return jsonError(400, err);
+            if (parsed) return handleConfig(name, version);
         }
     }
 
+    // Inference (POST /v2/models/<name>/infer or
+    // POST /v2/models/<name>/versions/<version>/infer).
     if (req.method == "POST") {
         std::string name;
-        if (req.path.rfind("/infer") == req.path.size() - 6 &&
-            extractModelName(req.path.substr(0, req.path.size() - 6), name)) {
-            return handleInfer(req, name);
+        int64_t version = -1;
+        std::string err;
+        if (req.path.rfind("/infer") == req.path.size() - 6) {
+            const bool parsed = parseModelRequestPath(
+                req.path.substr(0, req.path.size() - 6), name, version, err);
+            if (!parsed && !err.empty()) return jsonError(400, err);
+            if (parsed) return handleInfer(req, name, version);
         }
     }
 
@@ -1601,17 +1673,32 @@ HttpResponse InferLite::handleVersions() {
     return resp;
 }
 
-HttpResponse InferLite::handleConfig(const std::string& name) {
+HttpResponse InferLite::handleConfig(const std::string& name, int64_t requested_version) {
     std::shared_ptr<const ModelConfig> cfg;
+    int64_t loaded_version = -1;
     {
         std::lock_guard<std::mutex> lock(models_mu_);
         auto e = findEntryLocked(name);
-        if (e && e->loaded() && e->config) cfg = e->config;
+        if (e && e->loaded() && e->config) {
+            cfg = e->config;
+            loaded_version = e->version;
+        }
     }
     if (!cfg) {
         HttpResponse resp;
         resp.status = 404;
         resp.body = "{\"error\":\"MODEL_NOT_FOUND\"}";
+        return resp;
+    }
+    // A config for a pinned version is only served when that version is the one
+    // loaded; otherwise the version is not served by this server instance.
+    if (requested_version >= 1 && requested_version != loaded_version) {
+        HttpResponse resp;
+        resp.status = 404;
+        resp.body = "{\"error\":\"MODEL_NOT_FOUND\",\"message\":\"model '" + name +
+                    "' version " + std::to_string(requested_version) +
+                    " is not loaded (loaded version: " +
+                    std::to_string(loaded_version) + ")\"}";
         return resp;
     }
     const auto& c = *cfg;
@@ -1807,7 +1894,8 @@ HttpResponse InferLite::handleMetrics() {
     return resp;
 }
 
-HttpResponse InferLite::handleInfer(const HttpRequest& req, const std::string& model_name) {
+HttpResponse InferLite::handleInfer(const HttpRequest& req, const std::string& model_name,
+                                    int64_t requested_version) {
     HttpResponse resp;
     resp.content_type = "application/json";
 
@@ -1904,7 +1992,8 @@ HttpResponse InferLite::handleInfer(const HttpRequest& req, const std::string& m
 
     // Shared inference core: validation + scheduling + audit + outputs.
     InferenceOutcome outcome = runInference(model_name, std::move(input_tensors),
-                                            generateTraceId(), req_priority);
+                                            generateTraceId(), req_priority,
+                                            requested_version);
     if (!outcome.ok) {
         return makeError(outcome.error_code, outcome.error);
     }
