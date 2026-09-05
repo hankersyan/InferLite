@@ -263,6 +263,10 @@ InferLite::InferLite(const ServerOptions& opts) : opts_(opts) {
                         continue;
                     }
                     attachScheduler(e);
+                    if (!runEntryWarmup(e)) {
+                        throw std::runtime_error("ensemble '" + e->config->name +
+                                                 "' failed its configured model_warmup");
+                    }
                     e->state = ModelEntry::State::kReady;
                     commitEntry(e);
                     it = pending_ensembles.erase(it);
@@ -485,6 +489,12 @@ std::shared_ptr<InferLite::ModelEntry> InferLite::buildEntry(const LoadedModel& 
         entry->device_label = "CPU";
     }
     attachScheduler(entry);
+    // kNone fail-fast semantics: a model that cannot complete its configured
+    // model_warmup aborts startup, just like a backend that cannot load.
+    if (!runEntryWarmup(entry)) {
+        throw std::runtime_error("model '" + entry->config->name +
+                                 "' failed its configured model_warmup");
+    }
     entry->state = ModelEntry::State::kReady;
     return entry;
 }
@@ -534,6 +544,94 @@ bool InferLite::runEntrySelfTest(const std::shared_ptr<ModelEntry>& entry) {
         diag_->error("self-test model '" + entry->name + "' failed detail=" + results[0].detail);
     }
     return results[0].passed;
+}
+
+bool InferLite::buildWarmupRequest(const std::shared_ptr<const ModelConfig>& cfg,
+                                   const ModelWarmup& wu,
+                                   std::vector<Tensor>& tensors,
+                                   std::string& err) const {
+    // Leading batch dimension: Triton puts the batch dim on the request tensor
+    // (when the model batches); batch_size 0/1 both produce a single sample.
+    const int64_t batch = (wu.batch_size > 0) ? wu.batch_size : 1;
+    for (const auto& wi : wu.inputs) {
+        const TensorSpec* spec = nullptr;
+        for (const auto& in : cfg->inputs) {
+            if (in.name == wi.name) {
+                spec = &in;
+                break;
+            }
+        }
+        if (!spec) {
+            err = "unknown input '" + wi.name + "'";
+            return false;
+        }
+        const DataType type = wi.has_type ? wi.data_type : spec->data_type;
+        std::vector<int64_t> full;
+        if (wi.has_shape) {
+            full = wi.shape;
+        } else {
+            const std::vector<int64_t>& dims = wi.has_dims ? wi.dims : spec->dims;
+            if (cfg->max_batch_size > 0) full.push_back(batch);
+            full.insert(full.end(), dims.begin(), dims.end());
+        }
+        for (int64_t d : full) {
+            if (d <= 0) {
+                err = "input '" + wi.name +
+                      "' needs a concrete shape (found non-positive dim " +
+                      std::to_string(d) + ")";
+                return false;
+            }
+        }
+        const size_t bytes = tensorByteSize(full, type);
+        const size_t limit = cfg->max_input_size_bytes > 0 ? cfg->max_input_size_bytes
+                                                           : opts_.max_input_size_bytes;
+        if (bytes > limit) {
+            err = "input '" + wi.name + "' warmup payload is " + std::to_string(bytes) +
+                  " bytes, exceeding the " + std::to_string(limit) + "-byte input limit";
+            return false;
+        }
+        Tensor t;
+        t.name = wi.name;
+        t.type = type;
+        t.shape = std::move(full);
+        // zero_data semantics: the payload is all zeros. validateConfig rejects
+        // any warmup input that is not zero-filled.
+        t.data.assign(bytes, 0);
+        tensors.push_back(std::move(t));
+    }
+    return true;
+}
+
+bool InferLite::runEntryWarmup(const std::shared_ptr<ModelEntry>& entry) {
+    if (!entry->scheduler) return false;
+    const std::vector<ModelWarmup>& warmups = entry->config->warmups;
+    if (warmups.empty()) return true;
+    // Each named warmup request is submitted once, through the real scheduler
+    // (workers, queue, batching/priority policy), so the shared backend's
+    // execution paths are pre-warmed exactly like a client request.
+    for (const auto& wu : warmups) {
+        std::vector<Tensor> tensors;
+        std::string err;
+        if (!buildWarmupRequest(entry->config, wu, tensors, err)) {
+            diag_->error("warmup model '" + entry->name + "' request '" + wu.name +
+                         "' cannot be built: " + err);
+            return false;
+        }
+        auto req = std::make_shared<InferenceRequest>();
+        req->inputs = std::move(tensors);
+        req->timeout_ms = opts_.request_timeout_ms;
+        auto res = entry->scheduler->submit(req);
+        if (!res || !res->ok) {
+            const std::string detail =
+                res ? res->error : "no response (queue rejected or request timed out)";
+            diag_->error("warmup model '" + entry->name + "' request '" + wu.name +
+                         "' failed: " + detail);
+            return false;
+        }
+        diag_->info("warmup model '" + entry->name + "' request '" + wu.name + "' ok (inputs=" +
+                    std::to_string(wu.inputs.size()) + ")");
+    }
+    return true;
 }
 
 void InferLite::runStartupSelfTest() {
@@ -871,6 +969,18 @@ ControlStatus InferLite::loadModelInternal(const std::string& name,
         }
         return ControlStatus{false, 500,
                              "model '" + name + "' failed its functional self-test"};
+    }
+
+    // 4b. Triton model_warmup: run the configured sample requests through the
+    // real scheduler before the model is marked ready. A warmup failure leaves
+    // the model UNAVAILABLE (explicit/poll), mirroring self-test behavior.
+    if (!runEntryWarmup(fresh)) {
+        std::lock_guard<std::mutex> lock(models_mu_);
+        if (!already_loaded) {
+            markUnavailableLocked(name, "model failed its configured model_warmup");
+        }
+        return ControlStatus{false, 500,
+                             "model '" + name + "' failed its configured model_warmup"};
     }
 
     // 5. Commit the new instance (atomic swap under the model lock).
@@ -1551,6 +1661,35 @@ HttpResponse InferLite::handleConfig(const std::string& name) {
         }
         sb.asObject()["state"] = std::move(states);
         obj.asObject()["sequence_batching"] = std::move(sb);
+    }
+    if (!c.warmups.empty()) {
+        json::Value warmups = json::Value(json::Value::Array());
+        for (const auto& w : c.warmups) {
+            json::Value wj = json::Value::Object();
+            wj.asObject()["name"] = json::Value(w.name);
+            wj.asObject()["batch_size"] = json::Value(w.batch_size);
+            json::Value ins = json::Value(json::Value::Array());
+            for (const auto& wi : w.inputs) {
+                json::Value ij = json::Value::Object();
+                ij.asObject()["name"] = json::Value(wi.name);
+                if (wi.has_type) {
+                    ij.asObject()["data_type"] =
+                        json::Value(dataTypeToString(wi.data_type));
+                }
+                if (wi.has_shape || wi.has_dims) {
+                    const std::vector<int64_t>& dd =
+                        wi.has_shape ? wi.shape : wi.dims;
+                    json::Value dims = json::Value(json::Value::Array());
+                    for (int64_t d : dd) dims.asArray().push_back(json::Value(d));
+                    ij.asObject()[wi.has_shape ? "shape" : "dims"] = std::move(dims);
+                }
+                ij.asObject()["zero_data"] = json::Value(wi.zero_data);
+                ins.asArray().push_back(std::move(ij));
+            }
+            wj.asObject()["inputs"] = std::move(ins);
+            warmups.asArray().push_back(std::move(wj));
+        }
+        obj.asObject()["model_warmup"] = std::move(warmups);
     }
     json::Value ig = json::Value::Object();
     ig.asObject()["count"] = json::Value(static_cast<int64_t>(c.instance_group.count));

@@ -201,6 +201,32 @@ struct SequenceBatching {
     std::vector<SequenceStateSpec> states;
 };
 
+// Triton `model_warmup`: sample requests executed through the real scheduler
+// when a model loads so lazy execution paths (shape-specific kernel
+// compilation, first-touch allocations, backend/plugin caches) are exercised
+// before the model is marked ready. Mirrors Triton's ModelWarmup.Input:
+//   inputs {
+//     key: "INPUT"
+//     value { data_type: TYPE_FP32 dims: [ 4 ] zero_data: true }
+//   }
+struct WarmupInput {
+    std::string name;                          // must match a declared model input
+    bool has_type = false;                     // `data_type` present in the config
+    DataType data_type = DataType::kInvalid;   // optional; defaults to the model input type
+    bool has_dims = false;                     // `dims` present in the config
+    std::vector<int64_t> dims;                 // per-request dims (no batch dimension)
+    bool has_shape = false;                    // Triton `shape` (full shape) present
+    std::vector<int64_t> shape;                // full tensor shape incl. batch dim (overrides dims)
+    bool zero_data = false;                    // fill with zeros (input_data_file not supported)
+};
+
+// One named warmup request, executed once through the real scheduler at load.
+struct ModelWarmup {
+    std::string name;        // request name (informational / diagnostics)
+    int64_t batch_size = 0;  // 0 or 1 => single request; >1 sets the leading batch dim
+    std::vector<WarmupInput> inputs;
+};
+
 // Parsed representation of one model's config.pbtxt.
 struct ModelConfig {
     std::string name;
@@ -216,6 +242,10 @@ struct ModelConfig {
     // `sequence_batching {}` block) for stateful models. Mutually exclusive
     // with dynamic batching. See SequenceBatching.
     SequenceBatching sequence;
+    // Triton `model_warmup`: sample requests run through the real scheduler at
+    // load time (before the model is marked ready). Empty => no warmup. Not
+    // supported together with sequence_batching. See ModelWarmup.
+    std::vector<ModelWarmup> warmups;
     std::vector<TensorSpec> inputs;
     std::vector<TensorSpec> outputs;
     InstanceGroup instance_group;

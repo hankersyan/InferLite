@@ -81,6 +81,110 @@ void validateConfig(const ModelConfig& cfg, const fs::path& model_dir) {
                               std::to_string(cfg.instance_group.count));
     }
 
+    // Triton model_warmup: sample requests executed through the real scheduler
+    // at load time (before the model is marked ready). Constraints validated
+    // here so a bad config fails fast:
+    //   - not supported together with sequence_batching (a warmup cannot open a
+    //     sequence slot or drive the sequence control tensors)
+    //   - every warmup input must name a declared model input, use the model
+    //     input's data type, and resolve to concrete (non-dynamic) dims
+    //   - warmups only support zero-filled payloads (zero_data: true);
+    //     Triton's input_data_file is not implemented
+    //   - batch_size must fit the model's max_batch_size when batching is on,
+    //     and must be 0/1 otherwise
+    if (!cfg.warmups.empty()) {
+        if (cfg.sequence.enabled) {
+            throw RepositoryError("model '" + cfg.name +
+                                  "' configures 'model_warmup' with 'sequence_batching'; "
+                                  "warmup of sequence models is not supported (control "
+                                  "tensors cannot be driven from zero-filled warmup inputs)");
+        }
+        std::map<std::string, const TensorSpec*> spec_by_name;
+        for (const auto& in : cfg.inputs) spec_by_name[in.name] = &in;
+        for (const auto& wu : cfg.warmups) {
+            if (wu.name.empty()) {
+                throw RepositoryError("model '" + cfg.name +
+                                      "' has a model_warmup entry without a 'name'");
+            }
+            if (wu.batch_size < 0) {
+                throw RepositoryError("model '" + cfg.name + "' model_warmup '" + wu.name +
+                                      "' has negative batch_size=" +
+                                      std::to_string(wu.batch_size));
+            }
+            if (wu.batch_size > 1 && cfg.max_batch_size <= 0) {
+                throw RepositoryError("model '" + cfg.name + "' model_warmup '" + wu.name +
+                                      "' sets batch_size=" + std::to_string(wu.batch_size) +
+                                      " but the model does not batch (max_batch_size=0; "
+                                      "warmup batch_size must be 0 or 1)");
+            }
+            if (cfg.max_batch_size > 0 && wu.batch_size > cfg.max_batch_size) {
+                throw RepositoryError("model '" + cfg.name + "' model_warmup '" + wu.name +
+                                      "' has batch_size=" + std::to_string(wu.batch_size) +
+                                      " greater than max_batch_size=" +
+                                      std::to_string(cfg.max_batch_size));
+            }
+            if (wu.inputs.empty()) {
+                throw RepositoryError("model '" + cfg.name + "' model_warmup '" + wu.name +
+                                      "' declares no inputs");
+            }
+            for (const auto& wi : wu.inputs) {
+                auto it = spec_by_name.find(wi.name);
+                if (it == spec_by_name.end()) {
+                    throw RepositoryError("model '" + cfg.name + "' model_warmup '" + wu.name +
+                                          "' references unknown input '" + wi.name + "'");
+                }
+                if (wi.has_type && wi.data_type != it->second->data_type) {
+                    throw RepositoryError("model '" + cfg.name + "' model_warmup '" + wu.name +
+                                          "' input '" + wi.name + "' declares data_type " +
+                                          dataTypeToString(wi.data_type) + " which does not "
+                                          "match the model input type " +
+                                          dataTypeToString(it->second->data_type));
+                }
+                if (!wi.zero_data) {
+                    throw RepositoryError("model '" + cfg.name + "' model_warmup '" + wu.name +
+                                          "' input '" + wi.name +
+                                          "' must set zero_data: true (InferLite warmup "
+                                          "fills inputs with zeros; Triton input_data_file "
+                                          "is not implemented)");
+                }
+                if (wi.has_shape) {
+                    for (int64_t d : wi.shape) {
+                        if (d <= 0) {
+                            throw RepositoryError("model '" + cfg.name + "' model_warmup '" +
+                                                  wu.name + "' input '" + wi.name +
+                                                  "' has non-positive shape entry " +
+                                                  std::to_string(d));
+                        }
+                    }
+                } else {
+                    if (!wi.has_dims) {
+                        bool dynamic = false;
+                        for (int64_t d : it->second->dims) {
+                            if (d <= 0) dynamic = true;
+                        }
+                        if (dynamic) {
+                            throw RepositoryError("model '" + cfg.name + "' model_warmup '" +
+                                                  wu.name + "' input '" + wi.name +
+                                                  "' inherits dynamic dims from the model "
+                                                  "config; warmup must declare explicit "
+                                                  "'dims'");
+                        }
+                    }
+                    const std::vector<int64_t>& dims =
+                        wi.has_dims ? wi.dims : it->second->dims;
+                    for (int64_t d : dims) {
+                        if (d <= 0) {
+                            throw RepositoryError("model '" + cfg.name + "' model_warmup '" +
+                                                  wu.name + "' input '" + wi.name +
+                                                  "' has non-positive dims entry " +
+                                                  std::to_string(d));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Phase 7 (batching mode): Triton dynamic-batching policy constraints.
     // Mirror NVIDIA Triton's validation of ModelConfig.dynamic_batching:
     //   - requires max_batch_size > 0 (batching must be enabled)

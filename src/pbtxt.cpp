@@ -385,6 +385,134 @@ std::vector<TensorSpec> parseIOField(Lexer& lex, const char* what, const std::st
     return specs;
 }
 
+// ---- Triton model_warmup parsing (config `model_warmup { ... }`) ----
+
+// Parse one ModelWarmup.Input value-message body (leading '{' consumed):
+//   { data_type: TYPE_FP32 dims: [ 4 ] zero_data: true }
+void parseWarmupInputBody(Lexer& lex, WarmupInput& out) {
+    while (true) {
+        std::string f = lex.next();
+        if (f == "}") break;
+        if (f.empty()) throw PbtxtError("unexpected EOF in model_warmup input block");
+        if (f == "data_type") {
+            requireToken(lex, ":", "warmup input data_type");
+            std::string v = stripTypePrefix(lex.next());
+            out.data_type = dataTypeFromString(v);
+            if (out.data_type == DataType::kInvalid) {
+                throw PbtxtError("unsupported data_type in model_warmup input: " + v);
+            }
+            out.has_type = true;
+        } else if (f == "dims") {
+            requireToken(lex, ":", "warmup input dims");
+            out.dims = parseDims(lex);
+            out.has_dims = true;
+        } else if (f == "shape") {
+            requireToken(lex, ":", "warmup input shape");
+            out.shape = parseDims(lex);
+            out.has_shape = true;
+        } else if (f == "zero_data") {
+            requireToken(lex, ":", "warmup input zero_data");
+            std::string bt = lex.next();
+            if (bt == "true") {
+                out.zero_data = true;
+            } else if (bt == "false") {
+                out.zero_data = false;
+            } else {
+                out.zero_data = parseInteger(bt) != 0;
+            }
+        } else {
+            // Skip unknown scalar/message fields (input_data_file is parsed but
+            // rejected later in validateConfig with a precise error).
+            std::string t = lex.next();
+            if (t == "{") {
+                int depth = 1;
+                while (depth > 0) {
+                    std::string inner = lex.next();
+                    if (inner == "{") ++depth;
+                    else if (inner == "}") --depth;
+                    else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                }
+            }
+        }
+    }
+}
+
+// Parse the proto-text map form `inputs { key: "X" value { ... } }` (leading
+// '{' consumed). A `value` requires a preceding `key`, whose name is attached
+// to the parsed input.
+void parseWarmupInputsMap(Lexer& lex, ModelWarmup& wu) {
+    while (true) {
+        std::string f = lex.next();
+        if (f == "}") break;
+        if (f.empty()) throw PbtxtError("unexpected EOF in model_warmup.inputs map");
+        if (f == "key") {
+            requireToken(lex, ":", "model_warmup.inputs key");
+            if (wu.inputs.empty() || !wu.inputs.back().name.empty()) {
+                // A fresh key/entry unless the previous entry never received a value.
+                wu.inputs.emplace_back();
+            }
+            wu.inputs.back().name = lex.next();
+        } else if (f == "value") {
+            std::string t = lex.next();  // optional ':' before '{'
+            if (t == ":") t = lex.next();
+            if (t != "{") throw PbtxtError("expected '{' for model_warmup input value");
+            if (wu.inputs.empty() || wu.inputs.back().name.empty()) {
+                throw PbtxtError("model_warmup.inputs 'value' without a preceding 'key'");
+            }
+            parseWarmupInputBody(lex, wu.inputs.back());
+        } else {
+            // Skip unknown scalar/message fields.
+            std::string t = lex.next();
+            if (t == "{") {
+                int depth = 1;
+                while (depth > 0) {
+                    std::string inner = lex.next();
+                    if (inner == "{") ++depth;
+                    else if (inner == "}") --depth;
+                    else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                }
+            }
+        }
+    }
+}
+
+// Parse one warmup-request message (leading '{' consumed):
+//   { name: "warmup" batch_size: 1 inputs { key: "INPUT" value { ... } } }
+ModelWarmup parseModelWarmupBody(Lexer& lex) {
+    ModelWarmup wu;
+    while (true) {
+        std::string f = lex.next();
+        if (f == "}") break;
+        if (f.empty()) throw PbtxtError("unexpected EOF in model_warmup block");
+        if (f == "name") {
+            requireToken(lex, ":", "model_warmup.name");
+            wu.name = lex.next();
+        } else if (f == "batch_size") {
+            requireToken(lex, ":", "model_warmup.batch_size");
+            wu.batch_size = parseInteger(lex.next());
+        } else if (f == "inputs") {
+            std::string t = lex.next();
+            if (t == ":") t = lex.next();
+            if (t != "{") throw PbtxtError("expected '{' for model_warmup.inputs");
+            parseWarmupInputsMap(lex, wu);
+        } else {
+            // Skip unknown scalar/message fields (Triton also defines `count`,
+            // which InferLite does not implement: each warmup request runs once).
+            std::string t = lex.next();
+            if (t == "{") {
+                int depth = 1;
+                while (depth > 0) {
+                    std::string inner = lex.next();
+                    if (inner == "{") ++depth;
+                    else if (inner == "}") --depth;
+                    else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                }
+            }
+        }
+    }
+    return wu;
+}
+
 // Resolve a DeviceKind from an instance_group's `kind` string.
 DeviceKind kindFromStringInternal(const std::string& s) {
     std::string v = toUpper(s);
@@ -936,6 +1064,27 @@ ModelConfig parseConfigPbtxt(const std::string& text) {
                         }
                     }
                 }
+            }
+        } else if (field == "model_warmup") {
+            // Triton repeated message. Accept both the array form
+            //   model_warmup [ { ... }, { ... } ]
+            // and the repeated-message form `model_warmup { ... }`.
+            std::string t = lex.next();
+            if (t == ":") t = lex.next();
+            if (t == "[") {
+                while (true) {
+                    std::string n = lex.next();
+                    if (n == "]") break;
+                    if (n == ",") continue;
+                    if (n != "{") {
+                        throw PbtxtError("expected '{' in model_warmup array");
+                    }
+                    cfg.warmups.push_back(parseModelWarmupBody(lex));
+                }
+            } else if (t == "{") {
+                cfg.warmups.push_back(parseModelWarmupBody(lex));
+            } else {
+                throw PbtxtError("expected '{' or '[' for model_warmup");
             }
         } else if (field == "max_inference_time_ms") {
             require(":", "max_inference_time_ms");

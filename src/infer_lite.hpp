@@ -257,6 +257,20 @@ private:
     // Run the golden-input functional self-test for one freshly built model.
     // Returns true when it passes (or no golden input is configured).
     bool runEntrySelfTest(const std::shared_ptr<ModelEntry>& e);
+    // Run the configured Triton `model_warmup` requests for one freshly built
+    // model. Each warmup request is submitted through the real scheduler before
+    // the model is marked ready, so backend execution paths (kernel
+    // compilation, first-touch allocations) are pre-warmed. Returns true when
+    // every warmup passes (or none is configured).
+    bool runEntryWarmup(const std::shared_ptr<ModelEntry>& entry);
+    // Build the zero-filled sample tensors for one warmup request, resolving
+    // defaults (data type / dims) against the model's input specs. Returns
+    // false and fills `err` when the spec cannot produce a request (should not
+    // happen after validateConfig, kept as a defensive check).
+    bool buildWarmupRequest(const std::shared_ptr<const ModelConfig>& cfg,
+                            const ModelWarmup& wu,
+                            std::vector<Tensor>& tensors,
+                            std::string& err) const;
     // Load (or reload) one model. `config_override` overrides config.pbtxt.
     // Ensemble dependencies are resolved first. Never holds the model lock
     // while a backend loads, so serving continues during a reload.
