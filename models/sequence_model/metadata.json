@@ -1,0 +1,7 @@
+{
+  "model_id": "sequence_model",
+  "version": "1.0.0",
+  "intended_use": "Test Triton sequence batching: stateful y = input + state; state advances by 1 per step; idle timeout 300000us",
+  "training_dataset_id": "N/A",
+  "approval_status": "approved"
+}

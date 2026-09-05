@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <chrono>
+#include <set>
 
 #include "pbtxt.hpp"
+#include "validation.hpp"
 
 namespace inferlite {
 
@@ -52,6 +54,10 @@ Scheduler::Scheduler(BackendPtr backend, std::shared_ptr<const ModelConfig> conf
             priority_served_.push_back(std::make_unique<std::atomic<uint64_t>>(0));
         }
     }
+    // Triton sequence batching (stateful models).
+    sequence_mode_ = config_ && config_->sequence.enabled;
+    sequence_idle_us_ =
+        sequence_mode_ ? config_->sequence.max_sequence_idle_us : 0;
 
     worker_count_ = instance_count;
     // Spawn one worker thread per instance. For GPU instances the backend
@@ -89,6 +95,23 @@ std::shared_ptr<InferenceResult> Scheduler::submit(std::shared_ptr<InferenceRequ
         if (!s.empty() && s[0] >= 1) req->batch = s[0];
     }
     req->enqueued_at = clock::now();
+
+    // Sequence batching: resolve the correlation id from the request's CORRID
+    // control tensor before enqueueing; a malformed control never enters the
+    // queue (fail-fast, structured INVALID_INPUT).
+    if (sequence_mode_) {
+        bool start = false, end = false;
+        int64_t corrid = 0;
+        if (!readSequenceControl(req, start, end, corrid)) {
+            auto res = std::make_shared<InferenceResult>();
+            res->ok = false;
+            res->error_code = ErrorCode::kInvalidInput;
+            res->error = "request is missing or has malformed sequence control tensors "
+                         "(START and CORRID are required)";
+            return res;
+        }
+        req->sequence_id = corrid;
+    }
 
     // Bound the queue: reject if at capacity (requests in queue + in-flight).
     {
@@ -147,7 +170,12 @@ std::shared_ptr<InferenceResult> Scheduler::submit(std::shared_ptr<InferenceRequ
 void Scheduler::workerLoop(size_t idx) {
     (void)idx;
     while (true) {
-        const bool cont = batchingEnabled() ? runBatchCycle() : runSingleCycle();
+        bool cont = true;
+        if (sequence_mode_) {
+            cont = runSequenceCycle();
+        } else {
+            cont = batchingEnabled() ? runBatchCycle() : runSingleCycle();
+        }
         if (!cont) return;
     }
 }
@@ -680,6 +708,347 @@ void Scheduler::executeBatch(std::vector<std::shared_ptr<InferenceRequest>>& gro
     }
     finishBatchMembers(specs);
     releaseSlots();
+}
+
+// ---- Sequence batching (Phase 7, follows Triton) ---------------------------
+
+bool Scheduler::readSequenceControl(const std::shared_ptr<InferenceRequest>& req, bool& start,
+                                    bool& end, int64_t& corrid) {
+    start = false;
+    end = false;
+    corrid = 0;
+    if (!config_) return false;
+    bool saw_corrid = false;
+    for (const auto& ci : config_->sequence.control_input) {
+        const Tensor* t = nullptr;
+        for (const auto& in : req->inputs) {
+            if (in.name == ci.name) {
+                t = &in;
+                break;
+            }
+        }
+        if (t == nullptr) return false;  // missing control tensor
+        double v = 0.0;
+        if (!readTensorScalar(*t, 0, v)) return false;
+        for (const auto& ctl : ci.controls) {
+            switch (ctl.kind) {
+                case SequenceControlKind::kSequenceStart:
+                    if (v == ctl.true_value) {
+                        start = true;
+                    } else if (v == ctl.false_value) {
+                        start = false;
+                    } else {
+                        return false;
+                    }
+                    break;
+                case SequenceControlKind::kSequenceEnd:
+                    if (v == ctl.true_value) {
+                        end = true;
+                    } else if (v == ctl.false_value) {
+                        end = false;
+                    } else {
+                        return false;
+                    }
+                    break;
+                case SequenceControlKind::kSequenceReady:
+                    // Accepted for protocol compatibility; a non-ready request
+                    // is still executed (InferLite does not discard outputs).
+                    break;
+                case SequenceControlKind::kSequenceCorrId:
+                    corrid = static_cast<int64_t>(v);
+                    if (static_cast<double>(corrid) != v) return false;
+                    saw_corrid = true;
+                    break;
+                default:
+                    return false;
+            }
+        }
+    }
+    return saw_corrid;
+}
+
+// Execute one request of the active sequence. Returns true when the request
+// carried END (the sequence should be closed after this step).
+bool Scheduler::processSequenceStep(const std::shared_ptr<InferenceRequest>& req) {
+    if (!active_seq_ || !config_) return false;
+    bool start = false, end = false;
+    int64_t corrid = 0;
+    if (!readSequenceControl(req, start, end, corrid)) {
+        std::lock_guard<std::mutex> lock(req->m);
+        if (!req->done) {
+            req->result.ok = false;
+            req->result.error_code = ErrorCode::kInvalidInput;
+            req->result.error = "malformed sequence control tensors";
+            req->done = true;
+            req->cv.notify_all();
+        }
+        stats_.requests_failed.fetch_add(1, std::memory_order_relaxed);
+        return end;
+    }
+
+    // Finalize a request (result + stats + wake). Must be called with no lock.
+    auto finish = [&](bool ok, ErrorCode ec, const std::string& msg,
+                      std::vector<Tensor> outputs, int64_t us) {
+        std::lock_guard<std::mutex> lock(req->m);
+        if (req->done) return;
+        req->result.inference_us = us;
+        req->result.ok = ok;
+        req->result.error_code = ec;
+        req->result.error = msg;
+        req->result.outputs = std::move(outputs);
+        req->done = true;
+        req->cv.notify_all();
+        if (ok) {
+            stats_.requests_completed.fetch_add(1, std::memory_order_relaxed);
+            stats_.total_exec_us.fetch_add(static_cast<uint64_t>(us), std::memory_order_relaxed);
+        } else if (ec == ErrorCode::kTimeout) {
+            stats_.requests_timed_out.fetch_add(1, std::memory_order_relaxed);
+        } else {
+            stats_.requests_failed.fetch_add(1, std::memory_order_relaxed);
+        }
+    };
+
+    if (quarantined_.load(std::memory_order_acquire)) {
+        finish(false, ErrorCode::kInternalError,
+               "model instance is quarantined after a CUDA fault", {}, 0);
+        return end;
+    }
+
+    // Strip control tensors; the client never sends state tensors, but ignore
+    // them anyway if present (the scheduler owns the state).
+    std::set<std::string> skip;
+    for (const auto& ci : config_->sequence.control_input) skip.insert(ci.name);
+    for (const auto& st : config_->sequence.states) skip.insert(st.input_name);
+    std::vector<Tensor> exec;
+    exec.reserve(req->inputs.size() + config_->sequence.states.size());
+    for (const auto& in : req->inputs) {
+        if (!skip.count(in.name)) exec.push_back(in);
+    }
+    // Inject the current state of every declared state tensor.
+    for (const auto& st : config_->sequence.states) {
+        Tensor s;
+        auto it = active_seq_->state.find(st.input_name);
+        if (it != active_seq_->state.end()) {
+            s = it->second;
+        } else {
+            s.name = st.input_name;
+            s.type = st.data_type;
+            s.shape = st.dims;
+            s.data.assign(tensorByteSize(s.shape, s.type), 0);  // zeros
+        }
+        s.name = st.input_name;
+        exec.push_back(std::move(s));
+    }
+    // Every declared (non-state) input must be present after stripping.
+    for (const auto& spec : config_->inputs) {
+        if (skip.count(spec.name)) continue;
+        bool found = false;
+        for (const auto& t : exec) {
+            if (t.name == spec.name) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            finish(false, ErrorCode::kInvalidInput,
+                   "missing required input '" + spec.name + "'", {}, 0);
+            return end;
+        }
+    }
+
+    auto t0 = clock::now();
+    BackendResult bres;
+    try {
+        bres = backend_->execute(exec);
+    } catch (const std::exception& e) {
+        finish(false, ErrorCode::kInternalError, e.what(), {}, 0);
+        return end;
+    }
+    const int64_t us =
+        std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - t0).count();
+    if (bres.quarantine) quarantined_.store(true, std::memory_order_release);
+
+    if (us > max_inference_time_ms_ * 1000) {
+        finish(false, ErrorCode::kTimeout,
+               "inference exceeded time limit (" + std::to_string(max_inference_time_ms_) +
+                   "ms)",
+               {}, us);
+        return end;
+    }
+    if (!bres.ok) {
+        finish(false, bres.error_code, bres.error, {}, us);
+        return end;
+    }
+
+    // Capture the next state and drop state outputs from the client response.
+    std::set<std::string> state_out_names;
+    for (const auto& st : config_->sequence.states) state_out_names.insert(st.output_name);
+    bool state_ok = true;
+    for (const auto& st : config_->sequence.states) {
+        const Tensor* found = nullptr;
+        for (const auto& out : bres.outputs) {
+            if (out.name == st.output_name) {
+                found = &out;
+                break;
+            }
+        }
+        if (found == nullptr) {
+            state_ok = false;
+            break;
+        }
+        active_seq_->state[st.input_name] = *found;
+    }
+    active_seq_->last_activity = clock::now();
+    if (!state_ok) {
+        finish(false, ErrorCode::kInternalError,
+               "sequence model did not produce its declared state output(s)", {}, us);
+        return end;
+    }
+    std::vector<Tensor> reply;
+    for (const auto& out : bres.outputs) {
+        if (!state_out_names.count(out.name)) reply.push_back(out);
+    }
+    finish(true, ErrorCode::kNone, "", std::move(reply), us);
+    return end;
+}
+
+// One worker iteration for a sequence-batching model. Processes exactly one
+// request (starting a new sequence or continuing the active one); waits up to
+// the idle timeout when the active sequence currently has no queued request.
+// Returns false when the worker must exit.
+bool Scheduler::runSequenceCycle() {
+    // Release the in-flight slot of a request that was popped for processing.
+    auto releaseReq = [this]() {
+        {
+            std::lock_guard<std::mutex> ilock(inflight_mu_);
+            if (inflight_ > 0) --inflight_;
+        }
+        inflight_cv_.notify_all();
+    };
+    // Whether a live request of `c` is queued (queue_mu_ must be held).
+    auto queuedLiveLocked = [this](int64_t c) {
+        for (const auto& r : queue_) {
+            if (r->done) continue;
+            if (r->sequence_id == c) return true;
+        }
+        return false;
+    };
+    // Scan for and pop the first live request of `c` (queue_mu_ held).
+    auto popForLocked = [this](int64_t c, std::shared_ptr<InferenceRequest>& out) -> bool {
+        for (auto it = queue_.begin(); it != queue_.end(); ++it) {
+            if ((*it)->done) continue;
+            if ((*it)->sequence_id == c) {
+                out = *it;
+                queue_.erase(it);
+                {
+                    std::lock_guard<std::mutex> ilock(inflight_mu_);
+                    ++inflight_;
+                }
+                return true;
+            }
+        }
+        return false;
+    };
+
+    // Phase 1: start a new sequence when the slot is free.
+    if (!active_seq_) {
+        std::shared_ptr<InferenceRequest> first;
+        while (true) {
+            {
+                std::unique_lock<std::mutex> lock(queue_mu_);
+                queue_cv_.wait(lock, [this]() { return stop_ || !queue_.empty(); });
+                if (stop_ && queue_.empty()) return false;
+                if (queue_.front()->done) {
+                    queue_.pop_front();  // timed-out request: nothing to serve
+                    continue;
+                }
+                first = queue_.front();
+                queue_.pop_front();
+                {
+                    std::lock_guard<std::mutex> ilock(inflight_mu_);
+                    ++inflight_;
+                }
+            }
+            break;
+        }
+        bool start = false, end = false;
+        int64_t corrid = 0;
+        bool ok = readSequenceControl(first, start, end, corrid);
+        if (!ok || !start) {
+            std::lock_guard<std::mutex> lock(first->m);
+            if (!first->done) {
+                first->result.ok = false;
+                first->result.error_code = ErrorCode::kInvalidInput;
+                first->result.error = ok
+                                          ? "first request of a sequence must set START=1"
+                                          : "malformed sequence control tensors";
+                first->done = true;
+                first->cv.notify_all();
+            }
+            stats_.requests_failed.fetch_add(1, std::memory_order_relaxed);
+            releaseReq();
+            return true;
+        }
+        active_seq_ = std::make_unique<ActiveSequence>();
+        active_seq_->corrid = corrid;
+        active_seq_->last_activity = clock::now();
+        // Initialize hidden state to zeros (Triton initial state).
+        if (config_) {
+            for (const auto& st : config_->sequence.states) {
+                Tensor s;
+                s.name = st.input_name;
+                s.type = st.data_type;
+                s.shape = st.dims;
+                s.data.assign(tensorByteSize(s.shape, s.type), 0);
+                active_seq_->state[st.input_name] = std::move(s);
+            }
+        }
+        bool ended = processSequenceStep(first);
+        releaseReq();
+        if (ended) active_seq_.reset();
+        return true;
+    }
+
+    // Phase 2: the slot is occupied by an active sequence. Serve its queued
+    // requests in arrival order; otherwise wait (idle-limited) for the next one.
+    while (true) {
+        std::shared_ptr<InferenceRequest> step;
+        {
+            std::lock_guard<std::mutex> lock(queue_mu_);
+            if (popForLocked(active_seq_->corrid, step)) {
+                // processed below (outside the queue lock)
+            }
+        }
+        if (step) {
+            bool ended = processSequenceStep(step);
+            releaseReq();
+            if (ended) active_seq_.reset();
+            return true;
+        }
+
+        // No request of the active sequence is queued.
+        if (sequence_idle_us_ <= 0) {
+            active_seq_.reset();
+            return true;
+        }
+        const auto deadline = active_seq_->last_activity +
+                              std::chrono::microseconds(sequence_idle_us_);
+        if (clock::now() >= deadline) {
+            active_seq_.reset();  // idle timeout aborts the sequence
+            return true;
+        }
+        {
+            std::unique_lock<std::mutex> lock(queue_mu_);
+            queue_cv_.wait_until(lock, deadline,
+                                 [&]() { return stop_ || queuedLiveLocked(active_seq_->corrid); });
+        }
+        if (stop_) {
+            active_seq_.reset();  // let the next cycle drain remaining requests
+            return true;
+        }
+        // Loop: re-scan; the wait above released the lock so a matching request
+        // may now be queued.
+    }
 }
 
 }  // namespace inferlite

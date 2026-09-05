@@ -143,6 +143,51 @@ std::vector<int64_t> parseDims(Lexer& lex) {
     return dims;
 }
 
+// Parse a list of numbers / bools: `[ 0, 1 ]` or a single token `1`.
+std::vector<double> parseNumberArray(Lexer& lex) {
+    std::vector<double> out;
+    std::string tok = lex.next();
+    if (tok == "[") {
+        while (true) {
+            std::string t = lex.next();
+            if (t == "]") break;
+            if (t == ",") continue;
+            if (t == "true" || t == "True") {
+                out.push_back(1.0);
+            } else if (t == "false" || t == "False") {
+                out.push_back(0.0);
+            } else {
+                out.push_back(std::stod(t));
+            }
+        }
+    } else {
+        if (tok == "true" || tok == "True") {
+            out.push_back(1.0);
+        } else if (tok == "false" || tok == "False") {
+            out.push_back(0.0);
+        } else {
+            out.push_back(std::stod(tok));
+        }
+    }
+    return out;
+}
+
+// Defined below (after stripTypePrefix) in this anonymous namespace.
+std::string toUpper(const std::string& s);
+
+// Map a CONTROL_SEQUENCE_* kind string to the enum.
+SequenceControlKind sequenceKindFromString(const std::string& s) {
+    std::string v = toUpper(s);
+    if (v == "START" || v == "CONTROL_SEQUENCE_START") return SequenceControlKind::kSequenceStart;
+    if (v == "END" || v == "CONTROL_SEQUENCE_END") return SequenceControlKind::kSequenceEnd;
+    if (v == "READY" || v == "CONTROL_SEQUENCE_READY") return SequenceControlKind::kSequenceReady;
+    if (v == "CORRID" || v == "CONTROL_SEQUENCE_CORRID" ||
+        v == "CORRELATIONID" || v == "CONTROL_SEQUENCE_CORRELATIONID") {
+        return SequenceControlKind::kSequenceCorrId;
+    }
+    return SequenceControlKind::kInvalid;
+}
+
 // "TYPE_FP32" -> "FP32"
 std::string stripTypePrefix(const std::string& v) {
     const std::string prefix = "TYPE_";
@@ -349,6 +394,150 @@ DeviceKind kindFromStringInternal(const std::string& s) {
     if (v == "AUTO" || v == "KIND_AUTO") return DeviceKind::kAuto;
     if (v == "CUDA" || v == "GPU" || v == "TENSORRT" || v == "KIND_GPU") return DeviceKind::kNvidiaGpu;
     return DeviceKind::kInvalid;
+}
+
+// Map a control value-field name (int32_false_true / fp32_false_true / ...) to
+// the data type it implies. Returns kInvalid for unknown field names.
+DataType controlValueFieldType(const std::string& f) {
+    std::string v = toUpper(f);
+    if (v.find("INT32") != std::string::npos) return DataType::kInt32;
+    if (v.find("INT64") != std::string::npos) return DataType::kInt64;
+    if (v.find("FP32") != std::string::npos || v.find("FLOAT") != std::string::npos) {
+        return DataType::kFloat32;
+    }
+    if (v.find("FP64") != std::string::npos || v.find("DOUBLE") != std::string::npos) {
+        return DataType::kFloat64;
+    }
+    if (v.find("BOOL") != std::string::npos) return DataType::kBool;
+    if (v.find("UINT32") != std::string::npos) return DataType::kUint32;
+    if (v.find("UINT64") != std::string::npos) return DataType::kUint64;
+    return DataType::kInvalid;
+}
+
+// Parse one `control { ... }` entry (the caller consumed the leading '{').
+SequenceControlSpec parseControlBody(Lexer& lex) {
+    SequenceControlSpec c;
+    while (true) {
+        std::string f = lex.next();
+        if (f == "}") break;
+        if (f.empty()) throw PbtxtError("unexpected EOF in control{}");
+        if (f == "kind") {
+            requireToken(lex, ":", "control.kind");
+            c.kind = sequenceKindFromString(lex.next());
+            if (c.kind == SequenceControlKind::kInvalid) {
+                throw PbtxtError("unknown sequence control kind");
+            }
+        } else if (controlValueFieldType(f) != DataType::kInvalid) {
+            // int32_false_true / fp32_false_true / bool_false_true: [false, true].
+            requireToken(lex, ":", "control values");
+            auto vals = parseNumberArray(lex);
+            c.data_type = controlValueFieldType(f);
+            if (!vals.empty()) c.false_value = vals[0];
+            if (vals.size() > 1) c.true_value = vals[1];
+            else if (vals.size() == 1) c.true_value = vals[0];
+        } else {
+            // Skip unknown scalar/message fields.
+            std::string t = lex.next();
+            if (t == "{") {
+                int depth = 1;
+                while (depth > 0) {
+                    std::string inner = lex.next();
+                    if (inner == "{") ++depth;
+                    else if (inner == "}") --depth;
+                    else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                }
+            }
+        }
+    }
+    if (c.kind == SequenceControlKind::kInvalid) {
+        throw PbtxtError("control is missing a valid 'kind'");
+    }
+    return c;
+}
+
+// Parse one `control_input { ... }` entry (the caller consumed the leading '{').
+SequenceControlInputSpec parseControlInputBody(Lexer& lex) {
+    SequenceControlInputSpec in;
+    while (true) {
+        std::string f = lex.next();
+        if (f == "}") break;
+        if (f.empty()) throw PbtxtError("unexpected EOF in control_input{}");
+        if (f == "name") {
+            requireToken(lex, ":", "control_input.name");
+            in.name = lex.next();
+        } else if (f == "control") {
+            std::string t = lex.next();
+            if (t != "{") {
+                // Also accept `control: { ... }`.
+                if (t == ":") t = lex.next();
+            }
+            if (t != "{") {
+                throw PbtxtError("expected '{' for control_input.control, got '" + t + "'");
+            }
+            in.controls.push_back(parseControlBody(lex));
+        } else {
+            std::string t = lex.next();
+            if (t == "{") {
+                int depth = 1;
+                while (depth > 0) {
+                    std::string inner = lex.next();
+                    if (inner == "{") ++depth;
+                    else if (inner == "}") --depth;
+                    else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                }
+            }
+        }
+    }
+    if (in.name.empty()) throw PbtxtError("control_input missing 'name'");
+    return in;
+}
+
+// Parse one `state { ... }` entry (the caller consumed the leading '{').
+SequenceStateSpec parseSequenceStateBody(Lexer& lex) {
+    SequenceStateSpec st;
+    while (true) {
+        std::string f = lex.next();
+        if (f == "}") break;
+        if (f.empty()) throw PbtxtError("unexpected EOF in sequence state{}");
+        if (f == "input_name") {
+            requireToken(lex, ":", "state.input_name");
+            st.input_name = lex.next();
+        } else if (f == "output_name") {
+            requireToken(lex, ":", "state.output_name");
+            st.output_name = lex.next();
+        } else if (f == "data_type") {
+            requireToken(lex, ":", "state.data_type");
+            std::string v = stripTypePrefix(lex.next());
+            st.data_type = dataTypeFromString(v);
+            if (st.data_type == DataType::kInvalid) {
+                throw PbtxtError("unsupported state data_type: " + v);
+            }
+        } else if (f == "dims") {
+            requireToken(lex, ":", "state.dims");
+            st.dims = parseDims(lex);
+        } else {
+            std::string t = lex.next();
+            if (t == "{") {
+                int depth = 1;
+                while (depth > 0) {
+                    std::string inner = lex.next();
+                    if (inner == "{") ++depth;
+                    else if (inner == "}") --depth;
+                    else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                }
+            }
+        }
+    }
+    if (st.input_name.empty() || st.output_name.empty()) {
+        throw PbtxtError("sequence state requires input_name and output_name");
+    }
+    if (st.data_type == DataType::kInvalid) {
+        throw PbtxtError("sequence state requires a valid data_type");
+    }
+    if (st.dims.empty()) {
+        throw PbtxtError("sequence state requires dims");
+    }
+    return st;
 }
 
 }  // namespace
@@ -676,6 +865,66 @@ ModelConfig parseConfigPbtxt(const std::string& text) {
                     // queue policies default_queue_policy /
                     // priority_queue_policy, which InferLite does not implement
                     // yet).
+                    std::string t = lex.next();
+                    if (t == "{") {
+                        int depth = 1;
+                        while (depth > 0) {
+                            std::string inner = lex.next();
+                            if (inner == "{") ++depth;
+                            else if (inner == "}") --depth;
+                            else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                        }
+                    }
+                }
+            }
+        } else if (field == "sequence_batching") {
+            require("{", "sequence_batching");
+            cfg.sequence.enabled = true;
+            while (true) {
+                std::string f = lex.next();
+                if (f == "}") break;
+                if (f.empty()) throw PbtxtError("unexpected EOF in sequence_batching{}");
+                if (f == "max_sequence_idle_microseconds") {
+                    require(":", "sequence_batching.max_sequence_idle_microseconds");
+                    cfg.sequence.max_sequence_idle_us = parseInteger(lex.next());
+                } else if (f == "control_input") {
+                    std::string t = lex.next();
+                    if (t == ":") t = lex.next();
+                    if (t == "[") {
+                        while (true) {
+                            std::string n = lex.next();
+                            if (n == "]") break;
+                            if (n == ",") continue;
+                            if (n != "{") {
+                                throw PbtxtError("expected '{' in control_input array");
+                            }
+                            cfg.sequence.control_input.push_back(parseControlInputBody(lex));
+                        }
+                    } else if (t == "{") {
+                        cfg.sequence.control_input.push_back(parseControlInputBody(lex));
+                    } else {
+                        throw PbtxtError("expected '{' or '[' for control_input");
+                    }
+                } else if (f == "state") {
+                    std::string t = lex.next();
+                    if (t == ":") t = lex.next();
+                    if (t == "[") {
+                        while (true) {
+                            std::string n = lex.next();
+                            if (n == "]") break;
+                            if (n == ",") continue;
+                            if (n != "{") {
+                                throw PbtxtError("expected '{' in state array");
+                            }
+                            cfg.sequence.states.push_back(parseSequenceStateBody(lex));
+                        }
+                    } else if (t == "{") {
+                        cfg.sequence.states.push_back(parseSequenceStateBody(lex));
+                    } else {
+                        throw PbtxtError("expected '{' or '[' for sequence state");
+                    }
+                } else {
+                    // Skip unknown scalar/message fields.
                     std::string t = lex.next();
                     if (t == "{") {
                         int depth = 1;

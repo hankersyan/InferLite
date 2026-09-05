@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <set>
 #include <sstream>
 
 #include "sha256.hpp"
@@ -145,6 +146,101 @@ void validateConfig(const ModelConfig& cfg, const fs::path& model_dir) {
                                   "' sets default_priority_level=" +
                                   std::to_string(cfg.batching.default_priority_level) +
                                   " but priority_levels is not > 0");
+        }
+    }
+
+    // Triton sequence batching (stateful models). Mutually exclusive with
+    // dynamic batching; a sequence model must run on a stable backend with one
+    // instance, no client-visible batch dimension, and its hidden state tensors
+    // declared in the model I/O.
+    if (cfg.sequence.enabled) {
+        if (cfg.batching.enabled) {
+            throw RepositoryError("model '" + cfg.name +
+                                  "' configures both 'dynamic_batching' and "
+                                  "'sequence_batching'; Triton allows one scheduler per model");
+        }
+        if (cfg.max_batch_size != 0) {
+            throw RepositoryError("model '" + cfg.name +
+                                  "' enables 'sequence_batching' but max_batch_size=" +
+                                  std::to_string(cfg.max_batch_size) +
+                                  " is not 0; sequence batching requires tensors without a "
+                                  "client-visible batch dimension");
+        }
+        if (cfg.backend != "openvino") {
+            throw RepositoryError("model '" + cfg.name +
+                                  "' enables 'sequence_batching' with backend '" +
+                                  cfg.backend + "'; only the 'openvino' backend supports it");
+        }
+        const DeviceKind sdk = cfg.instance_group.device_kind;
+        if (sdk != DeviceKind::kCpu && sdk != DeviceKind::kAuto) {
+            throw RepositoryError("model '" + cfg.name +
+                                  "' enables 'sequence_batching' with instance kind '" +
+                                  cfg.instance_group.kind +
+                                  "'; only KIND_CPU / KIND_AUTO instances support it");
+        }
+        if (cfg.instance_group.count != 1) {
+            throw RepositoryError("model '" + cfg.name +
+                                  "' enables 'sequence_batching' with instance_group count " +
+                                  std::to_string(cfg.instance_group.count) +
+                                  "; InferLite supports one sequence slot per model "
+                                  "(Triton binds one sequence per instance)");
+        }
+        if (cfg.sequence.max_sequence_idle_us < 0) {
+            throw RepositoryError("model '" + cfg.name +
+                                  "' has negative max_sequence_idle_microseconds");
+        }
+        if (cfg.sequence.control_input.empty()) {
+            throw RepositoryError("model '" + cfg.name +
+                                  "' enables 'sequence_batching' without any control_input");
+        }
+        std::set<std::string> control_names;
+        bool have_start = false, have_corrid = false;
+        for (const auto& ci : cfg.sequence.control_input) {
+            if (ci.name.empty() || !control_names.insert(ci.name).second) {
+                throw RepositoryError("model '" + cfg.name +
+                                      "' has an empty or duplicate control_input name '" +
+                                      ci.name + "'");
+            }
+            for (const auto& ctl : ci.controls) {
+                if (ctl.kind == SequenceControlKind::kInvalid ||
+                    ctl.data_type == DataType::kInvalid) {
+                    throw RepositoryError("model '" + cfg.name + "' control_input '" +
+                                          ci.name +
+                                          "' has an invalid control kind or data type");
+                }
+                if (ctl.kind == SequenceControlKind::kSequenceStart) have_start = true;
+                if (ctl.kind == SequenceControlKind::kSequenceCorrId) have_corrid = true;
+            }
+        }
+        if (!have_start || !have_corrid) {
+            throw RepositoryError("model '" + cfg.name +
+                                  "' sequence_batching must configure START and CORRID "
+                                  "control inputs (END is optional)");
+        }
+        // Hidden state tensors must be part of the model I/O (clients never
+        // send/receive them) and must not collide with control tensors.
+        for (const auto& st : cfg.sequence.states) {
+            bool in_ok = false, out_ok = false;
+            for (const auto& in : cfg.inputs) {
+                if (in.name == st.input_name && in.data_type == st.data_type) in_ok = true;
+            }
+            for (const auto& out : cfg.outputs) {
+                if (out.name == st.output_name && out.data_type == st.data_type) out_ok = true;
+            }
+            if (!in_ok) {
+                throw RepositoryError("model '" + cfg.name + "' sequence state input '" +
+                                      st.input_name +
+                                      "' is not declared as a model input of the same type");
+            }
+            if (!out_ok) {
+                throw RepositoryError("model '" + cfg.name + "' sequence state output '" +
+                                      st.output_name +
+                                      "' is not declared as a model output of the same type");
+            }
+            if (control_names.count(st.input_name) || control_names.count(st.output_name)) {
+                throw RepositoryError("model '" + cfg.name +
+                                      "' sequence state tensor collides with a control_input");
+            }
         }
     }
 

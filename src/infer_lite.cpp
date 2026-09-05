@@ -1156,9 +1156,15 @@ InferenceOutcome InferLite::runInference(const std::string& model_name,
     outcome.trace_id = trace_id;
 
     // Structured input validation against the model spec (shape/type/size).
+    // Sequence models use the client-view rules (state is scheduler-owned and
+    // control tensors are allowed); everything else uses the strict rules.
     ErrorCode vc = ErrorCode::kNone;
     std::string vm;
-    if (!validateInputs(*cfg, inputs, limits_.max_input_size_bytes, vc, vm)) {
+    bool inputs_ok = cfg->sequence.enabled
+                         ? validateClientInputs(*cfg, inputs, limits_.max_input_size_bytes, vc,
+                                                vm)
+                         : validateInputs(*cfg, inputs, limits_.max_input_size_bytes, vc, vm);
+    if (!inputs_ok) {
         return fail(vc, vm);
     }
 
@@ -1517,6 +1523,34 @@ HttpResponse InferLite::handleConfig(const std::string& name) {
             json::Value(c.batching.default_priority_level);
         db.asObject()["preserve_ordering"] = json::Value(c.batching.preserve_ordering);
         obj.asObject()["dynamic_batching"] = std::move(db);
+    }
+    if (c.sequence.enabled) {
+        json::Value sb = json::Value::Object();
+        sb.asObject()["max_sequence_idle_microseconds"] =
+            json::Value(c.sequence.max_sequence_idle_us);
+        json::Value controls = json::Value(json::Value::Array());
+        for (const auto& ci : c.sequence.control_input) {
+            json::Value cj = json::Value::Object();
+            cj.asObject()["name"] = json::Value(ci.name);
+            json::Value kinds = json::Value(json::Value::Array());
+            for (const auto& ctl : ci.controls) {
+                kinds.asArray().push_back(
+                    json::Value(sequenceControlKindToString(ctl.kind)));
+            }
+            cj.asObject()["control"] = std::move(kinds);
+            controls.asArray().push_back(std::move(cj));
+        }
+        sb.asObject()["control_input"] = std::move(controls);
+        json::Value states = json::Value(json::Value::Array());
+        for (const auto& st : c.sequence.states) {
+            json::Value sj = json::Value::Object();
+            sj.asObject()["input_name"] = json::Value(st.input_name);
+            sj.asObject()["output_name"] = json::Value(st.output_name);
+            sj.asObject()["data_type"] = json::Value(dataTypeToString(st.data_type));
+            states.asArray().push_back(std::move(sj));
+        }
+        sb.asObject()["state"] = std::move(states);
+        obj.asObject()["sequence_batching"] = std::move(sb);
     }
     json::Value ig = json::Value::Object();
     ig.asObject()["count"] = json::Value(static_cast<int64_t>(c.instance_group.count));

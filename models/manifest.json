@@ -64,6 +64,11 @@
       "model_id": "sample_model",
       "version": "1",
       "sha256": "95b1412d665a783364f116832e6d35e82e97556f73f5cfd19778aec285aa3f92"
+    },
+    {
+      "model_id": "sequence_model",
+      "version": "1",
+      "sha256": "932049bd55ff9668cf83a557bbe00562ddab3af97c7ac51a13d07d0b68e62eb7"
     }
   ]
 }

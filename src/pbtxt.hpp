@@ -144,6 +144,63 @@ struct DynamicBatching {
     bool preserve_ordering = false;
 };
 
+// Triton sequence-batching control kinds (ModelSequenceBatching.Control.Kind).
+// START/END/READY are flags encoded as a false/true pair; CORRID is a value
+// (the sequence correlation id).
+enum class SequenceControlKind : int {
+    kSequenceStart,
+    kSequenceEnd,
+    kSequenceReady,
+    kSequenceCorrId,
+    kInvalid,
+};
+
+inline const char* sequenceControlKindToString(SequenceControlKind k) {
+    switch (k) {
+        case SequenceControlKind::kSequenceStart: return "CONTROL_SEQUENCE_START";
+        case SequenceControlKind::kSequenceEnd: return "CONTROL_SEQUENCE_END";
+        case SequenceControlKind::kSequenceReady: return "CONTROL_SEQUENCE_READY";
+        case SequenceControlKind::kSequenceCorrId: return "CONTROL_SEQUENCE_CORRID";
+        default: return "INVALID";
+    }
+}
+
+// One control attached to a control-input tensor.
+struct SequenceControlSpec {
+    SequenceControlKind kind = SequenceControlKind::kInvalid;
+    // Data type of the client tensor carrying this control (INT32/FP32/BOOL...).
+    DataType data_type = DataType::kInvalid;
+    // For START/END/READY the client sends one of these two scalar values.
+    double false_value = 0.0;
+    double true_value = 1.0;
+};
+
+// A Triton sequence-batching control input: the client carries a tensor with
+// this `name` on every request; the scheduler reads it to manage the sequence
+// and strips it before the tensor is sent to the backend model.
+struct SequenceControlInputSpec {
+    std::string name;
+    std::vector<SequenceControlSpec> controls;
+};
+
+// A hidden state tensor kept between requests of one sequence. The backend
+// model declares both tensors; clients never send/receive them.
+struct SequenceStateSpec {
+    std::string input_name;    // backend input carrying the previous state
+    std::string output_name;   // backend output produced as the next state
+    DataType data_type = DataType::kInvalid;
+    std::vector<int64_t> dims; // per-request shape (no batch dimension)
+};
+
+// Triton sequence-batching scheduler policy (config `sequence_batching {}`).
+struct SequenceBatching {
+    bool enabled = false;
+    // A sequence is aborted after this much time without a request (us).
+    int64_t max_sequence_idle_us = 0;
+    std::vector<SequenceControlInputSpec> control_input;
+    std::vector<SequenceStateSpec> states;
+};
+
 // Parsed representation of one model's config.pbtxt.
 struct ModelConfig {
     std::string name;
@@ -155,6 +212,10 @@ struct ModelConfig {
     // Triton-style dynamic batching scheduler policy (config `dynamic_batching`
     // block). Requires max_batch_size > 0. See DynamicBatching.
     DynamicBatching batching;
+    // Triton-style sequence-batching scheduler policy (config
+    // `sequence_batching {}` block) for stateful models. Mutually exclusive
+    // with dynamic batching. See SequenceBatching.
+    SequenceBatching sequence;
     std::vector<TensorSpec> inputs;
     std::vector<TensorSpec> outputs;
     InstanceGroup instance_group;

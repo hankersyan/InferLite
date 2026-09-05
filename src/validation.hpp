@@ -43,6 +43,18 @@ bool validateInputTensor(const TensorSpec& spec, const Tensor& input,
 bool validateInputs(const ModelConfig& cfg, const std::vector<Tensor>& inputs,
                     size_t max_input_bytes, ErrorCode& err_code, std::string& err_msg);
 
+// Validate the *client* view of the inputs of a sequence-batching model.
+// Compared with validateInputs:
+//   * sequence state tensors (config sequence_batching.state[].input_name) are
+//     not required -- the scheduler owns and injects them;
+//   * sequence control tensors (config sequence_batching.control_input[].name)
+//     are allowed extra tensors and are checked for presence/type/scalar size;
+//   * any other unknown tensor, or a client-supplied state tensor, is rejected.
+// For non-sequence models this delegates to validateInputs.
+bool validateClientInputs(const ModelConfig& cfg, const std::vector<Tensor>& inputs,
+                          size_t max_input_bytes, ErrorCode& err_code,
+                          std::string& err_msg);
+
 // Validate a produced output tensor against the model's output spec and the
 // configured output-validation rules (shape, NaN/Inf, range, confidence).
 // `max_batch_size` selects Triton batch-dimension handling (see resolveBatch).

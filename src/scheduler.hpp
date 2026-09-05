@@ -110,6 +110,10 @@ struct InferenceRequest {
     // Scheduler-assigned monotonically increasing enqueue sequence. Used as the
     // arrival order for priority FIFO stability and for preserve_ordering.
     uint64_t seq = 0;
+    // Sequence batching: correlation id of the sequence this request belongs
+    // to, resolved at enqueue from the CORRID control tensor. -1 when the model
+    // is not sequence batched (or the request has no control tensors).
+    int64_t sequence_id = -1;
 
     // Completion channel.
     std::mutex m;
@@ -157,6 +161,12 @@ public:
     // True when this scheduler coalesces requests across concurrent inference
     // calls (config `max_batch_size > 0` and a `dynamic_batching {}` policy).
     bool batchingEnabled() const { return max_batch_size_ > 0 && batch_mode_; }
+    // True when this model uses Triton sequence batching (`sequence_batching {}`
+    // in config.pbtxt). Requests of one sequence are routed in order to the
+    // single sequence slot; hidden state is carried between requests.
+    bool sequenceEnabled() const { return sequence_mode_; }
+    // Number of currently active sequences (0 or 1 with a single slot).
+    int activeSequences() const { return active_seq_ ? 1 : 0; }
     // Number of successful backend executions (merged batches).
     uint64_t batchesCompleted() const { return stats_.batches_completed.load(); }
     // Total samples served by successful executions.
@@ -180,6 +190,21 @@ private:
     bool runSingleCycle();
     bool runBatchCycle();
     void processOne(std::shared_ptr<InferenceRequest> req);
+
+    // --- Sequence batching (Phase 7) ---
+    // One worker iteration for a sequence-batching model. Processes one request
+    // of the active sequence (or starts one) and blocks (idle-limited) while no
+    // request of the active sequence is queued. Returns false to exit.
+    bool runSequenceCycle();
+    // Read START/END/CORRID from the request's control tensors. Returns false
+    // when a required control tensor is missing/malformed.
+    bool readSequenceControl(const std::shared_ptr<InferenceRequest>& req, bool& start,
+                             bool& end, int64_t& corrid);
+    // Execute one request on the current active sequence: strips the control
+    // tensors, injects the sequence state, runs the backend, captures the next
+    // state, strips state outputs from the response. Returns true when END was
+    // set (the sequence must be closed after this request).
+    bool processSequenceStep(const std::shared_ptr<InferenceRequest>& req);
 
     // Execute one merged batch (requests already removed from the queue and
     // counted in inflight_). Slices the merged outputs back to each request.
@@ -237,6 +262,18 @@ private:
     uint64_t order_next_ = 1;                 // next seq allowed to be delivered
     std::map<uint64_t, std::function<void()>> order_pending_;   // finished, awaiting delivery
     std::set<uint64_t> order_skipped_;        // seqs resolved out-of-band (timeouts/drops)
+
+    // --- Sequence batching (Phase 7) ---
+    bool sequence_mode_ = false;
+    int64_t sequence_idle_us_ = 0;
+    // A sequence slot: one active sequence at a time (mirrors Triton binding a
+    // sequence to a model instance). Only touched by the single sequence worker.
+    struct ActiveSequence {
+        int64_t corrid = 0;
+        std::map<std::string, Tensor> state;  // state-spec input_name -> value
+        std::chrono::steady_clock::time_point last_activity;
+    };
+    std::unique_ptr<ActiveSequence> active_seq_;
 
     mutable std::mutex queue_mu_;
     std::condition_variable queue_cv_;
