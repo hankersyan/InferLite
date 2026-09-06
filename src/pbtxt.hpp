@@ -164,6 +164,24 @@ struct GoldenTest {
     double epsilon = 0.0;  // 0 => bit-for-bit
 };
 
+// Triton-style response caching, parsed from a `response_cache {}` block in
+// config.pbtxt (mirrors NVIDIA Triton's ModelConfig.ResponseCache message):
+//
+//   response_cache {
+//     enable: true
+//   }
+//
+// When enabled, the server keeps a bounded LRU of recently computed responses
+// keyed on the request inputs plus the model generation (config hash + model
+// file hash, see response_cache.hpp). Identical requests are answered from the
+// cache without queueing or executing the model. Safe ONLY for deterministic
+// models - enabling it asserts determinism. Stateful models
+// (sequence_batching) are rejected at config validation because their outputs
+// depend on sequence state that the cache would skip.
+struct ResponseCacheConfig {
+    bool enabled = false;
+};
+
 // Triton-style dynamic batching policy, parsed from a `dynamic_batching {}`
 // block in config.pbtxt (Phase 7 / batching mode). Mirrors NVIDIA Triton's
 // ModelConfig.DynamicBatching message:
@@ -300,6 +318,10 @@ struct ModelConfig {
     // `sequence_batching {}` block) for stateful models. Mutually exclusive
     // with dynamic batching. See SequenceBatching.
     SequenceBatching sequence;
+    // Triton-style response cache opt-in (config `response_cache { enable:
+    // true }`). Deterministic-model optimization: identical requests are served
+    // from a bounded LRU without executing the model. See ResponseCacheConfig.
+    ResponseCacheConfig response_cache;
     // Triton `model_warmup`: sample requests run through the real scheduler at
     // load time (before the model is marked ready). Empty => no warmup. Not
     // supported together with sequence_batching. See ModelWarmup.

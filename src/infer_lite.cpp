@@ -418,6 +418,16 @@ std::shared_ptr<InferLite::ModelEntry> InferLite::newEntryShell(const LoadedMode
         (lm.config->backend == "tensorrt" && lm.config->instance_group.kind == "KIND_GPU")
             ? "GPU"
             : "CPU";
+
+    // Triton-style response cache (config `response_cache { enable: true }`).
+    // A brand-new LRU is created on EVERY load/reload so entries can never
+    // outlive the exact model generation that produced them: reloads triggered
+    // by a config change, an artifact replacement, or an ensemble dependency
+    // re-load all start from an empty cache.
+    if (lm.config->response_cache.enabled) {
+        entry->response_cache = std::make_shared<ResponseCache>(
+            opts_.response_cache_max_entries, opts_.response_cache_max_bytes);
+    }
     return entry;
 }
 
@@ -858,6 +868,10 @@ void InferLite::commitEntry(const std::shared_ptr<ModelEntry>& fresh) {
         existing->version_path = fresh->version_path;
         existing->version = fresh->version;
         existing->device_label = fresh->device_label;
+        // Reload swaps in the fresh (empty) response cache atomically with the
+        // scheduler/backend; in-flight requests keep their old cache reference
+        // until they drain, exactly like the old scheduler they were built on.
+        existing->response_cache = fresh->response_cache;
         existing->state = fresh->state;
         existing->reason = fresh->reason;
     }
@@ -1119,6 +1133,9 @@ ControlStatus InferLite::unloadOne(const std::string& name, bool unload_dependen
         e->reason = "model unloaded";
         e->backend.reset();
         e->scheduler.reset();
+        // Drop the response cache: stored payloads belong to the unloaded model
+        // generation. (In-flight requests keep their own shared_ptr copy.)
+        e->response_cache.reset();
         // config/version_path are retained for reporting.
     } else {
         // Poll detected removal: forget the model entirely.
@@ -1280,6 +1297,7 @@ InferenceOutcome InferLite::runInference(const std::string& model_name,
     // serving and is destroyed only after the last reference is dropped.
     std::shared_ptr<const ModelConfig> cfg;
     std::shared_ptr<Scheduler> sched;
+    std::shared_ptr<ResponseCache> cache;  // null unless response cache enabled
     std::string entry_name, device_label;
     std::string cfg_hash, model_hash, meta_version;
     int64_t loaded_version = -1;
@@ -1289,6 +1307,7 @@ InferenceOutcome InferLite::runInference(const std::string& model_name,
             if (ep->name != model_name || !ep->loaded()) continue;
             cfg = ep->config;
             sched = ep->scheduler;
+            cache = ep->response_cache;
             entry_name = ep->name;
             device_label = ep->device_label;
             loaded_version = ep->version;
@@ -1373,6 +1392,69 @@ InferenceOutcome InferLite::runInference(const std::string& model_name,
         }
     }
 
+    // Audit writer shared by the scheduler path and the response-cache fast
+    // path below so cache hits produce the same chain-consistent records.
+    auto writeAudit = [&](bool ok, ErrorCode ec, const std::string& device,
+                          int64_t duration_ms) {
+        if (!audit_) return;
+        AuditEntry ae;
+        ae.trace_id = trace_id;
+        ae.model_id = entry_name;
+        ae.model_version = meta_version;
+        ae.model_hash = model_hash;
+        ae.software_version = config_store_->softwareVersion();
+        ae.config_hash = cfg_hash;
+        ae.duration_ms = duration_ms;
+        ae.device = device;
+        try {
+            json::Value parsed_shape = json::parse(input_shape_str);
+            if (parsed_shape.isArray()) {
+                for (const auto& d : parsed_shape.asArray()) {
+                    ae.input_shape.push_back(static_cast<int64_t>(d.asDouble()));
+                }
+            }
+        } catch (...) {
+        }
+        ae.inference_status = ok ? "SUCCESS" : "FAILURE";
+        ae.error_code = ok ? "" : std::string(errorCodeToString(ec));
+        try {
+            audit_->write(ae);
+        } catch (const std::exception& e) {
+            diag_->error(std::string("audit log write failed: ") + e.what());
+        }
+    };
+
+    // Triton-style response cache fast path (config.pbtxt
+    // `response_cache { enable: true }`). Deterministic-model optimization: a
+    // request whose canonical key already exists in the LRU is answered from
+    // the stored response without queueing or executing the model. The key
+    // binds the response to the exact model generation (loaded version +
+    // config hash + model file hash) and to the full canonicalized input
+    // contents, so an input change, a config override, an artifact replacement
+    // or an ensemble dependency re-load is always a miss (and every reload
+    // additionally starts from a fresh, empty cache).
+    std::string cache_key;
+    if (cache) {
+        cache_key = makeResponseCacheKey(entry_name, loaded_version, cfg_hash, model_hash,
+                                         inputs);
+        auto cache_start = std::chrono::steady_clock::now();
+        std::vector<Tensor> cached_outputs;
+        const bool cache_hit = cache->lookup(cache_key, cached_outputs);
+        const int64_t cache_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                                     std::chrono::steady_clock::now() - cache_start)
+                                     .count();
+        if (cache_hit) {
+            // Answer from cache. The stored response was produced by this exact
+            // model generation on the same device, so the resolved device label
+            // stays valid for audit/reporting.
+            writeAudit(true, ErrorCode::kNone, device_label, cache_us / 1000);
+            outcome.ok = true;
+            outcome.device = device_label;
+            outcome.outputs = std::move(cached_outputs);
+            return outcome;
+        }
+    }
+
     auto ireq = std::make_shared<InferenceRequest>();
     ireq->inputs = std::move(inputs);
     ireq->timeout_ms = opts_.request_timeout_ms;
@@ -1393,33 +1475,7 @@ InferenceOutcome InferLite::runInference(const std::string& model_name,
                            .count();
 
     // Finalize the audit entry.
-    if (audit_) {
-        AuditEntry ae;
-        ae.trace_id = trace_id;
-        ae.model_id = entry_name;
-        ae.model_version = meta_version;
-        ae.model_hash = model_hash;
-        ae.software_version = config_store_->softwareVersion();
-        ae.config_hash = cfg_hash;
-        ae.duration_ms = duration_ms;
-        ae.device = device_label;
-        try {
-            json::Value parsed_shape = json::parse(input_shape_str);
-            if (parsed_shape.isArray()) {
-                for (const auto& d : parsed_shape.asArray()) {
-                    ae.input_shape.push_back(static_cast<int64_t>(d.asDouble()));
-                }
-            }
-        } catch (...) {
-        }
-        ae.inference_status = result->ok ? "SUCCESS" : "FAILURE";
-        ae.error_code = result->ok ? "" : std::string(errorCodeToString(result->error_code));
-        try {
-            audit_->write(ae);
-        } catch (const std::exception& e) {
-            diag_->error(std::string("audit log write failed: ") + e.what());
-        }
-    }
+    writeAudit(result->ok, result->error_code, device_label, duration_ms);
 
     if (!result->ok) {
         outcome.error_code = result->error_code;
@@ -1430,6 +1486,11 @@ InferenceOutcome InferLite::runInference(const std::string& model_name,
     outcome.ok = true;
     outcome.device = device_label;
     outcome.outputs = std::move(result->outputs);
+
+    // Store the freshly computed response for later identical requests.
+    if (cache && !cache_key.empty()) {
+        cache->insert(cache_key, outcome.outputs);
+    }
     return outcome;
 }
 
@@ -1816,6 +1877,11 @@ HttpResponse InferLite::handleConfig(const std::string& name, int64_t requested_
         }
         obj.asObject()["model_warmup"] = std::move(warmups);
     }
+    if (c.response_cache.enabled) {
+        json::Value rc = json::Value::Object();
+        rc.asObject()["enable"] = json::Value(true);
+        obj.asObject()["response_cache"] = std::move(rc);
+    }
     json::Value ig = json::Value::Object();
     ig.asObject()["count"] = json::Value(static_cast<int64_t>(c.instance_group.count));
     ig.asObject()["kind"] = json::Value(c.instance_group.kind);
@@ -1874,6 +1940,8 @@ HttpResponse InferLite::handleMetrics() {
     json::Value models_arr = json::Value(json::Value::Array());
     uint64_t total_completed = 0, total_failed = 0, total_timeout = 0, total_us = 0;
     size_t total_queue = 0;
+    uint64_t total_cache_lookups = 0, total_cache_hits = 0, total_cache_insertions = 0;
+    uint64_t total_cache_evictions = 0, total_cache_entries = 0, total_cache_bytes = 0;
 
     {
         // Build the per-model and aggregate metrics under the model lock so a
@@ -1921,6 +1989,35 @@ HttpResponse InferLite::handleMetrics() {
                 mm.asObject()["gpu_memory_bytes"] = json::Value(static_cast<int64_t>(
                     it != gpu_usage_bytes_.end() ? it->second.load(std::memory_order_relaxed) : 0));
             }
+            // Triton-style response cache accounting (only present when the
+            // model enables response_cache). cache_lookups counts every request
+            // checked against the cache; hits are served without a scheduler/
+            // backend execution, so requests_completed tracks backend
+            // executions while cache_hits tracks the requests the cache saved.
+            if (m.response_cache) {
+                const auto& cs = m.response_cache->stats();
+                const uint64_t lookups = cs.lookups.load();
+                const uint64_t hits = cs.hits.load();
+                const size_t n_entries = m.response_cache->entries();
+                const size_t n_bytes = m.response_cache->bytes();
+                mm.asObject()["response_cache_enabled"] = json::Value(true);
+                mm.asObject()["cache_lookups"] = json::Value(static_cast<int64_t>(lookups));
+                mm.asObject()["cache_hits"] = json::Value(static_cast<int64_t>(hits));
+                mm.asObject()["cache_misses"] =
+                    json::Value(static_cast<int64_t>(lookups - hits));
+                mm.asObject()["cache_insertions"] =
+                    json::Value(static_cast<int64_t>(cs.insertions.load()));
+                mm.asObject()["cache_evictions"] =
+                    json::Value(static_cast<int64_t>(cs.evictions.load()));
+                mm.asObject()["cache_entries"] = json::Value(static_cast<int64_t>(n_entries));
+                mm.asObject()["cache_bytes"] = json::Value(static_cast<int64_t>(n_bytes));
+                total_cache_lookups += lookups;
+                total_cache_hits += hits;
+                total_cache_insertions += cs.insertions.load();
+                total_cache_evictions += cs.evictions.load();
+                total_cache_entries += n_entries;
+                total_cache_bytes += n_bytes;
+            }
             models_arr.asArray().push_back(std::move(mm));
         }
     }
@@ -1932,6 +2029,16 @@ HttpResponse InferLite::handleMetrics() {
     obj.asObject()["requests_timed_out"] = json::Value(static_cast<int64_t>(total_timeout));
     obj.asObject()["average_inference_latency_us"] = json::Value(avg_us);
     obj.asObject()["queue_depth"] = json::Value(static_cast<int64_t>(total_queue));
+    // Aggregate response-cache counters across all cached models (zero when no
+    // model enables response_cache).
+    obj.asObject()["cache_lookups"] = json::Value(static_cast<int64_t>(total_cache_lookups));
+    obj.asObject()["cache_hits"] = json::Value(static_cast<int64_t>(total_cache_hits));
+    obj.asObject()["cache_insertions"] =
+        json::Value(static_cast<int64_t>(total_cache_insertions));
+    obj.asObject()["cache_evictions"] =
+        json::Value(static_cast<int64_t>(total_cache_evictions));
+    obj.asObject()["cache_entries"] = json::Value(static_cast<int64_t>(total_cache_entries));
+    obj.asObject()["cache_bytes"] = json::Value(static_cast<int64_t>(total_cache_bytes));
     obj.asObject()["config_hash"] = json::Value(config_store_->configStoreHash());
     obj.asObject()["models"] = std::move(models_arr);
 #ifdef INFERLITE_ENABLE_GPU

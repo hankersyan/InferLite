@@ -19,6 +19,7 @@
 #include "http_server.hpp"
 #include "memory_manager.hpp"
 #include "model_repository.hpp"
+#include "response_cache.hpp"
 #include "scheduler.hpp"
 #include "validation.hpp"
 
@@ -156,6 +157,14 @@ struct ServerOptions {
     // special value "*" loads every model in the repository (and cannot be
     // combined with explicit names, matching Triton). Ignored otherwise.
     std::vector<std::string> load_models;
+
+    // --- Triton-style response cache options ---
+    // Capacity bounds applied to EACH model's response cache (config.pbtxt
+    // `response_cache { enable: true }`). Per-model bounded LRUs are used so a
+    // model reload/ unload implicitly retires its entries. 0 means unbounded
+    // for that dimension.
+    size_t response_cache_max_entries = 128;  // per-model LRU entry cap
+    size_t response_cache_max_bytes = 16u * 1024u * 1024u;  // per-model LRU byte cap
 };
 
 class InferLite {
@@ -377,6 +386,14 @@ private:
         enum class State : int { kUnavailable, kLoading, kReady, kUnloading };
         State state = State::kUnavailable;
         std::string reason;  // why the model is UNAVAILABLE ("" when READY)
+
+        // Triton-style response cache for deterministic models (config.pbtxt
+        // `response_cache { enable: true }`). Null while disabled. A fresh
+        // cache object is created on every successful load and dropped on
+        // unload, so entries can never outlive the model generation (config +
+        // files) that produced them; in-flight requests keep their own
+        // reference until they drain.
+        std::shared_ptr<ResponseCache> response_cache;
 
         bool loaded() const { return state == State::kReady && scheduler != nullptr; }
     };

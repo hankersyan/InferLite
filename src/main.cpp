@@ -10,6 +10,7 @@
 //             [--gpu-device=N]
 //             [--model-control-mode=none|poll|explicit]
 //             [--repository-poll-secs=N] [--load-model=<name>]
+//             [--response-cache-max-entries=N] [--response-cache-max-bytes=N]
 //
 //   Windows service modes (requires an elevated prompt to install/uninstall):
 //     --install-service        Register this exe as a Windows service
@@ -77,6 +78,11 @@ void printUsage(const char* prog) {
         << "  --repository-poll-secs=<n>  Repository poll interval in seconds (poll mode; default 15)\n"
         << "  --load-model=<name>         Model(s) to load at startup in explicit mode; '*' = all\n"
         << "                              (repeatable; may not combine '*' with explicit names)\n"
+        << "  --response-cache-max-entries=<n>  Per-model response-cache LRU entry cap\n"
+        << "                              (config.pbtxt `response_cache { enable: true }`;\n"
+        << "                              default: 128, 0 = unbounded)\n"
+        << "  --response-cache-max-bytes=<n>    Per-model response-cache LRU byte cap\n"
+        << "                              (default: 16777216, 0 = unbounded)\n"
 #ifdef _WIN32
         << "  --install-service           Install InferLite as a Windows service (admin)\n"
         << "  --uninstall-service         Remove the InferLite Windows service (admin)\n"
@@ -172,6 +178,16 @@ inferlite::ServerOptions inferlite::parseServerOptions(const std::vector<std::st
                 std::max(1, std::stoi(requireValue(arg, "--repository-poll-secs"))));
         } else if (arg.rfind("--load-model=", 0) == 0) {
             opts.load_models.push_back(requireValue(arg, "--load-model"));
+        } else if (arg.rfind("--response-cache-max-entries=", 0) == 0) {
+            // Per-model LRU entry cap for the Triton-style response cache
+            // (config.pbtxt `response_cache { enable: true }`). 0 = unbounded.
+            opts.response_cache_max_entries = static_cast<size_t>(std::max<int64_t>(
+                0, std::stoll(requireValue(arg, "--response-cache-max-entries"))));
+        } else if (arg.rfind("--response-cache-max-bytes=", 0) == 0) {
+            // Per-model LRU byte cap for the Triton-style response cache.
+            // 0 = unbounded.
+            opts.response_cache_max_bytes = static_cast<size_t>(std::max<int64_t>(
+                0, std::stoll(requireValue(arg, "--response-cache-max-bytes"))));
         } else {
             throw std::runtime_error("unknown option: " + arg);
         }

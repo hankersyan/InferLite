@@ -199,10 +199,23 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
   the one GPU from OOM/memory contention when several models are loaded
   concurrently. `--rate-limit-resource=<name>:<count>` raises a pool's
   capacity. See `docs/RATE_LIMITER.md`.
+- **Response cache (Triton-style)** — a `response_cache { enable: true }` block
+  in `config.pbtxt` makes the server answer identical requests from a bounded
+  LRU of previously computed responses instead of queueing and executing the
+  model again. The cache key is the SHA-256 of the model name, loaded version,
+  config hash, model file hash, and the canonicalized (name-sorted) input
+  contents, so a changed input — or a config override, artifact replacement, or
+  ensemble dependency re-load — is always a cache miss, and each reload starts
+  from a fresh cache. Safe only for deterministic models (enabling it asserts
+  determinism); stateful `sequence_batching` models are rejected at config
+  validation. Per-model LRU capacity is bounded by
+  `--response-cache-max-entries` (default 128) and
+  `--response-cache-max-bytes` (default 16 MiB; 0 = unbounded); `/v2/metrics`
+  reports `cache_lookups`/`cache_hits`/`cache_insertions`/`cache_evictions`
+  per model and server-wide. See `scripts/test_response_cache.ps1`.
 
 ### Not yet implemented
 
-- **Response cache** — returning cached outputs for identical requests.
 - **Ragged batching** — batching variable-sized inputs without padding.
 - **gRPC streaming** — unary RPCs only; no decoupled/streaming responses.
 - **Request cancellation** — clients cannot abort an in-flight request.

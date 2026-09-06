@@ -483,6 +483,17 @@ void validateConfig(const ModelConfig& cfg, const fs::path& model_dir) {
         }
     }
 
+    // Response cache (Triton `response_cache { enable: true }`) is a
+    // deterministic-model optimization: stateful models must never be cached
+    // because their outputs depend on sequence state that a cache hit would
+    // skip, and their state tensors are scheduler-owned (not client inputs).
+    if (cfg.response_cache.enabled && cfg.sequence.enabled) {
+        throw RepositoryError("model '" + cfg.name +
+                              "' enables 'response_cache' together with "
+                              "'sequence_batching'; response caching of stateful "
+                              "models is not supported");
+    }
+
     // Phase 4: validate the resolved device kind. For OpenVINO models the
     // accepted kinds are KIND_CPU / KIND_NPU / KIND_GPU_INTEL / KIND_AUTO.
     // NVIDIA GPU (KIND_GPU) is handled by a separate backend and not OpenVINO.

@@ -736,6 +736,40 @@ ModelConfig parseConfigPbtxt(const std::string& text) {
         } else if (field == "max_batch_size") {
             require(":", "max_batch_size");
             cfg.max_batch_size = parseInteger(lex.next());
+        } else if (field == "response_cache") {
+            // Triton `response_cache { enable: true }`: per-model opt-in for
+            // caching the responses of identical (deterministic) requests.
+            require("{", "response_cache");
+            while (true) {
+                std::string f = lex.next();
+                if (f == "}") break;
+                if (f.empty()) throw PbtxtError("unexpected EOF inside response_cache{}");
+                if (f == "enable") {
+                    require(":", "response_cache.enable");
+                    std::string bt = lex.next();
+                    if (bt == "true" || bt == "True" || bt == "1") {
+                        cfg.response_cache.enabled = true;
+                    } else if (bt == "false" || bt == "False" || bt == "0") {
+                        cfg.response_cache.enabled = false;
+                    } else {
+                        throw PbtxtError("response_cache.enable must be true/false, got '" +
+                                         bt + "'");
+                    }
+                } else {
+                    // Skip unknown scalar/message fields for forward
+                    // compatibility.
+                    std::string t = lex.next();
+                    if (t == "{") {
+                        int depth = 1;
+                        while (depth > 0) {
+                            std::string inner = lex.next();
+                            if (inner == "{") ++depth;
+                            else if (inner == "}") --depth;
+                            else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                        }
+                    }
+                }
+            }
         } else if (field == "input") {
             // Accept both `input { ... }` and `input: [ { ... }, ... ]`.
             std::string tok = lex.next();

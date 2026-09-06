@@ -158,6 +158,7 @@ add_executable(inferlite
     src/pbtxt.cpp
     src/plugin_backend.cpp
     src/rate_limiter.cpp
+    src/response_cache.cpp
     src/scheduler.cpp
     src/sha256.cpp
     src/validation.cpp
