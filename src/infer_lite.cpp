@@ -190,6 +190,22 @@ HttpResponse jsonError(int status, const std::string& msg) {
     return r;
 }
 
+// Escape a string for use as a Prometheus label value (the exposition format
+// escapes backslash, double quote and newline).
+std::string promLabelEscape(const std::string& v) {
+    std::string out;
+    out.reserve(v.size());
+    for (char c : v) {
+        switch (c) {
+            case '\\': out += "\\\\"; break;
+            case '"': out += "\\\""; break;
+            case '\n': out += "\\n"; break;
+            default: out += c;
+        }
+    }
+    return out;
+}
+
 }  // namespace
 
 // ---- model-control-mode conversions ----------------------------------------
@@ -874,10 +890,6 @@ void InferLite::commitEntry(const std::shared_ptr<ModelEntry>& fresh) {
         existing->response_cache = fresh->response_cache;
         existing->state = fresh->state;
         existing->reason = fresh->reason;
-    }
-    if (fresh->device_label == "GPU" &&
-        gpu_usage_bytes_.find(fresh->name) == gpu_usage_bytes_.end()) {
-        gpu_usage_bytes_[fresh->name].store(0, std::memory_order_relaxed);
     }
 }
 
@@ -1935,122 +1947,307 @@ HttpResponse InferLite::handleConfig(const std::string& name, int64_t requested_
 }
 
 HttpResponse InferLite::handleMetrics() {
+    // NVIDIA Triton exposes /v2/metrics in the Prometheus text exposition
+    // format so Prometheus (or any scrape target) can be pointed straight at
+    // the server. Each model's counters are emitted per metric family with
+    // {model, version} labels, mirroring Triton's nv_* metric names:
+    //
+    //   nv_inference_request_success          successful requests
+    //   nv_inference_request_failure          failed requests (reason label:
+    //                                         REJECTED = scheduler timeout,
+    //                                         OTHER = remaining failures)
+    //   nv_inference_count                    inferences performed (a batch of
+    //                                         n counts as n; response-cache
+    //                                         hits are not executed)
+    //   nv_inference_exec_count               model executions (one merged
+    //                                         batch = one execution)
+    //   nv_inference_pending_request_count    instantaneous scheduler queue
+    //                                         depth (gauge)
+    //   nv_inference_compute_infer_duration_us  cumulative backend inference
+    //                                         time in microseconds (divide by
+    //                                         nv_inference_request_success for
+    //                                         the average latency)
+    //   nv_inference_priority_completed       successful completions per
+    //                                         dynamic-batching priority level
+    //   nv_cache_lookup_count / hit / miss / insertion / eviction, and
+    //   nv_cache_num_entries / entry_size     per-model response cache
     HttpResponse resp;
-    json::Value obj = json::Value::Object();
-    json::Value models_arr = json::Value(json::Value::Array());
-    uint64_t total_completed = 0, total_failed = 0, total_timeout = 0, total_us = 0;
-    size_t total_queue = 0;
-    uint64_t total_cache_lookups = 0, total_cache_hits = 0, total_cache_insertions = 0;
-    uint64_t total_cache_evictions = 0, total_cache_entries = 0, total_cache_bytes = 0;
+    resp.status = 200;
+    resp.content_type = "text/plain; version=0.0.4";
 
+    // Snapshot every loaded model's counters under the model lock so a
+    // concurrent load/unload cannot tear the reads. Formatting happens after
+    // the lock is released; the scheduler shared_ptrs captured here keep the
+    // stats objects alive for the duration of the scrape.
+    struct Row {
+        std::string name;
+        std::string version;  // loaded version as decimal, or empty when unversioned
+        uint64_t completed = 0;
+        uint64_t failed = 0;      // non-timeout failures
+        uint64_t timed_out = 0;   // scheduler timeouts (part of failures)
+        uint64_t total_exec_us = 0;
+        uint64_t batches = 0;     // successful merged executions (batching mode)
+        uint64_t samples = 0;     // samples served by successful executions
+        size_t queue_depth = 0;
+        bool batching = false;
+        std::vector<uint64_t> priority_served;  // non-empty when priority active
+        bool has_cache = false;
+        uint64_t lookups = 0, hits = 0, insertions = 0, evictions = 0;
+        size_t cache_entries = 0, cache_bytes = 0;
+    };
+    std::vector<Row> rows;
     {
-        // Build the per-model and aggregate metrics under the model lock so a
-        // concurrent load/unload cannot tear field reads.
         std::lock_guard<std::mutex> lock(models_mu_);
+        rows.reserve(models_.size());
         for (const auto& ep : models_) {
-            if (!ep->loaded()) continue;
+            if (!ep->loaded() || !ep->scheduler) continue;
             const auto& m = *ep;
-            const auto& st = m.scheduler->stats();
-            total_completed += st.requests_completed.load();
-            total_failed += st.requests_failed.load();
-            total_timeout += st.requests_timed_out.load();
-            total_us += st.total_exec_us.load();
-            total_queue += m.scheduler->queueDepth();
-
-            json::Value mm = json::Value::Object();
-            mm.asObject()["model_name"] = json::Value(m.name);
-            mm.asObject()["device"] = json::Value(m.device_label);
-            mm.asObject()["requests_completed"] = json::Value(static_cast<int64_t>(st.requests_completed.load()));
-            mm.asObject()["requests_failed"] = json::Value(static_cast<int64_t>(st.requests_failed.load()));
-            mm.asObject()["requests_timed_out"] = json::Value(static_cast<int64_t>(st.requests_timed_out.load()));
-            mm.asObject()["average_latency_us"] = json::Value(m.scheduler->averageLatencyUs());
-            mm.asObject()["queue_depth"] = json::Value(static_cast<int64_t>(m.scheduler->queueDepth()));
-            if (m.scheduler->batchingEnabled()) {
-                mm.asObject()["batching_enabled"] = json::Value(true);
-                mm.asObject()["max_batch_size"] = json::Value(m.config ? m.config->max_batch_size
-                                                                       : 0);
-                mm.asObject()["batches_executed"] =
-                    json::Value(static_cast<int64_t>(m.scheduler->batchesCompleted()));
-                mm.asObject()["batch_samples"] =
-                    json::Value(static_cast<int64_t>(m.scheduler->samplesCompleted()));
-                mm.asObject()["average_batch_size"] =
-                    json::Value(m.scheduler->averageBatchSize());
-                std::vector<uint64_t> prio = m.scheduler->priorityServed();
-                if (!prio.empty()) {
-                    json::Value arr = json::Value(json::Value::Array());
-                    for (uint64_t n : prio) {
-                        arr.asArray().push_back(json::Value(static_cast<int64_t>(n)));
-                    }
-                    mm.asObject()["priority_completed"] = std::move(arr);
-                }
-            }
-            if (m.device_label == "GPU") {
-                auto it = gpu_usage_bytes_.find(m.name);
-                mm.asObject()["gpu_memory_bytes"] = json::Value(static_cast<int64_t>(
-                    it != gpu_usage_bytes_.end() ? it->second.load(std::memory_order_relaxed) : 0));
-            }
-            // Triton-style response cache accounting (only present when the
-            // model enables response_cache). cache_lookups counts every request
-            // checked against the cache; hits are served without a scheduler/
-            // backend execution, so requests_completed tracks backend
-            // executions while cache_hits tracks the requests the cache saved.
+            const SchedulerStats& st = m.scheduler->stats();
+            Row r;
+            r.name = m.name;
+            r.version = m.version >= 1 ? std::to_string(m.version) : std::string();
+            r.completed = st.requests_completed.load(std::memory_order_relaxed);
+            r.failed = st.requests_failed.load(std::memory_order_relaxed);
+            r.timed_out = st.requests_timed_out.load(std::memory_order_relaxed);
+            r.total_exec_us = st.total_exec_us.load(std::memory_order_relaxed);
+            r.batches = st.batches_completed.load(std::memory_order_relaxed);
+            r.samples = st.samples_completed.load(std::memory_order_relaxed);
+            r.queue_depth = m.scheduler->queueDepth();
+            r.batching = m.scheduler->batchingEnabled();
+            r.priority_served = m.scheduler->priorityServed();
             if (m.response_cache) {
-                const auto& cs = m.response_cache->stats();
-                const uint64_t lookups = cs.lookups.load();
-                const uint64_t hits = cs.hits.load();
-                const size_t n_entries = m.response_cache->entries();
-                const size_t n_bytes = m.response_cache->bytes();
-                mm.asObject()["response_cache_enabled"] = json::Value(true);
-                mm.asObject()["cache_lookups"] = json::Value(static_cast<int64_t>(lookups));
-                mm.asObject()["cache_hits"] = json::Value(static_cast<int64_t>(hits));
-                mm.asObject()["cache_misses"] =
-                    json::Value(static_cast<int64_t>(lookups - hits));
-                mm.asObject()["cache_insertions"] =
-                    json::Value(static_cast<int64_t>(cs.insertions.load()));
-                mm.asObject()["cache_evictions"] =
-                    json::Value(static_cast<int64_t>(cs.evictions.load()));
-                mm.asObject()["cache_entries"] = json::Value(static_cast<int64_t>(n_entries));
-                mm.asObject()["cache_bytes"] = json::Value(static_cast<int64_t>(n_bytes));
-                total_cache_lookups += lookups;
-                total_cache_hits += hits;
-                total_cache_insertions += cs.insertions.load();
-                total_cache_evictions += cs.evictions.load();
-                total_cache_entries += n_entries;
-                total_cache_bytes += n_bytes;
+                const ResponseCacheStats& cs = m.response_cache->stats();
+                r.has_cache = true;
+                r.lookups = cs.lookups.load(std::memory_order_relaxed);
+                r.hits = cs.hits.load(std::memory_order_relaxed);
+                r.insertions = cs.insertions.load(std::memory_order_relaxed);
+                r.evictions = cs.evictions.load(std::memory_order_relaxed);
+                r.cache_entries = m.response_cache->entries();
+                r.cache_bytes = m.response_cache->bytes();
             }
-            models_arr.asArray().push_back(std::move(mm));
+            rows.push_back(std::move(r));
         }
     }
-    double avg_us = total_completed > 0
-                        ? static_cast<double>(total_us) / static_cast<double>(total_completed)
-                        : 0.0;
-    obj.asObject()["requests_completed"] = json::Value(static_cast<int64_t>(total_completed));
-    obj.asObject()["requests_failed"] = json::Value(static_cast<int64_t>(total_failed));
-    obj.asObject()["requests_timed_out"] = json::Value(static_cast<int64_t>(total_timeout));
-    obj.asObject()["average_inference_latency_us"] = json::Value(avg_us);
-    obj.asObject()["queue_depth"] = json::Value(static_cast<int64_t>(total_queue));
-    // Aggregate response-cache counters across all cached models (zero when no
-    // model enables response_cache).
-    obj.asObject()["cache_lookups"] = json::Value(static_cast<int64_t>(total_cache_lookups));
-    obj.asObject()["cache_hits"] = json::Value(static_cast<int64_t>(total_cache_hits));
-    obj.asObject()["cache_insertions"] =
-        json::Value(static_cast<int64_t>(total_cache_insertions));
-    obj.asObject()["cache_evictions"] =
-        json::Value(static_cast<int64_t>(total_cache_evictions));
-    obj.asObject()["cache_entries"] = json::Value(static_cast<int64_t>(total_cache_entries));
-    obj.asObject()["cache_bytes"] = json::Value(static_cast<int64_t>(total_cache_bytes));
-    obj.asObject()["config_hash"] = json::Value(config_store_->configStoreHash());
-    obj.asObject()["models"] = std::move(models_arr);
-#ifdef INFERLITE_ENABLE_GPU
-    obj.asObject()["gpu_memory"] = json::Value(json::Value::Object());
+
+    // Triton labels every per-model metric with {model, version}.
+    auto modelLabels = [](const Row& r) {
+        const std::string v = r.version.empty() ? "-1" : r.version;
+        return std::string("{model=\"") + promLabelEscape(r.name) +
+               "\",version=\"" + promLabelEscape(v) + "\"}";
+    };
+    auto labelsWithExtra = [](const Row& r, const std::string& key,
+                              const std::string& value) {
+        const std::string v = r.version.empty() ? "-1" : r.version;
+        std::string s = "{model=\"" + promLabelEscape(r.name) +
+                        "\",version=\"" + promLabelEscape(v) + "\"";
+        if (!key.empty()) {
+            s += "," + key + "=\"" + promLabelEscape(value) + "\"";
+        }
+        s += "}";
+        return s;
+    };
+
+    std::ostringstream out;
+    // Emit one counter family: HELP/TYPE once, then one sample per model.
+    auto emitCounter = [&](const char* name, const char* help,
+                           uint64_t Row::*member) {
+        bool first = true;
+        for (const auto& r : rows) {
+            if (first) {
+                out << "# HELP " << name << ' ' << help << '\n';
+                out << "# TYPE " << name << " counter\n";
+                first = false;
+            }
+            out << name << modelLabels(r) << ' ' << (r.*member) << '\n';
+        }
+    };
+    // Emit one gauge family (size_t-valued member, e.g. queue depth).
+    auto emitGauge = [&](const char* name, const char* help,
+                         size_t Row::*member) {
+        bool first = true;
+        for (const auto& r : rows) {
+            if (first) {
+                out << "# HELP " << name << ' ' << help << '\n';
+                out << "# TYPE " << name << " gauge\n";
+                first = false;
+            }
+            out << name << modelLabels(r) << ' ' << (r.*member) << '\n';
+        }
+    };
+    // Conditional family: only rows for which `present` is true contribute a
+    // sample, and the family is omitted entirely when none do.
+    auto emitCounterWhere = [&](const char* name, const char* help,
+                                bool Row::*present, uint64_t Row::*member) {
+        bool first = true;
+        for (const auto& r : rows) {
+            if (!(r.*present)) continue;
+            if (first) {
+                out << "# HELP " << name << ' ' << help << '\n';
+                out << "# TYPE " << name << " counter\n";
+                first = false;
+            }
+            out << name << modelLabels(r) << ' ' << (r.*member) << '\n';
+        }
+    };
+    auto emitGaugeWhere = [&](const char* name, const char* help,
+                              bool Row::*present, size_t Row::*member) {
+        bool first = true;
+        for (const auto& r : rows) {
+            if (!(r.*present)) continue;
+            if (first) {
+                out << "# HELP " << name << ' ' << help << '\n';
+                out << "# TYPE " << name << " gauge\n";
+                first = false;
+            }
+            out << name << modelLabels(r) << ' ' << (r.*member) << '\n';
+        }
+    };
+
+    // ---- Inference request counters (per model) ----
+    emitCounter("nv_inference_request_success",
+                "Number of successful inference requests.",
+                &Row::completed);
+    // Failures are split by Triton's `reason` label. REJECTED covers scheduler
+    // timeouts; every remaining failure (backend/validation/other) is OTHER.
     {
-        json::Value& g = obj.asObject()["gpu_memory"];
-        g.asObject()["device_pool_bytes"] = json::Value(static_cast<int64_t>(gpu_memory_->devicePoolBytes()));
-        g.asObject()["pinned_pool_bytes"] = json::Value(static_cast<int64_t>(gpu_memory_->pinnedPoolBytes()));
+        bool first = true;
+        for (const auto& r : rows) {
+            if (r.timed_out == 0 && r.failed == 0) continue;
+            if (first) {
+                out << "# HELP nv_inference_request_failure "
+                       "Number of failed inference requests.\n";
+                out << "# TYPE nv_inference_request_failure counter\n";
+                first = false;
+            }
+            if (r.timed_out != 0) {
+                out << "nv_inference_request_failure"
+                    << labelsWithExtra(r, "reason", "REJECTED") << ' '
+                    << r.timed_out << '\n';
+            }
+            if (r.failed != 0) {
+                out << "nv_inference_request_failure"
+                    << labelsWithExtra(r, "reason", "OTHER") << ' '
+                    << r.failed << '\n';
+            }
+        }
+    }
+    // nv_inference_count / nv_inference_exec_count: a batch of n counts as n
+    // inferences; each merged backend execution counts as one execution.
+    // Non-batching models execute one request per execution, so count ==
+    // exec == request count there.
+    {
+        bool first = true;
+        for (const auto& r : rows) {
+            if (first) {
+                out << "# HELP nv_inference_count Number of inferences "
+                       "performed (a batch of n counts as n; response-cache "
+                       "hits are not counted).\n";
+                out << "# TYPE nv_inference_count counter\n";
+                first = false;
+            }
+            out << "nv_inference_count" << modelLabels(r) << ' '
+                << (r.batching ? r.samples : r.completed) << '\n';
+        }
+        first = true;
+        for (const auto& r : rows) {
+            if (first) {
+                out << "# HELP nv_inference_exec_count Number of model "
+                       "executions (one merged batch is one execution; "
+                       "response-cache hits are not counted).\n";
+                out << "# TYPE nv_inference_exec_count counter\n";
+                first = false;
+            }
+            out << "nv_inference_exec_count" << modelLabels(r) << ' '
+                << (r.batching ? r.batches : r.completed) << '\n';
+        }
+    }
+    // Pending requests (instantaneous scheduler queue depth).
+    emitGauge("nv_inference_pending_request_count",
+              "Instantaneous number of requests awaiting execution "
+              "(scheduler queue depth).",
+              &Row::queue_depth);
+    // Cumulative model execution time in microseconds. Together with
+    // nv_inference_request_success this yields the average per-request
+    // inference latency (the value previously exposed as average_latency_us).
+    emitCounter("nv_inference_compute_infer_duration_us",
+                "Cumulative model execution (inference) time in microseconds.",
+                &Row::total_exec_us);
+
+    // ---- Priority scheduling (dynamic batching) ----
+    // One sample per configured priority level (levels >= 1), including zeros,
+    // so the series set is stable across scrapes.
+    {
+        bool first = true;
+        for (const auto& r : rows) {
+            if (r.priority_served.empty()) continue;
+            for (size_t i = 0; i < r.priority_served.size(); ++i) {
+                if (first) {
+                    out << "# HELP nv_inference_priority_completed Number of "
+                           "successfully completed requests per "
+                           "dynamic-batching priority level.\n";
+                    out << "# TYPE nv_inference_priority_completed counter\n";
+                    first = false;
+                }
+                out << "nv_inference_priority_completed"
+                    << labelsWithExtra(r, "priority", std::to_string(i + 1))
+                    << ' ' << r.priority_served[i] << '\n';
+            }
+        }
+    }
+
+    // ---- Triton-style response cache (per model with response_cache enabled)
+    emitCounterWhere("nv_cache_lookup_count",
+                     "Number of response-cache lookups.", &Row::has_cache,
+                     &Row::lookups);
+    emitCounterWhere("nv_cache_hit_count",
+                     "Number of response-cache hits.", &Row::has_cache,
+                     &Row::hits);
+    {
+        // Misses are lookups that did not find a stored response. Only rows
+        // with the cache enabled contribute samples.
+        bool first = true;
+        for (const auto& r : rows) {
+            if (!r.has_cache) continue;
+            if (first) {
+                out << "# HELP nv_cache_miss_count Number of response-cache "
+                       "misses.\n";
+                out << "# TYPE nv_cache_miss_count counter\n";
+                first = false;
+            }
+            out << "nv_cache_miss_count" << modelLabels(r) << ' '
+                << (r.lookups - r.hits) << '\n';
+        }
+    }
+    emitCounterWhere("nv_cache_insertion_count",
+                     "Number of response-cache insertions.", &Row::has_cache,
+                     &Row::insertions);
+    emitCounterWhere("nv_cache_eviction_count",
+                     "Number of response-cache evictions.", &Row::has_cache,
+                     &Row::evictions);
+    emitGaugeWhere("nv_cache_num_entries",
+                   "Number of entries currently held in the response cache.",
+                   &Row::has_cache, &Row::cache_entries);
+    emitGaugeWhere("nv_cache_entry_size",
+                   "Total payload bytes currently held in the response cache.",
+                   &Row::has_cache, &Row::cache_bytes);
+
+    // ---- GPU pools (only in GPU builds) ----
+#ifdef INFERLITE_ENABLE_GPU
+    if (gpu_memory_) {
+        out << "# HELP nv_gpu_memory_used_bytes Current device-memory usage "
+               "of the GPU pool in bytes.\n";
+        out << "# TYPE nv_gpu_memory_used_bytes gauge\n";
+        out << "nv_gpu_memory_used_bytes " << gpu_memory_->devicePoolBytes()
+            << '\n';
+        out << "# HELP nv_pinned_memory_pool_used_bytes Current pinned "
+               "host-memory usage of the pinned pool in bytes.\n";
+        out << "# TYPE nv_pinned_memory_pool_used_bytes gauge\n";
+        out << "nv_pinned_memory_pool_used_bytes "
+            << gpu_memory_->pinnedPoolBytes() << '\n';
     }
 #endif
-    resp.status = 200;
-    resp.body = obj.dump();
+
+    resp.body = out.str();
     return resp;
 }
 

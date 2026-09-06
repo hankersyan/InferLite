@@ -404,9 +404,6 @@ private:
     mutable std::mutex models_mu_;
     std::vector<std::shared_ptr<ModelEntry>> models_;
 
-    // Per-model GPU resource accounting (Phase 3): model name -> bound bytes.
-    std::map<std::string, std::atomic<uint64_t>> gpu_usage_bytes_;
-
     // Serializes load/unload/reload transitions (including poll-driven ones) so
     // two control operations on the same model cannot interleave.
     std::mutex lifecycle_mu_;

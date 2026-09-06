@@ -12,8 +12,9 @@
 #   * A different input is a miss and executes the model.
 #   * A reload (even with an unchanged config) starts a fresh, empty cache; a
 #     load with a config override (config hash change) also invalidates it.
-#   * /v2/metrics reports cache_lookups / cache_hits / cache_insertions /
-#     cache_evictions per cached model.
+#   * /v2/metrics (Prometheus text format, mirroring NVIDIA Triton) reports
+#     nv_cache_lookup_count / nv_cache_hit_count / nv_cache_num_entries per
+#     cached model, along with nv_inference_request_success for executions.
 #
 # Runs against the HTTP-only build (build\inferlite.exe) in --model-control-
 # mode=explicit so the repository load API can be used for the reload test.
@@ -96,20 +97,47 @@ function Call-Server($method, $uri, $jsonBody) {
     }
 }
 
+# ---- /v2/metrics scraping ---------------------------------------------------
+# InferLite mirrors NVIDIA Triton: /v2/metrics returns the Prometheus text
+# exposition format, one sample per model with {model, version} labels.
+# Get-Metric maps the JSON-style field names used by the assertions below to
+# the Triton metric family that carries them:
+#   requests_completed -> nv_inference_request_success
+#   cache_lookups      -> nv_cache_lookup_count
+#   cache_hits         -> nv_cache_hit_count
+#   cache_entries      -> nv_cache_num_entries
+# A model that has no sample for the family returns $null (e.g. plain_model
+# has no nv_cache_lookup_count series because it does not enable a cache).
 function Get-Metric($name, $field) {
-    $doc = (Invoke-WebRequest -Uri "$base/v2/metrics" -UseBasicParsing -TimeoutSec 10).Content | ConvertFrom-Json
-    $row = $doc.models | Where-Object { $_.model_name -eq $name }
-    if ($null -eq $row) { return $null }
-    $prop = $row.PSObject.Properties[$field]
-    if ($null -eq $prop) { return $null }
-    return $prop.Value
+    $metric = switch ($field) {
+        "requests_completed" { "nv_inference_request_success" }
+        "cache_lookups"      { "nv_cache_lookup_count" }
+        "cache_hits"         { "nv_cache_hit_count" }
+        "cache_entries"      { "nv_cache_num_entries" }
+        default              { $null }
+    }
+    if (-not $metric) { return $null }
+    $text = (Invoke-WebRequest -Uri "$base/v2/metrics" -UseBasicParsing -TimeoutSec 10).Content
+    $pattern = '(?m)^' + [regex]::Escape($metric) + '\{model="' + [regex]::Escape($name) + '",version="[^"]*"\} (?<value>[0-9]+)\s*$'
+    $m = [regex]::Match($text, $pattern)
+    if (-not $m.Success) { return $null }
+    return [int64]$m.Groups['value'].Value
 }
 
+# Server-level aggregate: sums one metric family over every model sample.
 function Get-TopMetric($field) {
-    $doc = (Invoke-WebRequest -Uri "$base/v2/metrics" -UseBasicParsing -TimeoutSec 10).Content | ConvertFrom-Json
-    $prop = $doc.PSObject.Properties[$field]
-    if ($null -eq $prop) { return $null }
-    return $prop.Value
+    $metric = switch ($field) {
+        "cache_lookups" { "nv_cache_lookup_count" }
+        default         { $null }
+    }
+    if (-not $metric) { return $null }
+    $text = (Invoke-WebRequest -Uri "$base/v2/metrics" -UseBasicParsing -TimeoutSec 10).Content
+    $pattern = '(?m)^' + [regex]::Escape($metric) + '\{[^}]*\} (?<value>[0-9]+)\s*$'
+    $total = [int64]0
+    foreach ($m in [regex]::Matches($text, $pattern)) {
+        $total += [int64]$m.Groups['value'].Value
+    }
+    return $total
 }
 
 # sample_model body: input FP32 [1,4]; output y = 2*x + 1.

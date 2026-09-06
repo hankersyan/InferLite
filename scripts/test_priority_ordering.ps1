@@ -134,21 +134,46 @@ try {
         return $true
     }
 
+    # ---- /v2/metrics scraping ----------------------------------------------
+    # InferLite mirrors NVIDIA Triton: /v2/metrics returns the Prometheus text
+    # exposition format, one sample per model with {model, version} labels.
+    # Get-Metric maps the JSON-style field names used by the assertions below
+    # to the Triton metric family that carries them:
+    #   requests_completed -> nv_inference_request_success
+    #   priority_completed -> nv_inference_priority_completed (a counter with a
+    #                         `priority` label; Get-MetricArray returns the
+    #                         per-level values for levels 1..N in order).
     function Get-Metric($name, $field) {
-        $doc = (Invoke-WebRequest -Uri "$base/v2/metrics" -UseBasicParsing -TimeoutSec 10).Content | ConvertFrom-Json
-        $row = $doc.models | Where-Object { $_.model_name -eq $name }
-        if ($null -eq $row) { return $null }
-        $prop = $row.PSObject.Properties[$field]
-        if ($null -eq $prop) { return $null }
-        return [int64]$prop.Value
+        $metric = switch ($field) {
+            "requests_completed" { "nv_inference_request_success" }
+            default              { $null }
+        }
+        if (-not $metric) { return $null }
+        $text = (Invoke-WebRequest -Uri "$base/v2/metrics" -UseBasicParsing -TimeoutSec 10).Content
+        $pattern = '(?m)^' + [regex]::Escape($metric) + '\{model="' + [regex]::Escape($name) + '",version="[^"]*"\} (?<value>[0-9]+)\s*$'
+        $m = [regex]::Match($text, $pattern)
+        if (-not $m.Success) { return $null }
+        return [int64]$m.Groups['value'].Value
     }
     function Get-MetricArray($name, $field) {
-        $doc = (Invoke-WebRequest -Uri "$base/v2/metrics" -UseBasicParsing -TimeoutSec 10).Content | ConvertFrom-Json
-        $row = $doc.models | Where-Object { $_.model_name -eq $name }
-        if ($null -eq $row) { return @() }
-        $prop = $row.PSObject.Properties[$field]
-        if ($null -eq $prop) { return @() }
-        return ,(@($prop.Value) | ForEach-Object { [int64]$_ })
+        if ($field -ne "priority_completed") { return ,@() }
+        $text = (Invoke-WebRequest -Uri "$base/v2/metrics" -UseBasicParsing -TimeoutSec 10).Content
+        $pattern = '(?m)^nv_inference_priority_completed\{(?<labels>[^}]*)\} (?<value>[0-9]+)\s*$'
+        $byLevel = @{}
+        foreach ($mm in [regex]::Matches($text, $pattern)) {
+            $ls = $mm.Groups['labels'].Value
+            if ($ls -notmatch ('model="' + [regex]::Escape($name) + '"')) { continue }
+            if ($ls -match 'priority="(?<pri>[0-9]+)"') {
+                $byLevel[[int]$matches['pri']] = [int64]$mm.Groups['value'].Value
+            }
+        }
+        if ($byLevel.Count -eq 0) { return ,@() }
+        $maxLevel = ($byLevel.Keys | Measure-Object -Maximum).Maximum
+        $arr = @()
+        for ($i = 1; $i -le $maxLevel; $i++) {
+            if ($byLevel.ContainsKey($i)) { $arr += $byLevel[$i] } else { $arr += [int64]0 }
+        }
+        return ,$arr
     }
 
     $loadUri = "$base/v2/repository/models/priority_batch_model/load"

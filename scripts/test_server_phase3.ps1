@@ -65,7 +65,7 @@ $ebody = '{"inputs":[{"name":"raw","shape":[1,4],"datatype":"FP32","data":[2,4,6
 Write-Output (Call-Server "POST" "http://127.0.0.1:8000/v2/models/ensemble_pipeline/infer" $ebody)
 
 Write-Output ""
-Write-Output "== metrics (expect gpu_memory absent or 0 on CPU build) =="
+Write-Output "== metrics (Prometheus text; GPU pool gauges only on GPU builds) =="
 Write-Output (Call-Server "GET" "http://127.0.0.1:8000/v2/metrics")
 
 Write-Output ""

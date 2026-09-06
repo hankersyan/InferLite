@@ -41,7 +41,7 @@ provided by the OpenVINO backend and selected through `instance_group.kind`
   `dynamic_batching {}` policy lets the scheduler combine concurrent requests
   into one execution (see Features).
 - **Standard interface** — a compatible, synchronous subset of the reference
-  server's request API plus health and JSON metrics.
+  server's request API plus health and Prometheus metrics.
 
 ## Medical Equipment Level & FDA Compliance
 
@@ -61,7 +61,8 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
 - **Memory management** — pool of reusable host buffers, pinned host buffers, and
   OpenCL device-buffer bookkeeping for device data staging.
 - **CPU backend** — wraps the framework's compiled-model object.
-- **Interface** — inference, readiness health, model config, and JSON metrics.
+- **Interface** — inference, readiness health, model config, and Prometheus
+  metrics.
 - **Fail-fast startup** — unsupported configurations abort the server.
 - **Model integrity & traceability** — `manifest.json` with SHA-256 hashes
   (including precompiled NPU/GPU blobs); verified at startup; mismatches cause
@@ -90,7 +91,11 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
   `config.pbtxt` passes key/value strings to each plugin node at creation, so
   multiple pipelines can each own their own pre-/post-processing while sharing
   the same plugin DLL.
-- **Metrics** — queue depth, per-model latency, and a configuration hash.
+- **Prometheus metrics** — `GET /v2/metrics` returns the Prometheus text
+  exposition format (mirroring NVIDIA Triton's `nv_*` metric names) for every
+  loaded model: request success/failure, inference and execution counts,
+  pending-request gauge, cumulative inference duration, per-priority
+  completions, and response-cache counters.
 - **Intel CPU execution** — compiles the IR (`model.xml`/`model.bin`) on the
   OpenVINO CPU plugin; thread/stream tuning applied only where the plugin
   accepts it.
@@ -102,8 +107,8 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
   (NPU > GPU > CPU); imports an existing blob for that device or compiles the IR.
 - **Triton-compatible device selection** — `instance_group.kind` chooses the
   execution device: `KIND_CPU`, `KIND_NPU`, `KIND_GPU_INTEL`, or `KIND_AUTO`.
-- **Device reporting** — health/detailed, metrics, and audit logs report the
-  resolved execution device per model (`CPU`, `NPU`, `INTEL_GPU`, `AUTO`).
+- **Device reporting** — health/detailed and audit logs report the resolved
+  execution device per model (`CPU`, `NPU`, `INTEL_GPU`, `AUTO`).
 - **Device model tooling** — `tools/make_device_models.py` generates CPU/NPU/GPU/
   AUTO sample models, exporting precompiled blobs when the corresponding Intel
   hardware is present; reference configs live in `tools/examples/`.
@@ -130,7 +135,7 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
   explicitly through the Triton `priority` request parameter (HTTP
   `{"parameters":{"priority":1}}`, gRPC `parameters["priority"]` as a string
   number); unset requests use `default_priority_level`. `/v2/metrics` reports
-  `priority_completed` per level.
+  `nv_inference_priority_completed` (label `priority=<level>`) per level.
 - **Response ordering** — `dynamic_batching { preserve_ordering: true }`
   returns responses in the order the requests arrived at the scheduler even when
   execution reorders them (e.g. by priority). `priority_batch_model`
@@ -211,8 +216,9 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
   validation. Per-model LRU capacity is bounded by
   `--response-cache-max-entries` (default 128) and
   `--response-cache-max-bytes` (default 16 MiB; 0 = unbounded); `/v2/metrics`
-  reports `cache_lookups`/`cache_hits`/`cache_insertions`/`cache_evictions`
-  per model and server-wide. See `scripts/test_response_cache.ps1`.
+  reports `nv_cache_lookup_count`/`nv_cache_hit_count`/`nv_cache_miss_count`/
+  `nv_cache_insertion_count`/`nv_cache_eviction_count`/`nv_cache_num_entries`/
+  `nv_cache_entry_size` per cached model. See `scripts/test_response_cache.ps1`.
 
 ### Not yet implemented
 
@@ -221,8 +227,6 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
 - **Request cancellation** — clients cannot abort an in-flight request.
 - **System / CUDA shared memory** — tensors are always sent in the
   request/response body; no registered shared-memory regions.
-- **Prometheus metrics** — metrics are exposed as JSON, not in the Prometheus
-  text format.
 - **Request tracing** — `trace_id` audit entries only; no trace configuration
   API or OpenTelemetry export.
 - **OpenVINO multi-GPU** — a single OpenVINO GPU device per model.
@@ -518,12 +522,13 @@ scheduler may combine several concurrently queued requests into one backend
 execution whose total batch is the sum of their leading batch dimensions
 (never exceeding `max_batch_size`). Each response still carries only the slice
 that belongs to its request, so callers are unaffected. `/v2/metrics` reports
-`batches_executed`, `batch_samples`, and `average_batch_size` per batched model;
-`/v2/models/<name>/config` reflects the `dynamic_batching` policy.
+`nv_inference_exec_count` (merged executions) and `nv_inference_count`
+(samples served) per batched model — average batch size is their ratio, as in
+Triton; `/v2/models/<name>/config` reflects the `dynamic_batching` policy.
 
 ### Metrics
 ```
-GET /v2/metrics    -> requests counts, average latency, queue depth, config hash
+GET /v2/metrics    -> Prometheus text exposition (NVIDIA Triton format)
 ```
 
 ### Model management (Triton model-control modes)
@@ -594,8 +599,8 @@ The same operations are exposed over gRPC as `RepositoryIndex`,
 - `test_dynamic_batch.ps1` verifies dynamic batching: a single full-batch
   request, a `B > max_batch_size` rejection, and two concurrency cases where
   the scheduler merges requests (8 × `[1,4]`, and 2 × `[4,4]`) into a single
-  backend execution (`batches_executed` +1, `batch_samples` +8) while each
-  response is the correct per-request slice.
+  backend execution (`nv_inference_exec_count` +1, `nv_inference_count` +8)
+  while each response is the correct per-request slice.
 - `test_priority_ordering.ps1` verifies Triton priority scheduling and
   preserve_ordering on `priority_batch_model`: config validation rejects an
   out-of-range `default_priority_level`; explicit `priority` request parameters

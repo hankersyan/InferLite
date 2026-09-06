@@ -154,13 +154,27 @@ try {
         return $true
     }
 
+    # ---- /v2/metrics scraping ----------------------------------------------
+    # InferLite mirrors NVIDIA Triton: /v2/metrics returns the Prometheus text
+    # exposition format, one sample per model with {model, version} labels.
+    # Get-Metric maps the JSON-style field names used by the assertions below
+    # to the Triton metric family that carries them:
+    #   requests_completed -> nv_inference_request_success
+    #   batches_executed   -> nv_inference_exec_count
+    #   batch_samples      -> nv_inference_count
     function Get-Metric($name, $field) {
-        $doc = (Invoke-WebRequest -Uri "$base/v2/metrics" -UseBasicParsing -TimeoutSec 10).Content | ConvertFrom-Json
-        $row = $doc.models | Where-Object { $_.model_name -eq $name }
-        if ($null -eq $row) { return $null }
-        $prop = $row.PSObject.Properties[$field]
-        if ($null -eq $prop) { return $null }
-        return [int64]$prop.Value
+        $metric = switch ($field) {
+            "requests_completed" { "nv_inference_request_success" }
+            "batches_executed"   { "nv_inference_exec_count" }
+            "batch_samples"      { "nv_inference_count" }
+            default              { $null }
+        }
+        if (-not $metric) { return $null }
+        $text = (Invoke-WebRequest -Uri "$base/v2/metrics" -UseBasicParsing -TimeoutSec 10).Content
+        $pattern = '(?m)^' + [regex]::Escape($metric) + '\{model="' + [regex]::Escape($name) + '",version="[^"]*"\} (?<value>[0-9]+)\s*$'
+        $m = [regex]::Match($text, $pattern)
+        if (-not $m.Success) { return $null }
+        return [int64]$m.Groups['value'].Value
     }
 
     # ---------------- 1. config reports dynamic batching ----------------
