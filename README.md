@@ -207,11 +207,6 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
   text format.
 - **Request tracing** — `trace_id` audit entries only; no trace configuration
   API or OpenTelemetry export.
-- **gRPC binary tensor data** — `ModelInfer` consumes typed
-  `InferTensorContents` only; `raw_input_contents` / `raw_output_contents` are
-  not consumed or produced, even though `binary_tensor_data` is still listed in
-  the advertised `ServerMetadata` extensions (clients must not rely on it; use
-  typed contents or HTTP base64).
 - **OpenVINO multi-GPU** — a single OpenVINO GPU device per model.
 
 ### Out of scope
@@ -231,9 +226,11 @@ Deliberately not planned for a single-node, single-card workstation server:
 ### gRPC interface
 
 A Triton/KServe v2-compatible gRPC interface (`GRPCInferenceService`) is
-implemented (health, server/model metadata, model config, and `ModelInfer`) and
-shares the same inference core as HTTP. It is **opt-in** and disabled by
-default. Build it against a source-built gRPC (vcpkg) with
+implemented (health, server/model metadata, model config, and `ModelInfer`,
+including the KServe **binary-tensor-data** extension:
+`raw_input_contents` / `raw_output_contents` carry byte-exact little-endian
+payloads when the client uses the binary format) and shares the same inference
+core as HTTP. It is **opt-in** and disabled by default. Build it against a source-built gRPC (vcpkg) with
 `scripts/build_grpc.ps1`. The gRPC C++ runtime must be built with an MSVC
 toolchain whose STL/CRT ABI matches the compiler used here; a prebuilt gRPC DLL
 stack built with an older MSVC crashes on RPC dispatch due to an ABI mismatch.
@@ -461,11 +458,12 @@ or with the standard `sc.exe` tool (`sc start InferLite`, `sc stop InferLite`,
 
 ## Interface
 
-### Readiness
+### Readiness & liveness
 ```
-GET /v2/health/ready      -> 200 {"status":"READY"}  (only if self-tests passed)
-GET /v2/health/live       -> currently an alias of /health/ready (503 when not
-                             ready; it is NOT a pure liveness probe)
+GET /v2/health/live       -> 200 {"status":"LIVE"}   (pure process-liveness probe;
+                             independent of model/self-test readiness)
+GET /v2/health/ready      -> 200 {"status":"READY"}  (only if self-tests passed;
+                             503 NOT_READY otherwise)
 GET /v2/health/detailed   -> per-model status + hashes + versions
 GET /v2/versions          -> software + OpenVINO + model versions
 ```
@@ -606,9 +604,10 @@ The same operations are exposed over gRPC as `RepositoryIndex`,
   by default; pass `--grpc` (with `--grpc-server 127.0.0.1:8101`) to run the
   identical test over the gRPC `ModelInfer` RPC — a large-tensor (1×3×256×456
   FP32) request that exercises the tensor payload path over both protocols
-  (base64 in the HTTP JSON body, typed `InferTensorContents` over gRPC; the
-  gRPC binary-tensor `raw_input_contents` extension is not implemented).
-  `test_grpc_server.ps1` includes the gRPC variant as part of the gRPC suite.
+  (base64 in the HTTP JSON body, typed `InferTensorContents` over gRPC).
+  `test_grpc_server.ps1` includes the gRPC variant as part of the gRPC suite
+  and additionally exercises the binary-tensor `raw_input_contents` /
+  `raw_output_contents` extension.
 - `test_server_phase2.ps1` starts the server in validated mode and exercises
   integrity, validation, ensemble, plugin, audit log, and metrics.
 - `test_server_phase4.ps1` starts the server and exercises the

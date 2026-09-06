@@ -251,6 +251,7 @@ private:
                              int64_t requested_version = -1);
     HttpResponse handleConfig(const std::string& model_name,
                               int64_t requested_version = -1);
+    HttpResponse handleHealthLive();
     HttpResponse handleHealthReady();
     HttpResponse handleHealthDetailed();
     HttpResponse handleMetrics();

@@ -6026,10 +6026,10 @@ class ModelInferResponse final
   enum : int {
     kParametersFieldNumber = 4,
     kOutputsFieldNumber = 5,
+    kRawOutputContentsFieldNumber = 6,
     kModelNameFieldNumber = 1,
     kModelVersionFieldNumber = 2,
     kIdFieldNumber = 3,
-    kRawOutputContentsFieldNumber = 6,
   };
   // map<string, string> parameters = 4;
   int parameters_size() const;
@@ -6063,6 +6063,28 @@ class ModelInferResponse final
   const ::inference::ModelInferResponse_InferOutputTensor& outputs(int index) const;
   ::inference::ModelInferResponse_InferOutputTensor* add_outputs();
   const ::google::protobuf::RepeatedPtrField<::inference::ModelInferResponse_InferOutputTensor>& outputs() const;
+  // repeated bytes raw_output_contents = 6;
+  int raw_output_contents_size() const;
+  private:
+  int _internal_raw_output_contents_size() const;
+
+  public:
+  void clear_raw_output_contents() ;
+  const std::string& raw_output_contents(int index) const;
+  std::string* mutable_raw_output_contents(int index);
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_raw_output_contents(int index, Arg_&& value, Args_... args);
+  std::string* add_raw_output_contents();
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void add_raw_output_contents(Arg_&& value, Args_... args);
+  const ::google::protobuf::RepeatedPtrField<std::string>& raw_output_contents() const;
+  ::google::protobuf::RepeatedPtrField<std::string>* mutable_raw_output_contents();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<std::string>& _internal_raw_output_contents() const;
+  ::google::protobuf::RepeatedPtrField<std::string>* _internal_mutable_raw_output_contents();
+
+  public:
   // string model_name = 1;
   void clear_model_name() ;
   const std::string& model_name() const;
@@ -6111,22 +6133,6 @@ class ModelInferResponse final
   std::string* _internal_mutable_id();
 
   public:
-  // bytes raw_output_contents = 6;
-  void clear_raw_output_contents() ;
-  const std::string& raw_output_contents() const;
-  template <typename Arg_ = const std::string&, typename... Args_>
-  void set_raw_output_contents(Arg_&& arg, Args_... args);
-  std::string* mutable_raw_output_contents();
-  PROTOBUF_NODISCARD std::string* release_raw_output_contents();
-  void set_allocated_raw_output_contents(std::string* value);
-
-  private:
-  const std::string& _internal_raw_output_contents() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_raw_output_contents(
-      const std::string& value);
-  std::string* _internal_mutable_raw_output_contents();
-
-  public:
   // @@protoc_insertion_point(class_scope:inference.ModelInferResponse)
  private:
   class _Internal;
@@ -6155,10 +6161,10 @@ class ModelInferResponse final
                       ::google::protobuf::internal::WireFormatLite::TYPE_STRING>
         parameters_;
     ::google::protobuf::RepeatedPtrField< ::inference::ModelInferResponse_InferOutputTensor > outputs_;
+    ::google::protobuf::RepeatedPtrField<std::string> raw_output_contents_;
     ::google::protobuf::internal::ArenaStringPtr model_name_;
     ::google::protobuf::internal::ArenaStringPtr model_version_;
     ::google::protobuf::internal::ArenaStringPtr id_;
-    ::google::protobuf::internal::ArenaStringPtr raw_output_contents_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -6319,10 +6325,10 @@ class ModelInferRequest final
     kParametersFieldNumber = 4,
     kInputsFieldNumber = 5,
     kOutputsFieldNumber = 6,
+    kRawInputContentsFieldNumber = 7,
     kModelNameFieldNumber = 1,
     kModelVersionFieldNumber = 2,
     kIdFieldNumber = 3,
-    kRawInputContentsFieldNumber = 7,
   };
   // map<string, string> parameters = 4;
   int parameters_size() const;
@@ -6373,6 +6379,28 @@ class ModelInferRequest final
   const ::inference::ModelInferRequest_InferRequestedOutputTensor& outputs(int index) const;
   ::inference::ModelInferRequest_InferRequestedOutputTensor* add_outputs();
   const ::google::protobuf::RepeatedPtrField<::inference::ModelInferRequest_InferRequestedOutputTensor>& outputs() const;
+  // repeated bytes raw_input_contents = 7;
+  int raw_input_contents_size() const;
+  private:
+  int _internal_raw_input_contents_size() const;
+
+  public:
+  void clear_raw_input_contents() ;
+  const std::string& raw_input_contents(int index) const;
+  std::string* mutable_raw_input_contents(int index);
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_raw_input_contents(int index, Arg_&& value, Args_... args);
+  std::string* add_raw_input_contents();
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void add_raw_input_contents(Arg_&& value, Args_... args);
+  const ::google::protobuf::RepeatedPtrField<std::string>& raw_input_contents() const;
+  ::google::protobuf::RepeatedPtrField<std::string>* mutable_raw_input_contents();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<std::string>& _internal_raw_input_contents() const;
+  ::google::protobuf::RepeatedPtrField<std::string>* _internal_mutable_raw_input_contents();
+
+  public:
   // string model_name = 1;
   void clear_model_name() ;
   const std::string& model_name() const;
@@ -6421,22 +6449,6 @@ class ModelInferRequest final
   std::string* _internal_mutable_id();
 
   public:
-  // bytes raw_input_contents = 7;
-  void clear_raw_input_contents() ;
-  const std::string& raw_input_contents() const;
-  template <typename Arg_ = const std::string&, typename... Args_>
-  void set_raw_input_contents(Arg_&& arg, Args_... args);
-  std::string* mutable_raw_input_contents();
-  PROTOBUF_NODISCARD std::string* release_raw_input_contents();
-  void set_allocated_raw_input_contents(std::string* value);
-
-  private:
-  const std::string& _internal_raw_input_contents() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_raw_input_contents(
-      const std::string& value);
-  std::string* _internal_mutable_raw_input_contents();
-
-  public:
   // @@protoc_insertion_point(class_scope:inference.ModelInferRequest)
  private:
   class _Internal;
@@ -6466,10 +6478,10 @@ class ModelInferRequest final
         parameters_;
     ::google::protobuf::RepeatedPtrField< ::inference::ModelInferRequest_InferInputTensor > inputs_;
     ::google::protobuf::RepeatedPtrField< ::inference::ModelInferRequest_InferRequestedOutputTensor > outputs_;
+    ::google::protobuf::RepeatedPtrField<std::string> raw_input_contents_;
     ::google::protobuf::internal::ArenaStringPtr model_name_;
     ::google::protobuf::internal::ArenaStringPtr model_version_;
     ::google::protobuf::internal::ArenaStringPtr id_;
-    ::google::protobuf::internal::ArenaStringPtr raw_input_contents_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -8594,52 +8606,68 @@ ModelInferRequest::_internal_mutable_outputs() {
   return &_impl_.outputs_;
 }
 
-// bytes raw_input_contents = 7;
+// repeated bytes raw_input_contents = 7;
+inline int ModelInferRequest::_internal_raw_input_contents_size() const {
+  return _internal_raw_input_contents().size();
+}
+inline int ModelInferRequest::raw_input_contents_size() const {
+  return _internal_raw_input_contents_size();
+}
 inline void ModelInferRequest::clear_raw_input_contents() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.raw_input_contents_.ClearToEmpty();
+  _impl_.raw_input_contents_.Clear();
 }
-inline const std::string& ModelInferRequest::raw_input_contents() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:inference.ModelInferRequest.raw_input_contents)
-  return _internal_raw_input_contents();
-}
-template <typename Arg_, typename... Args_>
-inline PROTOBUF_ALWAYS_INLINE void ModelInferRequest::set_raw_input_contents(Arg_&& arg,
-                                                     Args_... args) {
+inline std::string* ModelInferRequest::add_raw_input_contents() ABSL_ATTRIBUTE_LIFETIME_BOUND {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.raw_input_contents_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:inference.ModelInferRequest.raw_input_contents)
-}
-inline std::string* ModelInferRequest::mutable_raw_input_contents() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  std::string* _s = _internal_mutable_raw_input_contents();
-  // @@protoc_insertion_point(field_mutable:inference.ModelInferRequest.raw_input_contents)
+  std::string* _s = _internal_mutable_raw_input_contents()->Add();
+  // @@protoc_insertion_point(field_add_mutable:inference.ModelInferRequest.raw_input_contents)
   return _s;
 }
-inline const std::string& ModelInferRequest::_internal_raw_input_contents() const {
+inline const std::string& ModelInferRequest::raw_input_contents(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:inference.ModelInferRequest.raw_input_contents)
+  return _internal_raw_input_contents().Get(index);
+}
+inline std::string* ModelInferRequest::mutable_raw_input_contents(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:inference.ModelInferRequest.raw_input_contents)
+  return _internal_mutable_raw_input_contents()->Mutable(index);
+}
+template <typename Arg_, typename... Args_>
+inline void ModelInferRequest::set_raw_input_contents(int index, Arg_&& value, Args_... args) {
+  ::google::protobuf::internal::AssignToString(
+      *_internal_mutable_raw_input_contents()->Mutable(index),
+      std::forward<Arg_>(value), args... , ::google::protobuf::internal::BytesTag{});
+  // @@protoc_insertion_point(field_set:inference.ModelInferRequest.raw_input_contents)
+}
+template <typename Arg_, typename... Args_>
+inline void ModelInferRequest::add_raw_input_contents(Arg_&& value, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::google::protobuf::internal::AddToRepeatedPtrField(*_internal_mutable_raw_input_contents(),
+                               std::forward<Arg_>(value),
+                               args... , ::google::protobuf::internal::BytesTag{});
+  // @@protoc_insertion_point(field_add:inference.ModelInferRequest.raw_input_contents)
+}
+inline const ::google::protobuf::RepeatedPtrField<std::string>&
+ModelInferRequest::raw_input_contents() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:inference.ModelInferRequest.raw_input_contents)
+  return _internal_raw_input_contents();
+}
+inline ::google::protobuf::RepeatedPtrField<std::string>*
+ModelInferRequest::mutable_raw_input_contents() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_list:inference.ModelInferRequest.raw_input_contents)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_raw_input_contents();
+}
+inline const ::google::protobuf::RepeatedPtrField<std::string>&
+ModelInferRequest::_internal_raw_input_contents() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.raw_input_contents_.Get();
+  return _impl_.raw_input_contents_;
 }
-inline void ModelInferRequest::_internal_set_raw_input_contents(const std::string& value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.raw_input_contents_.Set(value, GetArena());
-}
-inline std::string* ModelInferRequest::_internal_mutable_raw_input_contents() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _impl_.raw_input_contents_.Mutable( GetArena());
-}
-inline std::string* ModelInferRequest::release_raw_input_contents() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:inference.ModelInferRequest.raw_input_contents)
-  return _impl_.raw_input_contents_.Release();
-}
-inline void ModelInferRequest::set_allocated_raw_input_contents(std::string* value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.raw_input_contents_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.raw_input_contents_.IsDefault()) {
-    _impl_.raw_input_contents_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:inference.ModelInferRequest.raw_input_contents)
+inline ::google::protobuf::RepeatedPtrField<std::string>*
+ModelInferRequest::_internal_mutable_raw_input_contents() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.raw_input_contents_;
 }
 
 // -------------------------------------------------------------------
@@ -9140,52 +9168,68 @@ ModelInferResponse::_internal_mutable_outputs() {
   return &_impl_.outputs_;
 }
 
-// bytes raw_output_contents = 6;
+// repeated bytes raw_output_contents = 6;
+inline int ModelInferResponse::_internal_raw_output_contents_size() const {
+  return _internal_raw_output_contents().size();
+}
+inline int ModelInferResponse::raw_output_contents_size() const {
+  return _internal_raw_output_contents_size();
+}
 inline void ModelInferResponse::clear_raw_output_contents() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.raw_output_contents_.ClearToEmpty();
+  _impl_.raw_output_contents_.Clear();
 }
-inline const std::string& ModelInferResponse::raw_output_contents() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:inference.ModelInferResponse.raw_output_contents)
-  return _internal_raw_output_contents();
-}
-template <typename Arg_, typename... Args_>
-inline PROTOBUF_ALWAYS_INLINE void ModelInferResponse::set_raw_output_contents(Arg_&& arg,
-                                                     Args_... args) {
+inline std::string* ModelInferResponse::add_raw_output_contents() ABSL_ATTRIBUTE_LIFETIME_BOUND {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.raw_output_contents_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:inference.ModelInferResponse.raw_output_contents)
-}
-inline std::string* ModelInferResponse::mutable_raw_output_contents() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  std::string* _s = _internal_mutable_raw_output_contents();
-  // @@protoc_insertion_point(field_mutable:inference.ModelInferResponse.raw_output_contents)
+  std::string* _s = _internal_mutable_raw_output_contents()->Add();
+  // @@protoc_insertion_point(field_add_mutable:inference.ModelInferResponse.raw_output_contents)
   return _s;
 }
-inline const std::string& ModelInferResponse::_internal_raw_output_contents() const {
+inline const std::string& ModelInferResponse::raw_output_contents(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:inference.ModelInferResponse.raw_output_contents)
+  return _internal_raw_output_contents().Get(index);
+}
+inline std::string* ModelInferResponse::mutable_raw_output_contents(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:inference.ModelInferResponse.raw_output_contents)
+  return _internal_mutable_raw_output_contents()->Mutable(index);
+}
+template <typename Arg_, typename... Args_>
+inline void ModelInferResponse::set_raw_output_contents(int index, Arg_&& value, Args_... args) {
+  ::google::protobuf::internal::AssignToString(
+      *_internal_mutable_raw_output_contents()->Mutable(index),
+      std::forward<Arg_>(value), args... , ::google::protobuf::internal::BytesTag{});
+  // @@protoc_insertion_point(field_set:inference.ModelInferResponse.raw_output_contents)
+}
+template <typename Arg_, typename... Args_>
+inline void ModelInferResponse::add_raw_output_contents(Arg_&& value, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::google::protobuf::internal::AddToRepeatedPtrField(*_internal_mutable_raw_output_contents(),
+                               std::forward<Arg_>(value),
+                               args... , ::google::protobuf::internal::BytesTag{});
+  // @@protoc_insertion_point(field_add:inference.ModelInferResponse.raw_output_contents)
+}
+inline const ::google::protobuf::RepeatedPtrField<std::string>&
+ModelInferResponse::raw_output_contents() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:inference.ModelInferResponse.raw_output_contents)
+  return _internal_raw_output_contents();
+}
+inline ::google::protobuf::RepeatedPtrField<std::string>*
+ModelInferResponse::mutable_raw_output_contents() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_list:inference.ModelInferResponse.raw_output_contents)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_raw_output_contents();
+}
+inline const ::google::protobuf::RepeatedPtrField<std::string>&
+ModelInferResponse::_internal_raw_output_contents() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.raw_output_contents_.Get();
+  return _impl_.raw_output_contents_;
 }
-inline void ModelInferResponse::_internal_set_raw_output_contents(const std::string& value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.raw_output_contents_.Set(value, GetArena());
-}
-inline std::string* ModelInferResponse::_internal_mutable_raw_output_contents() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _impl_.raw_output_contents_.Mutable( GetArena());
-}
-inline std::string* ModelInferResponse::release_raw_output_contents() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:inference.ModelInferResponse.raw_output_contents)
-  return _impl_.raw_output_contents_.Release();
-}
-inline void ModelInferResponse::set_allocated_raw_output_contents(std::string* value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.raw_output_contents_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.raw_output_contents_.IsDefault()) {
-    _impl_.raw_output_contents_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:inference.ModelInferResponse.raw_output_contents)
+inline ::google::protobuf::RepeatedPtrField<std::string>*
+ModelInferResponse::_internal_mutable_raw_output_contents() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.raw_output_contents_;
 }
 
 // -------------------------------------------------------------------

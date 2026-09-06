@@ -1431,9 +1431,11 @@ InferenceOutcome InferLite::runInference(const std::string& model_name,
 // ---- HTTP dispatch -----------------------------------------------------------
 
 HttpResponse InferLite::handleRequest(const HttpRequest& req) {
-    if (req.path == "/v2/health/ready" || req.path == "/v2/health/live") {
-        return handleHealthReady();
-    }
+    // Liveness and readiness are distinct Kubernetes-style probes: /live
+    // answers 200 while the process is up (independent of model readiness);
+    // /ready answers 200 only after self-tests pass.
+    if (req.path == "/v2/health/ready") return handleHealthReady();
+    if (req.path == "/v2/health/live") return handleHealthLive();
     if (req.path == "/v2/health/detailed") return handleHealthDetailed();
     if (req.path == "/v2/metrics") return handleMetrics();
     if (req.path == "/v2/versions") return handleVersions();
@@ -1577,6 +1579,19 @@ HttpResponse InferLite::handleRepositoryUnload(const HttpRequest& req,
     HttpResponse resp;
     resp.status = st.ok ? 200 : st.http_status;
     resp.body = st.ok ? "" : jsonError(st.http_status, st.error).body;
+    return resp;
+}
+
+HttpResponse InferLite::handleHealthLive() {
+    // Pure process-liveness probe (Kubernetes-style / Kubernetes liveness /
+    // Triton ServerLive parity): reaching this handler means the HTTP server
+    // is up and dispatching, so it always answers 200 — independent of model
+    // readiness / self-test state.
+    HttpResponse resp;
+    resp.status = 200;
+    json::Value o = json::Value::Object();
+    o.asObject()["status"] = json::Value("LIVE");
+    resp.body = o.dump();
     return resp;
 }
 

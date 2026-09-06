@@ -153,7 +153,11 @@ message ModelInferRequest {
   map<string, string> parameters = 4;
   repeated InferInputTensor inputs = 5;
   repeated InferRequestedOutputTensor outputs = 6;
-  bytes raw_input_contents = 7;
+  // Binary-tensor-data extension. When used, one raw little-endian byte
+  // payload is stored per input tensor, aligned by index with `inputs`
+  // (raw_input_contents[i] belongs to inputs[i]); the per-input `contents`
+  // fields must then be empty. Binary is used for ALL inputs or none.
+  repeated bytes raw_input_contents = 7;
 }
 
 message ModelInferResponse {
@@ -169,7 +173,10 @@ message ModelInferResponse {
   string id = 3;
   map<string, string> parameters = 4;
   repeated InferOutputTensor outputs = 5;
-  bytes raw_output_contents = 6;
+  // Binary-tensor-data extension: raw little-endian byte payload for each
+  // output, aligned by index with `outputs`. When present, the corresponding
+  // per-output `contents` fields are empty.
+  repeated bytes raw_output_contents = 6;
 }
 
 // @@

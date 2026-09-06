@@ -210,6 +210,30 @@ void bytesToContents(const Tensor& t, inference::InferTensorContents& c) {
     }
 }
 
+// True when no typed `contents` field is populated. KServe's binary-tensor
+// extension requires this for every input when `raw_input_contents` is used.
+bool contentsEmpty(const inference::InferTensorContents& c) {
+    return c.bool_contents_size() == 0 && c.int_contents_size() == 0 &&
+           c.int64_contents_size() == 0 && c.uint_contents_size() == 0 &&
+           c.uint64_contents_size() == 0 && c.fp32_contents_size() == 0 &&
+           c.fp64_contents_size() == 0 && c.bytes_contents_size() == 0;
+}
+
+// Byte count a raw binary payload must have for the declared shape/datatype
+// (an empty shape is a scalar == 1 element). Returns false when the datatype
+// has no fixed width or a shape dimension is not a positive integer.
+bool expectedRawSize(const std::vector<int64_t>& shape, DataType dt, size_t& bytes) {
+    const size_t elem = dataTypeSize(dt);
+    if (elem == 0) return false;
+    int64_t n = 1;
+    for (int64_t d : shape) {
+        if (d <= 0) return false;
+        n *= d;
+    }
+    bytes = static_cast<size_t>(n) * elem;
+    return true;
+}
+
 }  // namespace
 
 GrpcServer::GrpcServer(InferLite* owner, std::string host, int port)
@@ -442,10 +466,28 @@ int GrpcServer::port() const {
                               "model '" + model_name + "' is not loaded");
     }
 
+    // Binary-tensor-data extension: when raw_input_contents is present every
+    // input travels as a raw little-endian byte payload (index-aligned with
+    // `inputs`) and typed `contents` must be empty. When it is absent the
+    // typed `InferTensorContents` path below is used. The server mirrors the
+    // request format on the output side (raw in => raw out, typed in => typed
+    // out), matching the Triton/KServe clients that switch format per request.
+    const bool binary_input = request->raw_input_contents_size() > 0;
+    if (binary_input &&
+        request->raw_input_contents_size() != request->inputs_size()) {
+        return ::grpc::Status(
+            ::grpc::StatusCode::INVALID_ARGUMENT,
+            "binary_tensor_data raw_input_contents must carry exactly one "
+            "payload per input (have " +
+                std::to_string(request->raw_input_contents_size()) +
+                " for " + std::to_string(request->inputs_size()) + " inputs)");
+    }
+
     // Convert KServe InferInputTensor -> internal Tensor (raw byte payload).
     std::vector<Tensor> inputs;
     inputs.reserve(request->inputs_size());
-    for (const auto& in : request->inputs()) {
+    for (int i = 0; i < request->inputs_size(); ++i) {
+        const auto& in = request->inputs(i);
         Tensor t;
         t.name = in.name();
         t.type = dataTypeFromString(in.datatype());
@@ -455,10 +497,38 @@ int GrpcServer::port() const {
                                       in.datatype());
         }
         for (int64_t d : in.shape()) t.shape.push_back(d);
-        std::string err;
-        if (!contentsToBytes(in.contents(), t.type, t.data, err)) {
-            return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
-                                  "input '" + in.name() + "': " + err);
+        if (binary_input) {
+            // Raw path: byte-exact, little-endian payload, no typed contents.
+            if (!contentsEmpty(in.contents())) {
+                return ::grpc::Status(
+                    ::grpc::StatusCode::INVALID_ARGUMENT,
+                    "input '" + in.name() +
+                        "': typed contents must be empty when raw_input_contents "
+                        "is used (binary_tensor_data)");
+            }
+            size_t expected = 0;
+            if (!expectedRawSize(t.shape, t.type, expected)) {
+                return ::grpc::Status(
+                    ::grpc::StatusCode::INVALID_ARGUMENT,
+                    "input '" + in.name() +
+                        "': cannot compute raw payload size from datatype/shape");
+            }
+            const std::string& raw = request->raw_input_contents(i);
+            if (raw.size() != expected) {
+                return ::grpc::Status(
+                    ::grpc::StatusCode::INVALID_ARGUMENT,
+                    "input '" + in.name() + "': raw_input_contents has " +
+                        std::to_string(raw.size()) +
+                        " bytes but shape/datatype require " +
+                        std::to_string(expected));
+            }
+            t.data.assign(raw.begin(), raw.end());
+        } else {
+            std::string err;
+            if (!contentsToBytes(in.contents(), t.type, t.data, err)) {
+                return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
+                                      "input '" + in.name() + "': " + err);
+            }
         }
         inputs.push_back(std::move(t));
     }
@@ -502,12 +572,21 @@ int GrpcServer::port() const {
         }
     }
     response->set_id(outcome.trace_id);
+    // Serialize outputs. When the request used the binary_tensor_data format,
+    // mirror it: one raw byte payload per output in `raw_output_contents`, with
+    // typed `contents` left empty (and vice versa for typed requests).
+    const bool binary_output = binary_input;
     for (const auto& out : outcome.outputs) {
         inference::ModelInferResponse_InferOutputTensor* o = response->add_outputs();
         o->set_name(out.name);
         o->set_datatype(dataTypeToString(out.type));
         for (int64_t d : out.shape) o->add_shape(d);
-        bytesToContents(out, *o->mutable_contents());
+        if (binary_output) {
+            response->add_raw_output_contents()->assign(
+                reinterpret_cast<const char*>(out.data.data()), out.data.size());
+        } else {
+            bytesToContents(out, *o->mutable_contents());
+        }
     }
     return ::grpc::Status::OK;
 }

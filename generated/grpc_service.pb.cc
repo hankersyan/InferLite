@@ -851,6 +851,7 @@ inline constexpr ModelInferResponse::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : parameters_{},
         outputs_{},
+        raw_output_contents_{},
         model_name_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
@@ -858,9 +859,6 @@ inline constexpr ModelInferResponse::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         id_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
-        raw_output_contents_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         _cached_size_{0} {}
@@ -890,6 +888,7 @@ inline constexpr ModelInferRequest::Impl_::Impl_(
       : parameters_{},
         inputs_{},
         outputs_{},
+        raw_input_contents_{},
         model_name_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
@@ -897,9 +896,6 @@ inline constexpr ModelInferRequest::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         id_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
-        raw_input_contents_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         _cached_size_{0} {}
@@ -1424,7 +1420,7 @@ const char descriptor_table_protodef_grpc_5fservice_2eproto[] ABSL_ATTRIBUTE_SEC
     "-.inference.ModelInferRequest.InferInput"
     "Tensor\022H\n\007outputs\030\006 \003(\01327.inference.Mode"
     "lInferRequest.InferRequestedOutputTensor"
-    "\022\032\n\022raw_input_contents\030\007 \001(\014\032\371\001\n\020InferIn"
+    "\022\032\n\022raw_input_contents\030\007 \003(\014\032\371\001\n\020InferIn"
     "putTensor\022\014\n\004name\030\001 \001(\t\022\020\n\010datatype\030\002 \001("
     "\t\022\r\n\005shape\030\003 \003(\003\022Q\n\nparameters\030\004 \003(\0132=.i"
     "nference.ModelInferRequest.InferInputTen"
@@ -1442,7 +1438,7 @@ const char descriptor_table_protodef_grpc_5fservice_2eproto[] ABSL_ATTRIBUTE_SEC
     "\n\nparameters\030\004 \003(\0132-.inference.ModelInfe"
     "rResponse.ParametersEntry\022@\n\007outputs\030\005 \003"
     "(\0132/.inference.ModelInferResponse.InferO"
-    "utputTensor\022\033\n\023raw_output_contents\030\006 \001(\014"
+    "utputTensor\022\033\n\023raw_output_contents\030\006 \003(\014"
     "\032\374\001\n\021InferOutputTensor\022\014\n\004name\030\001 \001(\t\022\020\n\010"
     "datatype\030\002 \001(\t\022\r\n\005shape\030\003 \003(\003\022S\n\nparamet"
     "ers\030\004 \003(\0132\?.inference.ModelInferResponse"
@@ -5973,10 +5969,10 @@ inline PROTOBUF_NDEBUG_INLINE ModelInferRequest::Impl_::Impl_(
       : parameters_{visibility, arena, from.parameters_},
         inputs_{visibility, arena, from.inputs_},
         outputs_{visibility, arena, from.outputs_},
+        raw_input_contents_{visibility, arena, from.raw_input_contents_},
         model_name_(arena, from.model_name_),
         model_version_(arena, from.model_version_),
         id_(arena, from.id_),
-        raw_input_contents_(arena, from.raw_input_contents_),
         _cached_size_{0} {}
 
 ModelInferRequest::ModelInferRequest(
@@ -6001,10 +5997,10 @@ inline PROTOBUF_NDEBUG_INLINE ModelInferRequest::Impl_::Impl_(
       : parameters_{visibility, arena},
         inputs_{visibility, arena},
         outputs_{visibility, arena},
+        raw_input_contents_{visibility, arena},
         model_name_(arena),
         model_version_(arena),
         id_(arena),
-        raw_input_contents_(arena),
         _cached_size_{0} {}
 
 inline void ModelInferRequest::SharedCtor(::_pb::Arena* arena) {
@@ -6021,7 +6017,6 @@ inline void ModelInferRequest::SharedDtor(MessageLite& self) {
   this_._impl_.model_name_.Destroy();
   this_._impl_.model_version_.Destroy();
   this_._impl_.id_.Destroy();
-  this_._impl_.raw_input_contents_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -6045,6 +6040,10 @@ constexpr auto ModelInferRequest::InternalNewImpl_() {
                   ::google::protobuf::Message::internal_visibility()),
       PROTOBUF_FIELD_OFFSET(ModelInferRequest, _impl_.outputs_) +
           decltype(ModelInferRequest::_impl_.outputs_)::
+              InternalGetArenaOffset(
+                  ::google::protobuf::Message::internal_visibility()),
+      PROTOBUF_FIELD_OFFSET(ModelInferRequest, _impl_.raw_input_contents_) +
+          decltype(ModelInferRequest::_impl_.raw_input_contents_)::
               InternalGetArenaOffset(
                   ::google::protobuf::Message::internal_visibility()),
   });
@@ -6120,8 +6119,8 @@ const ::_pbi::TcParseTable<3, 7, 3, 71, 2> ModelInferRequest::_table_ = {
     // repeated .inference.ModelInferRequest.InferRequestedOutputTensor outputs = 6;
     {::_pbi::TcParser::FastMtR1,
      {50, 63, 1, PROTOBUF_FIELD_OFFSET(ModelInferRequest, _impl_.outputs_)}},
-    // bytes raw_input_contents = 7;
-    {::_pbi::TcParser::FastBS1,
+    // repeated bytes raw_input_contents = 7;
+    {::_pbi::TcParser::FastBR1,
      {58, 63, 0, PROTOBUF_FIELD_OFFSET(ModelInferRequest, _impl_.raw_input_contents_)}},
   }}, {{
     65535, 65535
@@ -6144,9 +6143,9 @@ const ::_pbi::TcParseTable<3, 7, 3, 71, 2> ModelInferRequest::_table_ = {
     // repeated .inference.ModelInferRequest.InferRequestedOutputTensor outputs = 6;
     {PROTOBUF_FIELD_OFFSET(ModelInferRequest, _impl_.outputs_), 0, 1,
     (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-    // bytes raw_input_contents = 7;
+    // repeated bytes raw_input_contents = 7;
     {PROTOBUF_FIELD_OFFSET(ModelInferRequest, _impl_.raw_input_contents_), 0, 0,
-    (0 | ::_fl::kFcSingular | ::_fl::kBytes | ::_fl::kRepAString)},
+    (0 | ::_fl::kFcRepeated | ::_fl::kBytes | ::_fl::kRepSString)},
   }}, {{
     {::_pbi::TcParser::GetTable<::inference::ModelInferRequest_InferInputTensor>()},
     {::_pbi::TcParser::GetTable<::inference::ModelInferRequest_InferRequestedOutputTensor>()},
@@ -6174,10 +6173,10 @@ PROTOBUF_NOINLINE void ModelInferRequest::Clear() {
   _impl_.parameters_.Clear();
   _impl_.inputs_.Clear();
   _impl_.outputs_.Clear();
+  _impl_.raw_input_contents_.Clear();
   _impl_.model_name_.ClearToEmpty();
   _impl_.model_version_.ClearToEmpty();
   _impl_.id_.ClearToEmpty();
-  _impl_.raw_input_contents_.ClearToEmpty();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
 
@@ -6275,10 +6274,10 @@ PROTOBUF_NOINLINE void ModelInferRequest::Clear() {
                     target, stream);
           }
 
-          // bytes raw_input_contents = 7;
-          if (!this_._internal_raw_input_contents().empty()) {
-            const std::string& _s = this_._internal_raw_input_contents();
-            target = stream->WriteBytesMaybeAliased(7, _s, target);
+          // repeated bytes raw_input_contents = 7;
+          for (int i = 0, n = this_._internal_raw_input_contents_size(); i < n; ++i) {
+            const auto& s = this_._internal_raw_input_contents().Get(i);
+            target = stream->WriteBytes(7, s, target);
           }
 
           if (PROTOBUF_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -6330,6 +6329,15 @@ PROTOBUF_NOINLINE void ModelInferRequest::Clear() {
                 total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
               }
             }
+            // repeated bytes raw_input_contents = 7;
+            {
+              total_size +=
+                  1 * ::google::protobuf::internal::FromIntSize(this_._internal_raw_input_contents().size());
+              for (int i = 0, n = this_._internal_raw_input_contents().size(); i < n; ++i) {
+                total_size += ::google::protobuf::internal::WireFormatLite::BytesSize(
+                    this_._internal_raw_input_contents().Get(i));
+              }
+            }
           }
            {
             // string model_name = 1;
@@ -6346,11 +6354,6 @@ PROTOBUF_NOINLINE void ModelInferRequest::Clear() {
             if (!this_._internal_id().empty()) {
               total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                               this_._internal_id());
-            }
-            // bytes raw_input_contents = 7;
-            if (!this_._internal_raw_input_contents().empty()) {
-              total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
-                                              this_._internal_raw_input_contents());
             }
           }
           return this_.MaybeComputeUnknownFieldsSize(total_size,
@@ -6370,6 +6373,7 @@ void ModelInferRequest::MergeImpl(::google::protobuf::MessageLite& to_msg, const
       from._internal_inputs());
   _this->_internal_mutable_outputs()->MergeFrom(
       from._internal_outputs());
+  _this->_internal_mutable_raw_input_contents()->MergeFrom(from._internal_raw_input_contents());
   if (!from._internal_model_name().empty()) {
     _this->_internal_set_model_name(from._internal_model_name());
   }
@@ -6378,9 +6382,6 @@ void ModelInferRequest::MergeImpl(::google::protobuf::MessageLite& to_msg, const
   }
   if (!from._internal_id().empty()) {
     _this->_internal_set_id(from._internal_id());
-  }
-  if (!from._internal_raw_input_contents().empty()) {
-    _this->_internal_set_raw_input_contents(from._internal_raw_input_contents());
   }
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(from._internal_metadata_);
 }
@@ -6401,10 +6402,10 @@ void ModelInferRequest::InternalSwap(ModelInferRequest* PROTOBUF_RESTRICT other)
   _impl_.parameters_.InternalSwap(&other->_impl_.parameters_);
   _impl_.inputs_.InternalSwap(&other->_impl_.inputs_);
   _impl_.outputs_.InternalSwap(&other->_impl_.outputs_);
+  _impl_.raw_input_contents_.InternalSwap(&other->_impl_.raw_input_contents_);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.model_name_, &other->_impl_.model_name_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.model_version_, &other->_impl_.model_version_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.id_, &other->_impl_.id_, arena);
-  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.raw_input_contents_, &other->_impl_.raw_input_contents_, arena);
 }
 
 ::google::protobuf::Metadata ModelInferRequest::GetMetadata() const {
@@ -7036,10 +7037,10 @@ inline PROTOBUF_NDEBUG_INLINE ModelInferResponse::Impl_::Impl_(
     const Impl_& from, const ::inference::ModelInferResponse& from_msg)
       : parameters_{visibility, arena, from.parameters_},
         outputs_{visibility, arena, from.outputs_},
+        raw_output_contents_{visibility, arena, from.raw_output_contents_},
         model_name_(arena, from.model_name_),
         model_version_(arena, from.model_version_),
         id_(arena, from.id_),
-        raw_output_contents_(arena, from.raw_output_contents_),
         _cached_size_{0} {}
 
 ModelInferResponse::ModelInferResponse(
@@ -7063,10 +7064,10 @@ inline PROTOBUF_NDEBUG_INLINE ModelInferResponse::Impl_::Impl_(
     ::google::protobuf::Arena* arena)
       : parameters_{visibility, arena},
         outputs_{visibility, arena},
+        raw_output_contents_{visibility, arena},
         model_name_(arena),
         model_version_(arena),
         id_(arena),
-        raw_output_contents_(arena),
         _cached_size_{0} {}
 
 inline void ModelInferResponse::SharedCtor(::_pb::Arena* arena) {
@@ -7083,7 +7084,6 @@ inline void ModelInferResponse::SharedDtor(MessageLite& self) {
   this_._impl_.model_name_.Destroy();
   this_._impl_.model_version_.Destroy();
   this_._impl_.id_.Destroy();
-  this_._impl_.raw_output_contents_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -7103,6 +7103,10 @@ constexpr auto ModelInferResponse::InternalNewImpl_() {
                   ::google::protobuf::Message::internal_visibility()),
       PROTOBUF_FIELD_OFFSET(ModelInferResponse, _impl_.outputs_) +
           decltype(ModelInferResponse::_impl_.outputs_)::
+              InternalGetArenaOffset(
+                  ::google::protobuf::Message::internal_visibility()),
+      PROTOBUF_FIELD_OFFSET(ModelInferResponse, _impl_.raw_output_contents_) +
+          decltype(ModelInferResponse::_impl_.raw_output_contents_)::
               InternalGetArenaOffset(
                   ::google::protobuf::Message::internal_visibility()),
   });
@@ -7175,8 +7179,8 @@ const ::_pbi::TcParseTable<3, 6, 2, 72, 2> ModelInferResponse::_table_ = {
     // repeated .inference.ModelInferResponse.InferOutputTensor outputs = 5;
     {::_pbi::TcParser::FastMtR1,
      {42, 63, 0, PROTOBUF_FIELD_OFFSET(ModelInferResponse, _impl_.outputs_)}},
-    // bytes raw_output_contents = 6;
-    {::_pbi::TcParser::FastBS1,
+    // repeated bytes raw_output_contents = 6;
+    {::_pbi::TcParser::FastBR1,
      {50, 63, 0, PROTOBUF_FIELD_OFFSET(ModelInferResponse, _impl_.raw_output_contents_)}},
     {::_pbi::TcParser::MiniParse, {}},
   }}, {{
@@ -7197,9 +7201,9 @@ const ::_pbi::TcParseTable<3, 6, 2, 72, 2> ModelInferResponse::_table_ = {
     // repeated .inference.ModelInferResponse.InferOutputTensor outputs = 5;
     {PROTOBUF_FIELD_OFFSET(ModelInferResponse, _impl_.outputs_), 0, 0,
     (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-    // bytes raw_output_contents = 6;
+    // repeated bytes raw_output_contents = 6;
     {PROTOBUF_FIELD_OFFSET(ModelInferResponse, _impl_.raw_output_contents_), 0, 0,
-    (0 | ::_fl::kFcSingular | ::_fl::kBytes | ::_fl::kRepAString)},
+    (0 | ::_fl::kFcRepeated | ::_fl::kBytes | ::_fl::kRepSString)},
   }}, {{
     {::_pbi::TcParser::GetTable<::inference::ModelInferResponse_InferOutputTensor>()},
     {::_pbi::TcParser::GetMapAuxInfo<
@@ -7225,10 +7229,10 @@ PROTOBUF_NOINLINE void ModelInferResponse::Clear() {
 
   _impl_.parameters_.Clear();
   _impl_.outputs_.Clear();
+  _impl_.raw_output_contents_.Clear();
   _impl_.model_name_.ClearToEmpty();
   _impl_.model_version_.ClearToEmpty();
   _impl_.id_.ClearToEmpty();
-  _impl_.raw_output_contents_.ClearToEmpty();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
 
@@ -7315,10 +7319,10 @@ PROTOBUF_NOINLINE void ModelInferResponse::Clear() {
                     target, stream);
           }
 
-          // bytes raw_output_contents = 6;
-          if (!this_._internal_raw_output_contents().empty()) {
-            const std::string& _s = this_._internal_raw_output_contents();
-            target = stream->WriteBytesMaybeAliased(6, _s, target);
+          // repeated bytes raw_output_contents = 6;
+          for (int i = 0, n = this_._internal_raw_output_contents_size(); i < n; ++i) {
+            const auto& s = this_._internal_raw_output_contents().Get(i);
+            target = stream->WriteBytes(6, s, target);
           }
 
           if (PROTOBUF_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -7363,6 +7367,15 @@ PROTOBUF_NOINLINE void ModelInferResponse::Clear() {
                 total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
               }
             }
+            // repeated bytes raw_output_contents = 6;
+            {
+              total_size +=
+                  1 * ::google::protobuf::internal::FromIntSize(this_._internal_raw_output_contents().size());
+              for (int i = 0, n = this_._internal_raw_output_contents().size(); i < n; ++i) {
+                total_size += ::google::protobuf::internal::WireFormatLite::BytesSize(
+                    this_._internal_raw_output_contents().Get(i));
+              }
+            }
           }
            {
             // string model_name = 1;
@@ -7380,11 +7393,6 @@ PROTOBUF_NOINLINE void ModelInferResponse::Clear() {
               total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                               this_._internal_id());
             }
-            // bytes raw_output_contents = 6;
-            if (!this_._internal_raw_output_contents().empty()) {
-              total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
-                                              this_._internal_raw_output_contents());
-            }
           }
           return this_.MaybeComputeUnknownFieldsSize(total_size,
                                                      &this_._impl_._cached_size_);
@@ -7401,6 +7409,7 @@ void ModelInferResponse::MergeImpl(::google::protobuf::MessageLite& to_msg, cons
   _this->_impl_.parameters_.MergeFrom(from._impl_.parameters_);
   _this->_internal_mutable_outputs()->MergeFrom(
       from._internal_outputs());
+  _this->_internal_mutable_raw_output_contents()->MergeFrom(from._internal_raw_output_contents());
   if (!from._internal_model_name().empty()) {
     _this->_internal_set_model_name(from._internal_model_name());
   }
@@ -7409,9 +7418,6 @@ void ModelInferResponse::MergeImpl(::google::protobuf::MessageLite& to_msg, cons
   }
   if (!from._internal_id().empty()) {
     _this->_internal_set_id(from._internal_id());
-  }
-  if (!from._internal_raw_output_contents().empty()) {
-    _this->_internal_set_raw_output_contents(from._internal_raw_output_contents());
   }
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(from._internal_metadata_);
 }
@@ -7431,10 +7437,10 @@ void ModelInferResponse::InternalSwap(ModelInferResponse* PROTOBUF_RESTRICT othe
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   _impl_.parameters_.InternalSwap(&other->_impl_.parameters_);
   _impl_.outputs_.InternalSwap(&other->_impl_.outputs_);
+  _impl_.raw_output_contents_.InternalSwap(&other->_impl_.raw_output_contents_);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.model_name_, &other->_impl_.model_name_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.model_version_, &other->_impl_.model_version_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.id_, &other->_impl_.id_, arena);
-  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.raw_output_contents_, &other->_impl_.raw_output_contents_, arena);
 }
 
 ::google::protobuf::Metadata ModelInferResponse::GetMetadata() const {

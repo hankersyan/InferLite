@@ -137,6 +137,32 @@ try:
     show("ModelInfer", vals == [3.0,5.0,7.0,9.0], "out=%s vals=%s" % (r.outputs[0].name, vals))
 except Exception as e:
     show("ModelInfer", False, "exc=" + str(e))
+# binary_tensor_data extension: raw_input_contents request must be echoed as
+# raw_output_contents (byte-exact FP32 little-endian payloads, contents empty).
+try:
+    import struct
+    req = pb.ModelInferRequest(model_name="intel_cpu_model")
+    tin = req.inputs.add(); tin.name="input"; tin.datatype="FP32"; tin.shape.extend([1,4])
+    req.raw_input_contents.append(struct.pack("<4f", 1.0, 2.0, 3.0, 4.0))
+    r = stub.ModelInfer(req, timeout=15)
+    got = struct.unpack("<4f", r.raw_output_contents[0]) if len(r.raw_output_contents) == 1 else None
+    empty_typed = len(r.outputs[0].contents.fp32_contents) == 0
+    show("ModelInferRaw", got == (3.0, 5.0, 7.0, 9.0) and empty_typed and len(r.raw_output_contents) == 1,
+         "raw=%s empty_typed=%s" % (got, empty_typed))
+except Exception as e:
+    show("ModelInferRaw", False, "exc=" + str(e))
+# Raw payload with the wrong byte count must be rejected at the protocol layer.
+try:
+    import struct
+    req = pb.ModelInferRequest(model_name="intel_cpu_model")
+    tin = req.inputs.add(); tin.name="input"; tin.datatype="FP32"; tin.shape.extend([1,4])
+    req.raw_input_contents.append(struct.pack("<2f", 1.0, 2.0))  # 8 bytes, shape needs 16
+    stub.ModelInfer(req, timeout=15)
+    show("ModelInferRawBadSize", False, "expected INVALID_ARGUMENT")
+except grpc.RpcError as e:
+    show("ModelInferRawBadSize", e.code() == grpc.StatusCode.INVALID_ARGUMENT, "code=%s" % e.code())
+except Exception as e:
+    show("ModelInferRawBadSize", False, "exc=" + str(e))
 ch.close()
 print("DONE")
 '@
@@ -148,9 +174,13 @@ Write-Output "== Full RPC suite =="
 Write-Output ""
 Write-Output "== HTTP still works alongside gRPC (regression) =="
 try {
+    $r = Invoke-WebRequest -Uri "http://127.0.0.1:8000/v2/health/live" -UseBasicParsing -TimeoutSec 10
+    Write-Output "HTTP /v2/health/live -> $($r.StatusCode) $($r.Content)"
+} catch { Write-Output "HTTP /v2/health/live check skipped (server state: $(-not $p.HasExited))" }
+try {
     $r = Invoke-WebRequest -Uri "http://127.0.0.1:8000/v2/health/ready" -UseBasicParsing -TimeoutSec 10
     Write-Output "HTTP /v2/health/ready -> $($r.StatusCode)"
-} catch { Write-Output "HTTP check skipped (server state: $(-not $p.HasExited))" }
+} catch { Write-Output "HTTP /v2/health/ready check skipped (server state: $(-not $p.HasExited))" }
 
 Write-Output ""
 Write-Output "== Human-pose-estimation over gRPC (large-tensor ModelInfer) =="
