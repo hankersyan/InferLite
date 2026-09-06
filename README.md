@@ -261,7 +261,6 @@ See `docs/GRPC.md` for details and `scripts/build_grpc.ps1` /
 
 ### Planned
 
-- **Profiling tool** — latency and throughput profiling across devices.
 - **In-process API** — embed the engine as a shared library (Triton-style
   `TRITONSERVER_Server` C API): expose a library target, and add an
   `extern "C"` embedding interface for C/C++/Python callers without network
@@ -652,6 +651,12 @@ The same operations are exposed over gRPC as `RepositoryIndex`,
   `INVALID_ARGUMENT`.
 - `load_test.ps1 -Concurrency <n> -PerWorker <m>` runs a sustained concurrent
   load test.
+- `profile.ps1 -BaseUrl http://127.0.0.1:8000` is the latency/throughput
+  profiling tool: it attaches to a running server, auto-discovers every READY
+  model via `/v2/health/detailed`, and reports per-model latency percentiles
+  (min/avg/p50/p90/p95/p99/max), throughput (req/s), and a server-side
+  execution-latency cross-check derived from the `/v2/metrics` cumulative
+  counters — console `key=value` output suitable as V&V latency evidence.
 - Additional suites not detailed above: `test_server.ps1` (base HTTP
   regression), `test_server_phase3.ps1` and `test_gpu_server.ps1` (GPU phase /
   TensorRT GPU server), `test_service.ps1` (Windows service install/run
