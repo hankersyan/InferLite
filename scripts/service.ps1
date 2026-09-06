@@ -29,6 +29,8 @@ param(
     [int]$GrpcPort = 0,
     [string]$HostAddr = "0.0.0.0",
     [switch]$Validated,
+    [switch]$RateLimit,
+    [string[]]$RateLimitResource,
     [string]$AuditLog,
     [string]$DiagnosticLog,
     [string]$TlsCert,
@@ -69,6 +71,10 @@ switch ($Action) {
         $args += "--http-port=$HttpPort"
         if ($GrpcPort -gt 0) { $args += "--grpc-port=$GrpcPort" }
         if ($Validated) { $args += "--validated-mode" }
+        if ($RateLimit) { $args += "--rate-limit" }
+        foreach ($rr in $RateLimitResource) {
+            if ($rr) { $args += "--rate-limit-resource=$rr" }
+        }
         if ($AuditLog)  { $args += "--audit-log=$AuditLog" }
         if ($DiagnosticLog) { $args += "--diagnostic-log=$DiagnosticLog" }
         if ($TlsCert)   { $args += "--tls-cert=$TlsCert" }

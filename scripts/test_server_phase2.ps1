@@ -88,7 +88,7 @@ Write-Output "== 9. MODEL_NOT_FOUND (expect 404) =="
 Write-Output (Invoke-IL "POST" "http://127.0.0.1:8100/v2/models/nope/infer" '{"inputs":[{"name":"x","shape":[1,1],"datatype":"FP32","data":[1]}]}')
 
 Write-Output ""
-Write-Output "== 10. metrics (with config_hash + per-model) =="
+Write-Output "== 10. metrics (Prometheus text) =="
 Write-Output (Invoke-IL "GET" "http://127.0.0.1:8100/v2/metrics")
 
 Write-Output ""

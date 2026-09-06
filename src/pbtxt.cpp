@@ -143,6 +143,51 @@ std::vector<int64_t> parseDims(Lexer& lex) {
     return dims;
 }
 
+// Parse a list of numbers / bools: `[ 0, 1 ]` or a single token `1`.
+std::vector<double> parseNumberArray(Lexer& lex) {
+    std::vector<double> out;
+    std::string tok = lex.next();
+    if (tok == "[") {
+        while (true) {
+            std::string t = lex.next();
+            if (t == "]") break;
+            if (t == ",") continue;
+            if (t == "true" || t == "True") {
+                out.push_back(1.0);
+            } else if (t == "false" || t == "False") {
+                out.push_back(0.0);
+            } else {
+                out.push_back(std::stod(t));
+            }
+        }
+    } else {
+        if (tok == "true" || tok == "True") {
+            out.push_back(1.0);
+        } else if (tok == "false" || tok == "False") {
+            out.push_back(0.0);
+        } else {
+            out.push_back(std::stod(tok));
+        }
+    }
+    return out;
+}
+
+// Defined below (after stripTypePrefix) in this anonymous namespace.
+std::string toUpper(const std::string& s);
+
+// Map a CONTROL_SEQUENCE_* kind string to the enum.
+SequenceControlKind sequenceKindFromString(const std::string& s) {
+    std::string v = toUpper(s);
+    if (v == "START" || v == "CONTROL_SEQUENCE_START") return SequenceControlKind::kSequenceStart;
+    if (v == "END" || v == "CONTROL_SEQUENCE_END") return SequenceControlKind::kSequenceEnd;
+    if (v == "READY" || v == "CONTROL_SEQUENCE_READY") return SequenceControlKind::kSequenceReady;
+    if (v == "CORRID" || v == "CONTROL_SEQUENCE_CORRID" ||
+        v == "CORRELATIONID" || v == "CONTROL_SEQUENCE_CORRELATIONID") {
+        return SequenceControlKind::kSequenceCorrId;
+    }
+    return SequenceControlKind::kInvalid;
+}
+
 // "TYPE_FP32" -> "FP32"
 std::string stripTypePrefix(const std::string& v) {
     const std::string prefix = "TYPE_";
@@ -181,6 +226,43 @@ std::vector<std::string> parseStringList(Lexer& lex) {
         out.push_back(tok);
     }
     return out;
+}
+
+// Parse the inner body of one `version_policy` sub-policy (`latest`,
+// `specific`, or `all`). The caller has consumed the sub-policy name and the
+// leading '{'. Fields:
+//   latest   { num_versions: N }      N is how many of the most recent versions
+//                                     are eligible (InferLite loads only the
+//                                     newest eligible one)
+//   specific { versions: [ a, b ] }   repeated int64; also the single-value form
+//                                     `versions: 3` and repeated `versions: 3`
+//   all      { }                      no fields
+void parseVersionPolicyBody(Lexer& lex, VersionPolicy& vp) {
+    while (true) {
+        std::string f = lex.next();
+        if (f == "}") break;
+        if (f.empty()) throw PbtxtError("unexpected EOF in version_policy body");
+        if (f == "num_versions") {
+            requireToken(lex, ":", "version_policy.num_versions");
+            vp.num_versions = parseInteger(lex.next());
+        } else if (f == "versions") {
+            requireToken(lex, ":", "version_policy.versions");
+            auto vals = parseDims(lex);
+            vp.versions.insert(vp.versions.end(), vals.begin(), vals.end());
+        } else {
+            // Skip unknown scalar/message fields.
+            std::string t = lex.next();
+            if (t == "{") {
+                int depth = 1;
+                while (depth > 0) {
+                    std::string inner = lex.next();
+                    if (inner == "{") ++depth;
+                    else if (inner == "}") --depth;
+                    else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                }
+            }
+        }
+    }
 }
 
 // Parse a `self_test` golden-input tensor block:
@@ -340,6 +422,134 @@ std::vector<TensorSpec> parseIOField(Lexer& lex, const char* what, const std::st
     return specs;
 }
 
+// ---- Triton model_warmup parsing (config `model_warmup { ... }`) ----
+
+// Parse one ModelWarmup.Input value-message body (leading '{' consumed):
+//   { data_type: TYPE_FP32 dims: [ 4 ] zero_data: true }
+void parseWarmupInputBody(Lexer& lex, WarmupInput& out) {
+    while (true) {
+        std::string f = lex.next();
+        if (f == "}") break;
+        if (f.empty()) throw PbtxtError("unexpected EOF in model_warmup input block");
+        if (f == "data_type") {
+            requireToken(lex, ":", "warmup input data_type");
+            std::string v = stripTypePrefix(lex.next());
+            out.data_type = dataTypeFromString(v);
+            if (out.data_type == DataType::kInvalid) {
+                throw PbtxtError("unsupported data_type in model_warmup input: " + v);
+            }
+            out.has_type = true;
+        } else if (f == "dims") {
+            requireToken(lex, ":", "warmup input dims");
+            out.dims = parseDims(lex);
+            out.has_dims = true;
+        } else if (f == "shape") {
+            requireToken(lex, ":", "warmup input shape");
+            out.shape = parseDims(lex);
+            out.has_shape = true;
+        } else if (f == "zero_data") {
+            requireToken(lex, ":", "warmup input zero_data");
+            std::string bt = lex.next();
+            if (bt == "true") {
+                out.zero_data = true;
+            } else if (bt == "false") {
+                out.zero_data = false;
+            } else {
+                out.zero_data = parseInteger(bt) != 0;
+            }
+        } else {
+            // Skip unknown scalar/message fields (input_data_file is parsed but
+            // rejected later in validateConfig with a precise error).
+            std::string t = lex.next();
+            if (t == "{") {
+                int depth = 1;
+                while (depth > 0) {
+                    std::string inner = lex.next();
+                    if (inner == "{") ++depth;
+                    else if (inner == "}") --depth;
+                    else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                }
+            }
+        }
+    }
+}
+
+// Parse the proto-text map form `inputs { key: "X" value { ... } }` (leading
+// '{' consumed). A `value` requires a preceding `key`, whose name is attached
+// to the parsed input.
+void parseWarmupInputsMap(Lexer& lex, ModelWarmup& wu) {
+    while (true) {
+        std::string f = lex.next();
+        if (f == "}") break;
+        if (f.empty()) throw PbtxtError("unexpected EOF in model_warmup.inputs map");
+        if (f == "key") {
+            requireToken(lex, ":", "model_warmup.inputs key");
+            if (wu.inputs.empty() || !wu.inputs.back().name.empty()) {
+                // A fresh key/entry unless the previous entry never received a value.
+                wu.inputs.emplace_back();
+            }
+            wu.inputs.back().name = lex.next();
+        } else if (f == "value") {
+            std::string t = lex.next();  // optional ':' before '{'
+            if (t == ":") t = lex.next();
+            if (t != "{") throw PbtxtError("expected '{' for model_warmup input value");
+            if (wu.inputs.empty() || wu.inputs.back().name.empty()) {
+                throw PbtxtError("model_warmup.inputs 'value' without a preceding 'key'");
+            }
+            parseWarmupInputBody(lex, wu.inputs.back());
+        } else {
+            // Skip unknown scalar/message fields.
+            std::string t = lex.next();
+            if (t == "{") {
+                int depth = 1;
+                while (depth > 0) {
+                    std::string inner = lex.next();
+                    if (inner == "{") ++depth;
+                    else if (inner == "}") --depth;
+                    else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                }
+            }
+        }
+    }
+}
+
+// Parse one warmup-request message (leading '{' consumed):
+//   { name: "warmup" batch_size: 1 inputs { key: "INPUT" value { ... } } }
+ModelWarmup parseModelWarmupBody(Lexer& lex) {
+    ModelWarmup wu;
+    while (true) {
+        std::string f = lex.next();
+        if (f == "}") break;
+        if (f.empty()) throw PbtxtError("unexpected EOF in model_warmup block");
+        if (f == "name") {
+            requireToken(lex, ":", "model_warmup.name");
+            wu.name = lex.next();
+        } else if (f == "batch_size") {
+            requireToken(lex, ":", "model_warmup.batch_size");
+            wu.batch_size = parseInteger(lex.next());
+        } else if (f == "inputs") {
+            std::string t = lex.next();
+            if (t == ":") t = lex.next();
+            if (t != "{") throw PbtxtError("expected '{' for model_warmup.inputs");
+            parseWarmupInputsMap(lex, wu);
+        } else {
+            // Skip unknown scalar/message fields (Triton also defines `count`,
+            // which InferLite does not implement: each warmup request runs once).
+            std::string t = lex.next();
+            if (t == "{") {
+                int depth = 1;
+                while (depth > 0) {
+                    std::string inner = lex.next();
+                    if (inner == "{") ++depth;
+                    else if (inner == "}") --depth;
+                    else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                }
+            }
+        }
+    }
+    return wu;
+}
+
 // Resolve a DeviceKind from an instance_group's `kind` string.
 DeviceKind kindFromStringInternal(const std::string& s) {
     std::string v = toUpper(s);
@@ -349,6 +559,150 @@ DeviceKind kindFromStringInternal(const std::string& s) {
     if (v == "AUTO" || v == "KIND_AUTO") return DeviceKind::kAuto;
     if (v == "CUDA" || v == "GPU" || v == "TENSORRT" || v == "KIND_GPU") return DeviceKind::kNvidiaGpu;
     return DeviceKind::kInvalid;
+}
+
+// Map a control value-field name (int32_false_true / fp32_false_true / ...) to
+// the data type it implies. Returns kInvalid for unknown field names.
+DataType controlValueFieldType(const std::string& f) {
+    std::string v = toUpper(f);
+    if (v.find("INT32") != std::string::npos) return DataType::kInt32;
+    if (v.find("INT64") != std::string::npos) return DataType::kInt64;
+    if (v.find("FP32") != std::string::npos || v.find("FLOAT") != std::string::npos) {
+        return DataType::kFloat32;
+    }
+    if (v.find("FP64") != std::string::npos || v.find("DOUBLE") != std::string::npos) {
+        return DataType::kFloat64;
+    }
+    if (v.find("BOOL") != std::string::npos) return DataType::kBool;
+    if (v.find("UINT32") != std::string::npos) return DataType::kUint32;
+    if (v.find("UINT64") != std::string::npos) return DataType::kUint64;
+    return DataType::kInvalid;
+}
+
+// Parse one `control { ... }` entry (the caller consumed the leading '{').
+SequenceControlSpec parseControlBody(Lexer& lex) {
+    SequenceControlSpec c;
+    while (true) {
+        std::string f = lex.next();
+        if (f == "}") break;
+        if (f.empty()) throw PbtxtError("unexpected EOF in control{}");
+        if (f == "kind") {
+            requireToken(lex, ":", "control.kind");
+            c.kind = sequenceKindFromString(lex.next());
+            if (c.kind == SequenceControlKind::kInvalid) {
+                throw PbtxtError("unknown sequence control kind");
+            }
+        } else if (controlValueFieldType(f) != DataType::kInvalid) {
+            // int32_false_true / fp32_false_true / bool_false_true: [false, true].
+            requireToken(lex, ":", "control values");
+            auto vals = parseNumberArray(lex);
+            c.data_type = controlValueFieldType(f);
+            if (!vals.empty()) c.false_value = vals[0];
+            if (vals.size() > 1) c.true_value = vals[1];
+            else if (vals.size() == 1) c.true_value = vals[0];
+        } else {
+            // Skip unknown scalar/message fields.
+            std::string t = lex.next();
+            if (t == "{") {
+                int depth = 1;
+                while (depth > 0) {
+                    std::string inner = lex.next();
+                    if (inner == "{") ++depth;
+                    else if (inner == "}") --depth;
+                    else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                }
+            }
+        }
+    }
+    if (c.kind == SequenceControlKind::kInvalid) {
+        throw PbtxtError("control is missing a valid 'kind'");
+    }
+    return c;
+}
+
+// Parse one `control_input { ... }` entry (the caller consumed the leading '{').
+SequenceControlInputSpec parseControlInputBody(Lexer& lex) {
+    SequenceControlInputSpec in;
+    while (true) {
+        std::string f = lex.next();
+        if (f == "}") break;
+        if (f.empty()) throw PbtxtError("unexpected EOF in control_input{}");
+        if (f == "name") {
+            requireToken(lex, ":", "control_input.name");
+            in.name = lex.next();
+        } else if (f == "control") {
+            std::string t = lex.next();
+            if (t != "{") {
+                // Also accept `control: { ... }`.
+                if (t == ":") t = lex.next();
+            }
+            if (t != "{") {
+                throw PbtxtError("expected '{' for control_input.control, got '" + t + "'");
+            }
+            in.controls.push_back(parseControlBody(lex));
+        } else {
+            std::string t = lex.next();
+            if (t == "{") {
+                int depth = 1;
+                while (depth > 0) {
+                    std::string inner = lex.next();
+                    if (inner == "{") ++depth;
+                    else if (inner == "}") --depth;
+                    else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                }
+            }
+        }
+    }
+    if (in.name.empty()) throw PbtxtError("control_input missing 'name'");
+    return in;
+}
+
+// Parse one `state { ... }` entry (the caller consumed the leading '{').
+SequenceStateSpec parseSequenceStateBody(Lexer& lex) {
+    SequenceStateSpec st;
+    while (true) {
+        std::string f = lex.next();
+        if (f == "}") break;
+        if (f.empty()) throw PbtxtError("unexpected EOF in sequence state{}");
+        if (f == "input_name") {
+            requireToken(lex, ":", "state.input_name");
+            st.input_name = lex.next();
+        } else if (f == "output_name") {
+            requireToken(lex, ":", "state.output_name");
+            st.output_name = lex.next();
+        } else if (f == "data_type") {
+            requireToken(lex, ":", "state.data_type");
+            std::string v = stripTypePrefix(lex.next());
+            st.data_type = dataTypeFromString(v);
+            if (st.data_type == DataType::kInvalid) {
+                throw PbtxtError("unsupported state data_type: " + v);
+            }
+        } else if (f == "dims") {
+            requireToken(lex, ":", "state.dims");
+            st.dims = parseDims(lex);
+        } else {
+            std::string t = lex.next();
+            if (t == "{") {
+                int depth = 1;
+                while (depth > 0) {
+                    std::string inner = lex.next();
+                    if (inner == "{") ++depth;
+                    else if (inner == "}") --depth;
+                    else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                }
+            }
+        }
+    }
+    if (st.input_name.empty() || st.output_name.empty()) {
+        throw PbtxtError("sequence state requires input_name and output_name");
+    }
+    if (st.data_type == DataType::kInvalid) {
+        throw PbtxtError("sequence state requires a valid data_type");
+    }
+    if (st.dims.empty()) {
+        throw PbtxtError("sequence state requires dims");
+    }
+    return st;
 }
 
 }  // namespace
@@ -382,6 +736,40 @@ ModelConfig parseConfigPbtxt(const std::string& text) {
         } else if (field == "max_batch_size") {
             require(":", "max_batch_size");
             cfg.max_batch_size = parseInteger(lex.next());
+        } else if (field == "response_cache") {
+            // Triton `response_cache { enable: true }`: per-model opt-in for
+            // caching the responses of identical (deterministic) requests.
+            require("{", "response_cache");
+            while (true) {
+                std::string f = lex.next();
+                if (f == "}") break;
+                if (f.empty()) throw PbtxtError("unexpected EOF inside response_cache{}");
+                if (f == "enable") {
+                    require(":", "response_cache.enable");
+                    std::string bt = lex.next();
+                    if (bt == "true" || bt == "True" || bt == "1") {
+                        cfg.response_cache.enabled = true;
+                    } else if (bt == "false" || bt == "False" || bt == "0") {
+                        cfg.response_cache.enabled = false;
+                    } else {
+                        throw PbtxtError("response_cache.enable must be true/false, got '" +
+                                         bt + "'");
+                    }
+                } else {
+                    // Skip unknown scalar/message fields for forward
+                    // compatibility.
+                    std::string t = lex.next();
+                    if (t == "{") {
+                        int depth = 1;
+                        while (depth > 0) {
+                            std::string inner = lex.next();
+                            if (inner == "{") ++depth;
+                            else if (inner == "}") --depth;
+                            else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                        }
+                    }
+                }
+            }
         } else if (field == "input") {
             // Accept both `input { ... }` and `input: [ { ... }, ... ]`.
             std::string tok = lex.next();
@@ -394,6 +782,49 @@ ModelConfig parseConfigPbtxt(const std::string& text) {
             cfg.outputs.insert(cfg.outputs.end(), specs.begin(), specs.end());
         } else if (field == "instance_group") {
             require("{", "instance_group");
+            // Parse one `rate_limiter { ... }` resource declaration. Shared with
+            // the top-level instance_group parser below via a lambda so both the
+            // message form (`resources { ... }`) and the repeated-message list
+            // form (`resources: [ { ... }, ... ]`) are accepted.
+            auto parseRateLimiterResource = [&]() -> RateLimiterResource {
+                RateLimiterResource r;
+                while (true) {
+                    std::string rf = lex.next();
+                    if (rf == "}") break;
+                    if (rf.empty()) throw PbtxtError("unexpected EOF in rate_limiter.resources{}");
+                    if (rf == "name") {
+                        require(":", "rate_limiter.resources.name");
+                        r.name = lex.next();
+                    } else if (rf == "count") {
+                        require(":", "rate_limiter.resources.count");
+                        r.count = parseInteger(lex.next());
+                    } else if (rf == "global") {
+                        require(":", "rate_limiter.resources.global");
+                        std::string bt = lex.next();
+                        if (bt == "true" || bt == "True" || bt == "1") {
+                            r.global = true;
+                        } else if (bt == "false" || bt == "False" || bt == "0") {
+                            r.global = false;
+                        } else {
+                            throw PbtxtError("rate_limiter.resources.global must be true/false");
+                        }
+                    } else {
+                        // Skip unknown scalar/message fields for forward
+                        // compatibility.
+                        std::string t = lex.next();
+                        if (t == "{") {
+                            int depth = 1;
+                            while (depth > 0) {
+                                std::string inner = lex.next();
+                                if (inner == "{") ++depth;
+                                else if (inner == "}") --depth;
+                                else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                            }
+                        }
+                    }
+                }
+                return r;
+            };
             while (true) {
                 std::string f = lex.next();
                 if (f == "}") break;
@@ -404,6 +835,62 @@ ModelConfig parseConfigPbtxt(const std::string& text) {
                 } else if (f == "kind") {
                     require(":", "instance_group.kind");
                     cfg.instance_group.kind = lex.next();
+                } else if (f == "rate_limiter") {
+                    // instance_group.rate_limiter { priority: N resources { ... } }
+                    std::string t = lex.next();
+                    if (t == ":") t = lex.next();
+                    if (t != "{") {
+                        throw PbtxtError("expected '{' for instance_group.rate_limiter, got '" +
+                                         t + "'");
+                    }
+                    cfg.instance_group.rate_limiter.configured = true;
+                    while (true) {
+                        std::string rf = lex.next();
+                        if (rf == "}") break;
+                        if (rf.empty()) {
+                            throw PbtxtError("unexpected EOF in instance_group.rate_limiter{}");
+                        }
+                        if (rf == "priority") {
+                            require(":", "instance_group.rate_limiter.priority");
+                            cfg.instance_group.rate_limiter.priority = parseInteger(lex.next());
+                        } else if (rf == "resources") {
+                            std::string t2 = lex.next();
+                            if (t2 == ":") t2 = lex.next();
+                            if (t2 == "[") {
+                                while (true) {
+                                    std::string t3 = lex.next();
+                                    if (t3 == "]") break;
+                                    if (t3 == ",") continue;
+                                    if (t3 != "{") {
+                                        throw PbtxtError(
+                                            "expected '{' in rate_limiter.resources list, got '" +
+                                            t3 + "'");
+                                    }
+                                    cfg.instance_group.rate_limiter.resources.push_back(
+                                        parseRateLimiterResource());
+                                }
+                            } else if (t2 == "{") {
+                                cfg.instance_group.rate_limiter.resources.push_back(
+                                    parseRateLimiterResource());
+                            } else {
+                                throw PbtxtError("expected '{' for rate_limiter.resources, got '" +
+                                                 t2 + "'");
+                            }
+                        } else {
+                            // Skip unknown scalar/message fields for forward
+                            // compatibility.
+                            std::string t = lex.next();
+                            if (t == "{") {
+                                int depth = 1;
+                                while (depth > 0) {
+                                    std::string inner = lex.next();
+                                    if (inner == "{") ++depth;
+                                    else if (inner == "}") --depth;
+                                    else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                                }
+                            }
+                        }
+                    }
                 } else {
                     std::string t = lex.next();
                     if (t == "{") {
@@ -416,6 +903,64 @@ ModelConfig parseConfigPbtxt(const std::string& text) {
                         }
                     }
                 }
+            }
+        } else if (field == "version_policy") {
+            // Triton version-policy control:
+            //   version_policy { latest   { num_versions: N } }
+            //   version_policy { specific { versions: [ a, b ] } }
+            //   version_policy { all {} }
+            // Exactly one sub-policy is allowed (mirrors Triton's oneof). The
+            // optional ':' after the message-field name (proto text
+            // `version_policy: { ... }`) is accepted too.
+            std::string t = lex.next();
+            if (t == ":") t = lex.next();
+            if (t != "{") {
+                throw PbtxtError("expected '{' for version_policy, got '" + t + "'");
+            }
+            cfg.version_policy.configured = true;
+            std::string subkind;
+            while (true) {
+                std::string f = lex.next();
+                if (f == "}") break;
+                if (f.empty()) throw PbtxtError("unexpected EOF in version_policy{}");
+                if (f == "latest" || f == "specific" || f == "all") {
+                    if (!subkind.empty()) {
+                        throw PbtxtError("version_policy must declare exactly one of "
+                                         "'latest', 'specific', or 'all'");
+                    }
+                    subkind = f;
+                    std::string t = lex.next();
+                    if (t == ":") t = lex.next();
+                    if (t != "{") {
+                        throw PbtxtError("expected '{' for version_policy." + f +
+                                         ", got '" + t + "'");
+                    }
+                    if (f == "latest") {
+                        cfg.version_policy.kind = VersionPolicyKind::kLatest;
+                    } else if (f == "specific") {
+                        cfg.version_policy.kind = VersionPolicyKind::kSpecific;
+                    } else {
+                        cfg.version_policy.kind = VersionPolicyKind::kAll;
+                    }
+                    parseVersionPolicyBody(lex, cfg.version_policy);
+                } else {
+                    // Skip unknown scalar/message fields for forward
+                    // compatibility.
+                    std::string t = lex.next();
+                    if (t == "{") {
+                        int depth = 1;
+                        while (depth > 0) {
+                            std::string inner = lex.next();
+                            if (inner == "{") ++depth;
+                            else if (inner == "}") --depth;
+                            else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                        }
+                    }
+                }
+            }
+            if (subkind.empty()) {
+                throw PbtxtError("version_policy block must declare one of "
+                                 "'latest', 'specific', or 'all'");
             }
         } else if (field == "plugin_library") {
             require(":", "plugin_library");
@@ -636,6 +1181,138 @@ ModelConfig parseConfigPbtxt(const std::string& text) {
                         }
                     }
                 }
+            }
+        } else if (field == "dynamic_batching") {
+            require("{", "dynamic_batching");
+            cfg.batching.enabled = true;
+            while (true) {
+                std::string f = lex.next();
+                if (f == "}") break;
+                if (f.empty()) throw PbtxtError("unexpected EOF in dynamic_batching{}");
+                if (f == "preferred_batch_size") {
+                    // Repeated field; accept both `[ 4, 8 ]` and repeated scalar
+                    // occurrences `preferred_batch_size: 4`.
+                    require(":", "dynamic_batching.preferred_batch_size");
+                    auto vals = parseDims(lex);
+                    cfg.batching.preferred_batch_size.insert(
+                        cfg.batching.preferred_batch_size.end(), vals.begin(), vals.end());
+                } else if (f == "max_queue_delay_microseconds") {
+                    require(":", "dynamic_batching.max_queue_delay_microseconds");
+                    cfg.batching.max_queue_delay_us = parseInteger(lex.next());
+                } else if (f == "priority_levels") {
+                    require(":", "dynamic_batching.priority_levels");
+                    cfg.batching.priority_levels = parseInteger(lex.next());
+                } else if (f == "default_priority_level") {
+                    require(":", "dynamic_batching.default_priority_level");
+                    cfg.batching.default_priority_level = parseInteger(lex.next());
+                } else if (f == "preserve_ordering") {
+                    require(":", "dynamic_batching.preserve_ordering");
+                    // proto-text booleans: accept true/false and 1/0.
+                    std::string bt = lex.next();
+                    if (bt == "true") {
+                        cfg.batching.preserve_ordering = true;
+                    } else if (bt == "false") {
+                        cfg.batching.preserve_ordering = false;
+                    } else {
+                        cfg.batching.preserve_ordering = parseInteger(bt) != 0;
+                    }
+                } else {
+                    // Skip unknown scalar/message fields (Triton also defines
+                    // queue policies default_queue_policy /
+                    // priority_queue_policy, which InferLite does not implement
+                    // yet).
+                    std::string t = lex.next();
+                    if (t == "{") {
+                        int depth = 1;
+                        while (depth > 0) {
+                            std::string inner = lex.next();
+                            if (inner == "{") ++depth;
+                            else if (inner == "}") --depth;
+                            else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                        }
+                    }
+                }
+            }
+        } else if (field == "sequence_batching") {
+            require("{", "sequence_batching");
+            cfg.sequence.enabled = true;
+            while (true) {
+                std::string f = lex.next();
+                if (f == "}") break;
+                if (f.empty()) throw PbtxtError("unexpected EOF in sequence_batching{}");
+                if (f == "max_sequence_idle_microseconds") {
+                    require(":", "sequence_batching.max_sequence_idle_microseconds");
+                    cfg.sequence.max_sequence_idle_us = parseInteger(lex.next());
+                } else if (f == "control_input") {
+                    std::string t = lex.next();
+                    if (t == ":") t = lex.next();
+                    if (t == "[") {
+                        while (true) {
+                            std::string n = lex.next();
+                            if (n == "]") break;
+                            if (n == ",") continue;
+                            if (n != "{") {
+                                throw PbtxtError("expected '{' in control_input array");
+                            }
+                            cfg.sequence.control_input.push_back(parseControlInputBody(lex));
+                        }
+                    } else if (t == "{") {
+                        cfg.sequence.control_input.push_back(parseControlInputBody(lex));
+                    } else {
+                        throw PbtxtError("expected '{' or '[' for control_input");
+                    }
+                } else if (f == "state") {
+                    std::string t = lex.next();
+                    if (t == ":") t = lex.next();
+                    if (t == "[") {
+                        while (true) {
+                            std::string n = lex.next();
+                            if (n == "]") break;
+                            if (n == ",") continue;
+                            if (n != "{") {
+                                throw PbtxtError("expected '{' in state array");
+                            }
+                            cfg.sequence.states.push_back(parseSequenceStateBody(lex));
+                        }
+                    } else if (t == "{") {
+                        cfg.sequence.states.push_back(parseSequenceStateBody(lex));
+                    } else {
+                        throw PbtxtError("expected '{' or '[' for sequence state");
+                    }
+                } else {
+                    // Skip unknown scalar/message fields.
+                    std::string t = lex.next();
+                    if (t == "{") {
+                        int depth = 1;
+                        while (depth > 0) {
+                            std::string inner = lex.next();
+                            if (inner == "{") ++depth;
+                            else if (inner == "}") --depth;
+                            else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                        }
+                    }
+                }
+            }
+        } else if (field == "model_warmup") {
+            // Triton repeated message. Accept both the array form
+            //   model_warmup [ { ... }, { ... } ]
+            // and the repeated-message form `model_warmup { ... }`.
+            std::string t = lex.next();
+            if (t == ":") t = lex.next();
+            if (t == "[") {
+                while (true) {
+                    std::string n = lex.next();
+                    if (n == "]") break;
+                    if (n == ",") continue;
+                    if (n != "{") {
+                        throw PbtxtError("expected '{' in model_warmup array");
+                    }
+                    cfg.warmups.push_back(parseModelWarmupBody(lex));
+                }
+            } else if (t == "{") {
+                cfg.warmups.push_back(parseModelWarmupBody(lex));
+            } else {
+                throw PbtxtError("expected '{' or '[' for model_warmup");
             }
         } else if (field == "max_inference_time_ms") {
             require(":", "max_inference_time_ms");

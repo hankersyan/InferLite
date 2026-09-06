@@ -46,6 +46,27 @@ inline const char* deviceKindToString(DeviceKind k) {
     }
 }
 
+// One resource an instance execution must reserve (Triton
+// ModelInstanceGroup.RateLimiter.Resource). While a backend execution runs it
+// holds `count` units of the named resource; if the units are not available
+// the execution waits (see docs/RATE_LIMITER.md).
+struct RateLimiterResource {
+    std::string name;     // resource identifier, e.g. "GLOBAL_MEMORY"
+    int64_t count = 1;    // units consumed by one execution
+    bool global = true;   // true => system-wide pool; false => per-device pool
+};
+
+// Triton-style rate limiter policy for a model's instance group
+// (`instance_group { rate_limiter { ... } }`). Cross-model resource admission:
+// multiple models that share a resource (e.g. the one GPU) are serialized so
+// their executions never over-subscribe it. `priority` (higher wins) selects
+// which waiting model is admitted when capacity is contended.
+struct RateLimiterConfig {
+    bool configured = false;   // a `rate_limiter {}` block appeared
+    int64_t priority = 0;      // higher values are preferred; default 0
+    std::vector<RateLimiterResource> resources;
+};
+
 struct InstanceGroup {
     int count = 1;
     // Triton-style kind (KIND_CPU / KIND_GPU / KIND_NPU / KIND_GPU_INTEL /
@@ -56,6 +77,43 @@ struct InstanceGroup {
     // Resolved device kind used by the scheduler/backend. Derived from `kind`.
     // Defaults to CPU for OpenVINO.
     DeviceKind device_kind = DeviceKind::kCpu;
+    // Triton-style cross-model rate limiter policy (optional). Empty when the
+    // instance group does not declare one (executions are then unrestricted).
+    RateLimiterConfig rate_limiter;
+};
+
+// Triton `version_policy` control, parsed from the optional top-level block in
+// config.pbtxt (Phase 0.4 / version policies). Mirrors NVIDIA Triton's
+// ModelConfig.VersionPolicy oneof:
+//
+//   version_policy { latest   { num_versions: N } }   // N most recent (default N=1)
+//   version_policy { specific { versions: [ a, b ] } } // the listed versions
+//   version_policy { all {} }                          // every version present
+//
+// Triton's default policy when the block is absent is `latest` with
+// num_versions=1, so an absent block and `latest { num_versions: 1 }` behave
+// identically. InferLite deviation (single instance per model name): the policy
+// selects the one version directory that is loaded (see
+// model_repository::resolveVersionDir) rather than keeping several versions
+// ready simultaneously as Triton does.
+enum class VersionPolicyKind : int {
+    kLatest,    // load the most recent version directory
+    kSpecific,  // load one of the explicitly listed versions
+    kAll,       // treat every available version as eligible
+    kInvalid,
+};
+
+struct VersionPolicy {
+    VersionPolicyKind kind = VersionPolicyKind::kLatest;
+    // `latest`: how many of the most recent versions are eligible. InferLite
+    // loads only the newest eligible version, so values > 1 behave like 1
+    // (documented deviation from Triton, which would keep N versions ready).
+    int64_t num_versions = 1;
+    // `specific`: the explicit versions to consider (positive, unique).
+    std::vector<int64_t> versions;
+    // True when a `version_policy {}` block appeared in config.pbtxt. Used to
+    // distinguish an explicit `latest` from Triton's implicit default.
+    bool configured = false;
 };
 
 // One step of an ensemble (backend: "ensemble").
@@ -106,6 +164,145 @@ struct GoldenTest {
     double epsilon = 0.0;  // 0 => bit-for-bit
 };
 
+// Triton-style response caching, parsed from a `response_cache {}` block in
+// config.pbtxt (mirrors NVIDIA Triton's ModelConfig.ResponseCache message):
+//
+//   response_cache {
+//     enable: true
+//   }
+//
+// When enabled, the server keeps a bounded LRU of recently computed responses
+// keyed on the request inputs plus the model generation (config hash + model
+// file hash, see response_cache.hpp). Identical requests are answered from the
+// cache without queueing or executing the model. Safe ONLY for deterministic
+// models - enabling it asserts determinism. Stateful models
+// (sequence_batching) are rejected at config validation because their outputs
+// depend on sequence state that the cache would skip.
+struct ResponseCacheConfig {
+    bool enabled = false;
+};
+
+// Triton-style dynamic batching policy, parsed from a `dynamic_batching {}`
+// block in config.pbtxt (Phase 7 / batching mode). Mirrors NVIDIA Triton's
+// ModelConfig.DynamicBatching message:
+//
+//   dynamic_batching {
+//     preferred_batch_size: [ 4, 8 ]
+//     max_queue_delay_microseconds: 100
+//   }
+//
+// When present (and max_batch_size > 0) the scheduler coalesces multiple
+// queued inference requests into a single backend execution whose batch
+// dimension is the sum of the requests' batch dimensions, up to
+// max_batch_size. preferred_batch_size gives batch sizes the scheduler tries
+// to reach before executing; max_queue_delay_us is how long the oldest request
+// waits for the batch to fill before the scheduler executes anyway.
+struct DynamicBatching {
+    bool enabled = false;
+    // Preferred batch sizes (samples) to form before dispatching. Empty means
+    // no preferred target: the scheduler fills up to max_batch_size within the
+    // delay window. Values must be in [1, max_batch_size].
+    std::vector<int64_t> preferred_batch_size;
+    // Maximum time (microseconds) a request waits for its batch to fill.
+    // 0 (default) dispatches immediately once the queue is drained.
+    int64_t max_queue_delay_us = 0;
+    // Triton priority scheduling: the number of priority levels enabled for the
+    // model. Priority starts at 1 and 1 is the highest priority; requests at
+    // the same level are handled in the order they are received. 0 disables
+    // priority scheduling (a single FIFO queue).
+    int64_t priority_levels = 0;
+    // Priority level used for requests that don't carry a `priority` request
+    // parameter. Must be in [1, priority_levels] when priorities are enabled.
+    int64_t default_priority_level = 1;
+    // Triton preserve_ordering: when true the scheduler returns responses in
+    // the order the requests were received by the scheduler, even though
+    // execution may be reordered (for example by priority). Default false.
+    bool preserve_ordering = false;
+};
+
+// Triton sequence-batching control kinds (ModelSequenceBatching.Control.Kind).
+// START/END/READY are flags encoded as a false/true pair; CORRID is a value
+// (the sequence correlation id).
+enum class SequenceControlKind : int {
+    kSequenceStart,
+    kSequenceEnd,
+    kSequenceReady,
+    kSequenceCorrId,
+    kInvalid,
+};
+
+inline const char* sequenceControlKindToString(SequenceControlKind k) {
+    switch (k) {
+        case SequenceControlKind::kSequenceStart: return "CONTROL_SEQUENCE_START";
+        case SequenceControlKind::kSequenceEnd: return "CONTROL_SEQUENCE_END";
+        case SequenceControlKind::kSequenceReady: return "CONTROL_SEQUENCE_READY";
+        case SequenceControlKind::kSequenceCorrId: return "CONTROL_SEQUENCE_CORRID";
+        default: return "INVALID";
+    }
+}
+
+// One control attached to a control-input tensor.
+struct SequenceControlSpec {
+    SequenceControlKind kind = SequenceControlKind::kInvalid;
+    // Data type of the client tensor carrying this control (INT32/FP32/BOOL...).
+    DataType data_type = DataType::kInvalid;
+    // For START/END/READY the client sends one of these two scalar values.
+    double false_value = 0.0;
+    double true_value = 1.0;
+};
+
+// A Triton sequence-batching control input: the client carries a tensor with
+// this `name` on every request; the scheduler reads it to manage the sequence
+// and strips it before the tensor is sent to the backend model.
+struct SequenceControlInputSpec {
+    std::string name;
+    std::vector<SequenceControlSpec> controls;
+};
+
+// A hidden state tensor kept between requests of one sequence. The backend
+// model declares both tensors; clients never send/receive them.
+struct SequenceStateSpec {
+    std::string input_name;    // backend input carrying the previous state
+    std::string output_name;   // backend output produced as the next state
+    DataType data_type = DataType::kInvalid;
+    std::vector<int64_t> dims; // per-request shape (no batch dimension)
+};
+
+// Triton sequence-batching scheduler policy (config `sequence_batching {}`).
+struct SequenceBatching {
+    bool enabled = false;
+    // A sequence is aborted after this much time without a request (us).
+    int64_t max_sequence_idle_us = 0;
+    std::vector<SequenceControlInputSpec> control_input;
+    std::vector<SequenceStateSpec> states;
+};
+
+// Triton `model_warmup`: sample requests executed through the real scheduler
+// when a model loads so lazy execution paths (shape-specific kernel
+// compilation, first-touch allocations, backend/plugin caches) are exercised
+// before the model is marked ready. Mirrors Triton's ModelWarmup.Input:
+//   inputs {
+//     key: "INPUT"
+//     value { data_type: TYPE_FP32 dims: [ 4 ] zero_data: true }
+//   }
+struct WarmupInput {
+    std::string name;                          // must match a declared model input
+    bool has_type = false;                     // `data_type` present in the config
+    DataType data_type = DataType::kInvalid;   // optional; defaults to the model input type
+    bool has_dims = false;                     // `dims` present in the config
+    std::vector<int64_t> dims;                 // per-request dims (no batch dimension)
+    bool has_shape = false;                    // Triton `shape` (full shape) present
+    std::vector<int64_t> shape;                // full tensor shape incl. batch dim (overrides dims)
+    bool zero_data = false;                    // fill with zeros (input_data_file not supported)
+};
+
+// One named warmup request, executed once through the real scheduler at load.
+struct ModelWarmup {
+    std::string name;        // request name (informational / diagnostics)
+    int64_t batch_size = 0;  // 0 or 1 => single request; >1 sets the leading batch dim
+    std::vector<WarmupInput> inputs;
+};
+
 // Parsed representation of one model's config.pbtxt.
 struct ModelConfig {
     std::string name;
@@ -114,9 +311,29 @@ struct ModelConfig {
     // >0 enables batching where request tensors carry a leading batch
     // dimension B (1 <= B <= max_batch_size) and config dims are per-request.
     int64_t max_batch_size = 0;
+    // Triton-style dynamic batching scheduler policy (config `dynamic_batching`
+    // block). Requires max_batch_size > 0. See DynamicBatching.
+    DynamicBatching batching;
+    // Triton-style sequence-batching scheduler policy (config
+    // `sequence_batching {}` block) for stateful models. Mutually exclusive
+    // with dynamic batching. See SequenceBatching.
+    SequenceBatching sequence;
+    // Triton-style response cache opt-in (config `response_cache { enable:
+    // true }`). Deterministic-model optimization: identical requests are served
+    // from a bounded LRU without executing the model. See ResponseCacheConfig.
+    ResponseCacheConfig response_cache;
+    // Triton `model_warmup`: sample requests run through the real scheduler at
+    // load time (before the model is marked ready). Empty => no warmup. Not
+    // supported together with sequence_batching. See ModelWarmup.
+    std::vector<ModelWarmup> warmups;
     std::vector<TensorSpec> inputs;
     std::vector<TensorSpec> outputs;
     InstanceGroup instance_group;
+
+    // Triton `version_policy` (specific | latest | all) controlling which model
+    // version directory is loaded. Absent => latest { num_versions: 1 }, i.e.
+    // the highest numeric version directory (the historical default).
+    VersionPolicy version_policy;
 
     // --- Phase 2 additions ---
     // Plugin backend: shared library name (e.g. "libpreprocess_plugin.so").

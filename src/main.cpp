@@ -8,6 +8,9 @@
 //             [--max-inference-time-ms=N] [--tls-cert=path] [--tls-key=path]
 //             [--max-gpu-memory-mb=N] [--max-concurrent-gpu-instances=N]
 //             [--gpu-device=N]
+//             [--model-control-mode=none|poll|explicit]
+//             [--repository-poll-secs=N] [--load-model=<name>]
+//             [--response-cache-max-entries=N] [--response-cache-max-bytes=N]
 //
 //   Windows service modes (requires an elevated prompt to install/uninstall):
 //     --install-service        Register this exe as a Windows service
@@ -58,12 +61,28 @@ void printUsage(const char* prog) {
         << "  --max-input-size-bytes=<n>  Input size limit (default: 52428800)\n"
         << "  --max-output-size-bytes=<n> Output size limit (default: 52428800)\n"
         << "  --max-inference-time-ms=<n> Per-request inference time limit (default: 5000)\n"
-        << "  --tls-cert=<path>           TLS certificate file (PEM) for validated mode\n"
-        << "  --tls-key=<path>            TLS private key file (PEM)\n"
+        << "  --tls-cert=<path>           Accepted but unused; reverse proxy terminates TLS\n"
+        << "  --tls-key=<path>            Accepted but unused; reverse proxy terminates TLS\n"
         << "  --software-version=<s>      Software version reported (default: InferLite 2.0.0)\n"
         << "  --max-gpu-memory-mb=<n>     Per-model GPU memory cap in MiB (default: 2048)\n"
         << "  --max-concurrent-gpu-instances=<n>  Max concurrent GPU instances (default: 4)\n"
         << "  --gpu-device=<n>            CUDA device index (default: 0, single GPU only)\n"
+        << "  --rate-limit                Enable the Triton-style cross-model rate limiter\n"
+        << "                              (default off). Models declare shared resources in\n"
+        << "                              config.pbtxt (instance_group.rate_limiter); executions\n"
+        << "                              of models that oversubscribe a resource are serialized\n"
+        << "  --rate-limit-resource=<x>   Override a rate-limiter pool capacity as <name>:<count>\n"
+        << "                              (repeatable; default capacity = max requirement declared)\n"
+        << "  --model-control-mode=<m>    Triton model control mode: none|poll|explicit\n"
+        << "                              (default: none; load/unload API usable only in explicit)\n"
+        << "  --repository-poll-secs=<n>  Repository poll interval in seconds (poll mode; default 15)\n"
+        << "  --load-model=<name>         Model(s) to load at startup in explicit mode; '*' = all\n"
+        << "                              (repeatable; may not combine '*' with explicit names)\n"
+        << "  --response-cache-max-entries=<n>  Per-model response-cache LRU entry cap\n"
+        << "                              (config.pbtxt `response_cache { enable: true }`;\n"
+        << "                              default: 128, 0 = unbounded)\n"
+        << "  --response-cache-max-bytes=<n>    Per-model response-cache LRU byte cap\n"
+        << "                              (default: 16777216, 0 = unbounded)\n"
 #ifdef _WIN32
         << "  --install-service           Install InferLite as a Windows service (admin)\n"
         << "  --uninstall-service         Remove the InferLite Windows service (admin)\n"
@@ -130,6 +149,45 @@ inferlite::ServerOptions inferlite::parseServerOptions(const std::vector<std::st
                 std::max(1, std::stoi(requireValue(arg, "--max-concurrent-gpu-instances"))));
         } else if (arg.rfind("--gpu-device=", 0) == 0) {
             opts.gpu_device = requireValue(arg, "--gpu-device");
+        } else if (arg == "--rate-limit") {
+            opts.rate_limit_enabled = true;
+        } else if (arg.rfind("--rate-limit-resource=", 0) == 0) {
+            // --rate-limit-resource=<name>:<count> (repeatable).
+            const std::string v = requireValue(arg, "--rate-limit-resource");
+            const size_t colon = v.find(':');
+            if (colon == std::string::npos || colon == 0 || colon + 1 >= v.size()) {
+                throw std::runtime_error("--rate-limit-resource expects <name>:<count>, got '" +
+                                         v + "'");
+            }
+            const std::string name = v.substr(0, colon);
+            try {
+                size_t idx = 0;
+                const long long count = std::stoll(v.substr(colon + 1), &idx, 10);
+                if (idx != v.substr(colon + 1).size() || count < 1) throw std::invalid_argument("");
+                opts.rate_limit_resources[name] = count;
+            } catch (...) {
+                throw std::runtime_error("--rate-limit-resource count must be a positive "
+                                         "integer, got '" +
+                                         v.substr(colon + 1) + "'");
+            }
+        } else if (arg.rfind("--model-control-mode=", 0) == 0) {
+            opts.model_control_mode =
+                modelControlModeFromString(requireValue(arg, "--model-control-mode"));
+        } else if (arg.rfind("--repository-poll-secs=", 0) == 0) {
+            opts.repository_poll_secs = static_cast<size_t>(
+                std::max(1, std::stoi(requireValue(arg, "--repository-poll-secs"))));
+        } else if (arg.rfind("--load-model=", 0) == 0) {
+            opts.load_models.push_back(requireValue(arg, "--load-model"));
+        } else if (arg.rfind("--response-cache-max-entries=", 0) == 0) {
+            // Per-model LRU entry cap for the Triton-style response cache
+            // (config.pbtxt `response_cache { enable: true }`). 0 = unbounded.
+            opts.response_cache_max_entries = static_cast<size_t>(std::max<int64_t>(
+                0, std::stoll(requireValue(arg, "--response-cache-max-entries"))));
+        } else if (arg.rfind("--response-cache-max-bytes=", 0) == 0) {
+            // Per-model LRU byte cap for the Triton-style response cache.
+            // 0 = unbounded.
+            opts.response_cache_max_bytes = static_cast<size_t>(std::max<int64_t>(
+                0, std::stoll(requireValue(arg, "--response-cache-max-bytes"))));
         } else {
             throw std::runtime_error("unknown option: " + arg);
         }

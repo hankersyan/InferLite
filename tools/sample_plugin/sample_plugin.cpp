@@ -8,6 +8,9 @@
 //   offset:     value added after clamping (postprocess)
 //   clamp_min:  lower clamp bound (postprocess; disabled if absent)
 //   clamp_max:  upper clamp bound (postprocess; disabled if absent)
+//   sleep_ms:   artificial per-execution delay in milliseconds (0 = none).
+//               Used by the cross-model rate-limiter tests to make an
+//               execution last long enough to observe serialization.
 //
 // Mode defaults (used when no parameters are given) preserve the Phase 2
 // behavior for the stock preprocess/postprocess plugin models:
@@ -20,11 +23,13 @@
 // The plugin runs on host tensors only (CPU). It writes results in place into
 // the caller-provided output buffers, which are sized per the declared output
 // specs (static shapes only in Phase 2).
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <cstdint>
 #include <cstdlib>
 #include <string>
+#include <thread>
 
 #include "../../src/plugin_api.hpp"
 
@@ -40,6 +45,7 @@ struct SampleNode {
     double clamp_max = 0.0;
     int32_t out_dtype = 0;
     int64_t out_elem_count = 0;
+    int64_t sleep_ms = 0;  // artificial per-execution delay (tests only)
 };
 
 // Locate a parameter value by key (case-sensitive, Triton-style).
@@ -129,6 +135,10 @@ extern "C" INFERLITE_PLUGIN_API PluginNodeHandle inferlite_plugin_create(
     if ((v = findParam(info, "clamp_max")) && parseDouble(v, node->clamp_max)) {
         node->clamp_max_set = true;
     }
+    double sleep_val = 0.0;
+    if ((v = findParam(info, "sleep_ms")) && parseDouble(v, sleep_val)) {
+        node->sleep_ms = (sleep_val > 0.0) ? static_cast<int64_t>(sleep_val) : 0;
+    }
 
     if (info && info->outputs && info->output_count > 0) {
         node->out_dtype = info->outputs[0].data_type;
@@ -170,6 +180,12 @@ extern "C" INFERLITE_PLUGIN_API int inferlite_plugin_execute(
     int64_t n = 1;
     for (int i = 0; i < in.rank; ++i) n *= in.dims[i];
     size_t elem = in.byte_size / (n > 0 ? n : 1);
+
+    // Artificial delay (rate-limiter tests): hold the execution slot so
+    // serialization of models that share a resource is observable.
+    if (node->sleep_ms > 0) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(node->sleep_ms));
+    }
 
     for (int64_t i = 0; i < n; ++i) {
         double v = readElement(in.data + i * elem, in.data_type);

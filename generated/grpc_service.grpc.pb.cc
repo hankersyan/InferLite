@@ -29,6 +29,9 @@ static const char* GRPCInferenceService_method_names[] = {
   "/inference.GRPCInferenceService/ModelMetadata",
   "/inference.GRPCInferenceService/ModelConfig",
   "/inference.GRPCInferenceService/ModelInfer",
+  "/inference.GRPCInferenceService/RepositoryIndex",
+  "/inference.GRPCInferenceService/RepositoryModelLoad",
+  "/inference.GRPCInferenceService/RepositoryModelUnload",
 };
 
 std::unique_ptr< GRPCInferenceService::Stub> GRPCInferenceService::NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options) {
@@ -45,6 +48,9 @@ GRPCInferenceService::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface
   , rpcmethod_ModelMetadata_(GRPCInferenceService_method_names[4], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_ModelConfig_(GRPCInferenceService_method_names[5], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_ModelInfer_(GRPCInferenceService_method_names[6], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_RepositoryIndex_(GRPCInferenceService_method_names[7], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_RepositoryModelLoad_(GRPCInferenceService_method_names[8], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_RepositoryModelUnload_(GRPCInferenceService_method_names[9], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   {}
 
 ::grpc::Status GRPCInferenceService::Stub::ServerLive(::grpc::ClientContext* context, const ::inference::ServerLiveRequest& request, ::inference::ServerLiveResponse* response) {
@@ -208,6 +214,75 @@ void GRPCInferenceService::Stub::async::ModelInfer(::grpc::ClientContext* contex
   return result;
 }
 
+::grpc::Status GRPCInferenceService::Stub::RepositoryIndex(::grpc::ClientContext* context, const ::inference::RepositoryIndexRequest& request, ::inference::RepositoryIndexResponse* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::inference::RepositoryIndexRequest, ::inference::RepositoryIndexResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_RepositoryIndex_, context, request, response);
+}
+
+void GRPCInferenceService::Stub::async::RepositoryIndex(::grpc::ClientContext* context, const ::inference::RepositoryIndexRequest* request, ::inference::RepositoryIndexResponse* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::inference::RepositoryIndexRequest, ::inference::RepositoryIndexResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_RepositoryIndex_, context, request, response, std::move(f));
+}
+
+void GRPCInferenceService::Stub::async::RepositoryIndex(::grpc::ClientContext* context, const ::inference::RepositoryIndexRequest* request, ::inference::RepositoryIndexResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_RepositoryIndex_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::inference::RepositoryIndexResponse>* GRPCInferenceService::Stub::PrepareAsyncRepositoryIndexRaw(::grpc::ClientContext* context, const ::inference::RepositoryIndexRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::inference::RepositoryIndexResponse, ::inference::RepositoryIndexRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_RepositoryIndex_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::inference::RepositoryIndexResponse>* GRPCInferenceService::Stub::AsyncRepositoryIndexRaw(::grpc::ClientContext* context, const ::inference::RepositoryIndexRequest& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncRepositoryIndexRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
+::grpc::Status GRPCInferenceService::Stub::RepositoryModelLoad(::grpc::ClientContext* context, const ::inference::RepositoryModelLoadRequest& request, ::inference::RepositoryModelLoadResponse* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::inference::RepositoryModelLoadRequest, ::inference::RepositoryModelLoadResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_RepositoryModelLoad_, context, request, response);
+}
+
+void GRPCInferenceService::Stub::async::RepositoryModelLoad(::grpc::ClientContext* context, const ::inference::RepositoryModelLoadRequest* request, ::inference::RepositoryModelLoadResponse* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::inference::RepositoryModelLoadRequest, ::inference::RepositoryModelLoadResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_RepositoryModelLoad_, context, request, response, std::move(f));
+}
+
+void GRPCInferenceService::Stub::async::RepositoryModelLoad(::grpc::ClientContext* context, const ::inference::RepositoryModelLoadRequest* request, ::inference::RepositoryModelLoadResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_RepositoryModelLoad_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::inference::RepositoryModelLoadResponse>* GRPCInferenceService::Stub::PrepareAsyncRepositoryModelLoadRaw(::grpc::ClientContext* context, const ::inference::RepositoryModelLoadRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::inference::RepositoryModelLoadResponse, ::inference::RepositoryModelLoadRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_RepositoryModelLoad_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::inference::RepositoryModelLoadResponse>* GRPCInferenceService::Stub::AsyncRepositoryModelLoadRaw(::grpc::ClientContext* context, const ::inference::RepositoryModelLoadRequest& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncRepositoryModelLoadRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
+::grpc::Status GRPCInferenceService::Stub::RepositoryModelUnload(::grpc::ClientContext* context, const ::inference::RepositoryModelUnloadRequest& request, ::inference::RepositoryModelUnloadResponse* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::inference::RepositoryModelUnloadRequest, ::inference::RepositoryModelUnloadResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_RepositoryModelUnload_, context, request, response);
+}
+
+void GRPCInferenceService::Stub::async::RepositoryModelUnload(::grpc::ClientContext* context, const ::inference::RepositoryModelUnloadRequest* request, ::inference::RepositoryModelUnloadResponse* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::inference::RepositoryModelUnloadRequest, ::inference::RepositoryModelUnloadResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_RepositoryModelUnload_, context, request, response, std::move(f));
+}
+
+void GRPCInferenceService::Stub::async::RepositoryModelUnload(::grpc::ClientContext* context, const ::inference::RepositoryModelUnloadRequest* request, ::inference::RepositoryModelUnloadResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_RepositoryModelUnload_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::inference::RepositoryModelUnloadResponse>* GRPCInferenceService::Stub::PrepareAsyncRepositoryModelUnloadRaw(::grpc::ClientContext* context, const ::inference::RepositoryModelUnloadRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::inference::RepositoryModelUnloadResponse, ::inference::RepositoryModelUnloadRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_RepositoryModelUnload_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::inference::RepositoryModelUnloadResponse>* GRPCInferenceService::Stub::AsyncRepositoryModelUnloadRaw(::grpc::ClientContext* context, const ::inference::RepositoryModelUnloadRequest& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncRepositoryModelUnloadRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
 GRPCInferenceService::Service::Service() {
   AddMethod(new ::grpc::internal::RpcServiceMethod(
       GRPCInferenceService_method_names[0],
@@ -279,6 +354,36 @@ GRPCInferenceService::Service::Service() {
              ::inference::ModelInferResponse* resp) {
                return service->ModelInfer(ctx, req, resp);
              }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      GRPCInferenceService_method_names[7],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< GRPCInferenceService::Service, ::inference::RepositoryIndexRequest, ::inference::RepositoryIndexResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](GRPCInferenceService::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::inference::RepositoryIndexRequest* req,
+             ::inference::RepositoryIndexResponse* resp) {
+               return service->RepositoryIndex(ctx, req, resp);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      GRPCInferenceService_method_names[8],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< GRPCInferenceService::Service, ::inference::RepositoryModelLoadRequest, ::inference::RepositoryModelLoadResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](GRPCInferenceService::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::inference::RepositoryModelLoadRequest* req,
+             ::inference::RepositoryModelLoadResponse* resp) {
+               return service->RepositoryModelLoad(ctx, req, resp);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      GRPCInferenceService_method_names[9],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< GRPCInferenceService::Service, ::inference::RepositoryModelUnloadRequest, ::inference::RepositoryModelUnloadResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](GRPCInferenceService::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::inference::RepositoryModelUnloadRequest* req,
+             ::inference::RepositoryModelUnloadResponse* resp) {
+               return service->RepositoryModelUnload(ctx, req, resp);
+             }, this)));
 }
 
 GRPCInferenceService::Service::~Service() {
@@ -327,6 +432,27 @@ GRPCInferenceService::Service::~Service() {
 }
 
 ::grpc::Status GRPCInferenceService::Service::ModelInfer(::grpc::ServerContext* context, const ::inference::ModelInferRequest* request, ::inference::ModelInferResponse* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status GRPCInferenceService::Service::RepositoryIndex(::grpc::ServerContext* context, const ::inference::RepositoryIndexRequest* request, ::inference::RepositoryIndexResponse* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status GRPCInferenceService::Service::RepositoryModelLoad(::grpc::ServerContext* context, const ::inference::RepositoryModelLoadRequest* request, ::inference::RepositoryModelLoadResponse* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status GRPCInferenceService::Service::RepositoryModelUnload(::grpc::ServerContext* context, const ::inference::RepositoryModelUnloadRequest* request, ::inference::RepositoryModelUnloadResponse* response) {
   (void) context;
   (void) request;
   (void) response;

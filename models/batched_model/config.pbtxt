@@ -15,3 +15,20 @@ instance_group {
   count: 1
   kind: KIND_CPU
 }
+# FDA/validated-mode golden self-test: deterministic 1:1 request->output
+# mapping for the default batch size of 1 (y = 2*x + 1).
+self_test {
+  input {
+    name: "input"
+    data_type: TYPE_FP32
+    dims: [ 1, 4 ]
+    data: [ 1.0, 2.0, 3.0, 4.0 ]
+  }
+  expected_output {
+    name: "add"
+    data_type: TYPE_FP32
+    dims: [ 1, 4 ]
+    data: [ 3.0, 5.0, 7.0, 9.0 ]
+  }
+  epsilon: 0.0001
+}

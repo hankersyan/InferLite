@@ -1,0 +1,57 @@
+name: "sequence_model"
+backend: "openvino"
+max_batch_size: 0
+input {
+  name: "input"
+  data_type: TYPE_FP32
+  dims: [ 1 ]
+}
+input {
+  name: "state"
+  data_type: TYPE_FP32
+  dims: [ 1 ]
+}
+output {
+  name: "output"
+  data_type: TYPE_FP32
+  dims: [ 1 ]
+}
+output {
+  name: "state_out"
+  data_type: TYPE_FP32
+  dims: [ 1 ]
+}
+instance_group {
+  count: 1
+  kind: KIND_CPU
+}
+sequence_batching {
+  max_sequence_idle_microseconds: 300000
+  control_input {
+    name: "START"
+    control {
+      kind: CONTROL_SEQUENCE_START
+      int32_false_true: [ 0, 1 ]
+    }
+  }
+  control_input {
+    name: "END"
+    control {
+      kind: CONTROL_SEQUENCE_END
+      int32_false_true: [ 0, 1 ]
+    }
+  }
+  control_input {
+    name: "CORRID"
+    control {
+      kind: CONTROL_SEQUENCE_CORRID
+      int32_false_true: [ 0, 0 ]
+    }
+  }
+  state {
+    input_name: "state"
+    output_name: "state_out"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+  }
+}

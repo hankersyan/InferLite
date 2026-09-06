@@ -35,11 +35,13 @@ provided by the OpenVINO backend and selected through `instance_group.kind`
   parallel.
 - **Zero-copy pipelines** — data is passed by reference between adjacent steps
   on the same device.
-- **Deterministic, low-latency serving** — static graph, no request-combining
-  dynamic batching, no hot reloading, minimal scheduling overhead. Triton-style
-  batch-dimension shapes are supported via `max_batch_size` (see Features).
+- **Deterministic, low-latency serving** — static graph, no hot reloading,
+  minimal scheduling overhead. Batching mode follows NVIDIA Triton: models with
+  `max_batch_size > 0` accept a leading batch dimension, and an optional
+  `dynamic_batching {}` policy lets the scheduler combine concurrent requests
+  into one execution (see Features).
 - **Standard interface** — a compatible, synchronous subset of the reference
-  server's request API plus health and JSON metrics.
+  server's request API plus health and Prometheus metrics.
 
 ## Medical Equipment Level & FDA Compliance
 
@@ -59,7 +61,8 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
 - **Memory management** — pool of reusable host buffers, pinned host buffers, and
   OpenCL device-buffer bookkeeping for device data staging.
 - **CPU backend** — wraps the framework's compiled-model object.
-- **Interface** — inference, readiness health, model config, and JSON metrics.
+- **Interface** — inference, readiness health, model config, and Prometheus
+  metrics.
 - **Fail-fast startup** — unsupported configurations abort the server.
 - **Model integrity & traceability** — `manifest.json` with SHA-256 hashes
   (including precompiled NPU/GPU blobs); verified at startup; mismatches cause
@@ -88,7 +91,11 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
   `config.pbtxt` passes key/value strings to each plugin node at creation, so
   multiple pipelines can each own their own pre-/post-processing while sharing
   the same plugin DLL.
-- **Metrics** — queue depth, per-model latency, and a configuration hash.
+- **Prometheus metrics** — `GET /v2/metrics` returns the Prometheus text
+  exposition format (mirroring NVIDIA Triton's `nv_*` metric names) for every
+  loaded model: request success/failure, inference and execution counts,
+  pending-request gauge, cumulative inference duration, per-priority
+  completions, and response-cache counters.
 - **Intel CPU execution** — compiles the IR (`model.xml`/`model.bin`) on the
   OpenVINO CPU plugin; thread/stream tuning applied only where the plugin
   accepts it.
@@ -100,8 +107,8 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
   (NPU > GPU > CPU); imports an existing blob for that device or compiles the IR.
 - **Triton-compatible device selection** — `instance_group.kind` chooses the
   execution device: `KIND_CPU`, `KIND_NPU`, `KIND_GPU_INTEL`, or `KIND_AUTO`.
-- **Device reporting** — health/detailed, metrics, and audit logs report the
-  resolved execution device per model (`CPU`, `NPU`, `INTEL_GPU`, `AUTO`).
+- **Device reporting** — health/detailed and audit logs report the resolved
+  execution device per model (`CPU`, `NPU`, `INTEL_GPU`, `AUTO`).
 - **Device model tooling** — `tools/make_device_models.py` generates CPU/NPU/GPU/
   AUTO sample models, exporting precompiled blobs when the corresponding Intel
   hardware is present; reference configs live in `tools/examples/`.
@@ -112,6 +119,66 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
   a model whose IR accepts `[1, 4]` declares `dims: [4]` and clients send/receive
   shape `[1, 4]`. `tools/make_batched_model.py` generates such a model; see
   `scripts/test_batch.ps1`.
+- **Dynamic batching (request-combining)** — a Triton `dynamic_batching {}`
+  block in `config.pbtxt` enables the scheduler to coalesce queued concurrent
+  requests into a single backend execution (total batch `<= max_batch_size`),
+  slicing the merged output back per request. `preferred_batch_size` executes as
+  soon as a batch reaches a listed size; `max_queue_delay_microseconds` is how
+  long the oldest request waits for its batch to fill. Only `openvino` models on
+  `KIND_CPU`/`KIND_AUTO` instances support it, and the model IR must accept a
+  dynamic batch dimension. `tools/make_dynamic_batch_model.py` generates such a
+  model (`dynamic_batch_model`, `max_batch_size: 8`); see
+  `scripts/test_dynamic_batch.ps1`.
+- **Priority scheduling** — `dynamic_batching { priority_levels: N
+  default_priority_level: D }` schedules requests by priority (1 is highest;
+  requests at the same level keep arrival order). A request can set its priority
+  explicitly through the Triton `priority` request parameter (HTTP
+  `{"parameters":{"priority":1}}`, gRPC `parameters["priority"]` as a string
+  number); unset requests use `default_priority_level`. `/v2/metrics` reports
+  `nv_inference_priority_completed` (label `priority=<level>`) per level.
+- **Response ordering** — `dynamic_batching { preserve_ordering: true }`
+  returns responses in the order the requests arrived at the scheduler even when
+  execution reorders them (e.g. by priority). `priority_batch_model`
+  (`priority_levels: 3`, `default_priority_level: 2`, `preserve_ordering: true`)
+  is generated by the same tool; see `scripts/test_priority_ordering.ps1`.
+- **Sequence batching (stateful models)** — a Triton `sequence_batching {}`
+  block routes every request of one sequence (identified by a `CORRID` control
+  tensor) to the model's single sequence slot in arrival order. `START`/`END`
+  control tensors mark sequence boundaries; a `max_sequence_idle_microseconds`
+  idle timeout aborts a stalled sequence and frees its slot. Hidden `state`
+  tensors declared in the config are owned by the scheduler: initialized to
+  zeros at `START`, fed back into the model on each step (`input_name`), captured
+  from the model output (`output_name`), and never sent/received by clients.
+  Control tensors are stripped before inference. `sequence_model`
+  (`output = input + state`) is generated by `tools/make_sequence_model.py`;
+  see `scripts/test_sequence_batch.ps1`.
+
+- **Version policies** — a Triton `version_policy {}` block in `config.pbtxt`
+  controls which version directory is loaded:
+  `specific { versions: [ a, b ] }` pins an exact model version (the newest
+  listed version that exists on disk is loaded); `latest { num_versions: N }`
+  (also the implicit default when the block is absent) and `all {}` load the
+  highest numeric version. A `specific` pin to a version that is not in the
+  repository fails the load (fail-fast) instead of silently serving another
+  version. Combined with runtime load/unload, an operator can pin an older
+  version through a load-time config override — API-driven rollback. Clients
+  may also pin a version per request: the KServe v2 route
+  `/v2/models/<name>/versions/<v>/infer` (and `/config`) over HTTP, and the
+  `model_version` / `version` fields over gRPC. Because InferLite serves one
+  version per model name, a request for any version other than the loaded one
+  is rejected (HTTP 404 / gRPC `NOT_FOUND`); `latest`/`all` with more than one
+  eligible version keep only the newest (documented deviation from Triton,
+  which keeps several versions ready). See `scripts/test_version_policy.ps1`.
+
+- **Model warmup** — a Triton `model_warmup` block in `config.pbtxt` runs
+  sample requests through the real scheduler when a model loads, before the
+  model is marked ready. This pre-warms backend execution paths (shape-specific
+  kernel compilation, first-touch allocations, plugin caches) beyond what the
+  golden-input self-test covers. Inputs are zero-filled (`zero_data: true`);
+  `dims`/`data_type` default to the model input spec, and `batch_size` sets the
+  leading batch dimension for batched models. A failed warmup leaves the model
+  UNAVAILABLE (explicit/poll) or aborts startup fail-fast (none). Not supported
+  together with `sequence_batching`. See `scripts/test_warmup.ps1`.
 
 - **TensorRT GPU backend** (opt-in) — deserializes approved `model.plan` engine
   files; each instance owns a CUDA stream; `execute()` enqueues on the stream
@@ -130,20 +197,62 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
   in the manifest, outputs are validated after the device→host copy, the audit
   log records `device: "GPU"`, and `MAX_GPU_MEMORY_MB` /
   `MAX_INFERENCE_TIME_MS` bound GPU execution.
+- **Cross-model rate limiter (Triton-style)** — a model declares the shared
+  resources one execution consumes (`instance_group { rate_limiter { ... } }`,
+  e.g. GPU memory / device copies); with `--rate-limit` the server serializes
+  executions of models that would over-subscribe the same resource, protecting
+  the one GPU from OOM/memory contention when several models are loaded
+  concurrently. `--rate-limit-resource=<name>:<count>` raises a pool's
+  capacity. See `docs/RATE_LIMITER.md`.
+- **Response cache (Triton-style)** — a `response_cache { enable: true }` block
+  in `config.pbtxt` makes the server answer identical requests from a bounded
+  LRU of previously computed responses instead of queueing and executing the
+  model again. The cache key is the SHA-256 of the model name, loaded version,
+  config hash, model file hash, and the canonicalized (name-sorted) input
+  contents, so a changed input — or a config override, artifact replacement, or
+  ensemble dependency re-load — is always a cache miss, and each reload starts
+  from a fresh cache. Safe only for deterministic models (enabling it asserts
+  determinism); stateful `sequence_batching` models are rejected at config
+  validation. Per-model LRU capacity is bounded by
+  `--response-cache-max-entries` (default 128) and
+  `--response-cache-max-bytes` (default 16 MiB; 0 = unbounded); `/v2/metrics`
+  reports `nv_cache_lookup_count`/`nv_cache_hit_count`/`nv_cache_miss_count`/
+  `nv_cache_insertion_count`/`nv_cache_eviction_count`/`nv_cache_num_entries`/
+  `nv_cache_entry_size` per cached model. See `scripts/test_response_cache.ps1`.
 
 ### Not yet implemented
 
-OpenVINO multi-GPU, live model updates, a profiling tool, and gRPC streaming.
-Request-combining dynamic batching is on the roadmap (see **Planned**);
-Triton-style batch-dimension shapes via `max_batch_size` are already
-implemented (see Features).
+- **Ragged batching** — batching variable-sized inputs without padding.
+- **gRPC streaming** — unary RPCs only; no decoupled/streaming responses.
+- **Request cancellation** — clients cannot abort an in-flight request.
+- **System / CUDA shared memory** — tensors are always sent in the
+  request/response body; no registered shared-memory regions.
+- **Request tracing** — `trace_id` audit entries only; no trace configuration
+  API or OpenTelemetry export.
+- **OpenVINO multi-GPU** — a single OpenVINO GPU device per model.
+
+### Out of scope
+
+Deliberately not planned for a single-node, single-card workstation server:
+
+- **Other framework backends** — PyTorch, ONNX Runtime, TensorFlow, Python,
+  FIL, DALI, vLLM. Single-node serving needs only the OpenVINO and TensorRT
+  backends; TensorRT-LLM is the only LLM-serving backend kept under
+  consideration.
+- **Business Logic Scripting (BLS)** — dynamic Python pipelines are excluded
+  due to Python's runtime performance cost; static ensembles cover fixed DAGs.
+- **Cloud-scale operations** — Kubernetes autoscaling, cloud object storage,
+  multi-node distributed inference, built-in authentication, and
+  high-availability / failover.
 
 ### gRPC interface
 
 A Triton/KServe v2-compatible gRPC interface (`GRPCInferenceService`) is
-implemented (health, server/model metadata, model config, and `ModelInfer`) and
-shares the same inference core as HTTP. It is **opt-in** and disabled by
-default. Build it against a source-built gRPC (vcpkg) with
+implemented (health, server/model metadata, model config, and `ModelInfer`,
+including the KServe **binary-tensor-data** extension:
+`raw_input_contents` / `raw_output_contents` carry byte-exact little-endian
+payloads when the client uses the binary format) and shares the same inference
+core as HTTP. It is **opt-in** and disabled by default. Build it against a source-built gRPC (vcpkg) with
 `scripts/build_grpc.ps1`. The gRPC C++ runtime must be built with an MSVC
 toolchain whose STL/CRT ABI matches the compiler used here; a prebuilt gRPC DLL
 stack built with an older MSVC crashes on RPC dispatch due to an ABI mismatch.
@@ -152,12 +261,6 @@ See `docs/GRPC.md` for details and `scripts/build_grpc.ps1` /
 
 ### Planned
 
-- **Request-combining dynamic batching** — the scheduler collecting queued
-  concurrent requests and executing them as a single combined inference
-  (bounded by `max_batch_size`), then splitting outputs back per request. The
-  batch-dimension shape convention is already implemented.
-- **Live model updates** — reloading or hot-swapping models at runtime.
-- **Profiling tool** — latency and throughput profiling across devices.
 - **In-process API** — embed the engine as a shared library (Triton-style
   `TRITONSERVER_Server` C API): expose a library target, and add an
   `extern "C"` embedding interface for C/C++/Python callers without network
@@ -171,7 +274,7 @@ models/
     config.pbtxt
     metadata.json         # FDA model metadata (optional)
     manifest.json         # repository-level approved-model manifest (validated mode)
-    <version>/            # highest numeric version is used
+    <version>/            # version selected by version_policy (default: highest numeric)
       model.xml
       model.bin
 src/
@@ -189,6 +292,7 @@ src/
   plugin_api.hpp           # plugin ABI (inferlite_plugin_*)
   ensemble_executor.*      # CPU ensemble DAG executor (zero-copy host memory)
   scheduler.*              # bounded FIFO scheduler (with inference time limit)
+  rate_limiter.*           # Triton-style cross-model resource rate limiter
   memory_manager.*         # host + pinned + device-buffer memory pools
   audit_log.*              # tamper-evident hash-chained audit log
   config_store.*           # manifest/metadata/self-test/hash management
@@ -206,6 +310,10 @@ scripts/
   gen_grpc*.ps1            # regenerate protobuf/gRPC C++ & Python stubs
   test_*.ps1               # HTTP / GPU / gRPC test suites
   test_batch.ps1           # Triton-style batching (max_batch_size) test
+  test_dynamic_batch.ps1   # dynamic batching (request-combining) test
+  test_priority_ordering.ps1 # priority levels / preserve_ordering test
+  test_sequence_batch.ps1  # sequence batching (stateful models) test
+  test_warmup.ps1          # Triton model_warmup (load-time warmup) test
   service.ps1              # Windows service install/start/stop/status/uninstall
   test_service.ps1         # Windows service + console regression test
 third_party/
@@ -216,6 +324,8 @@ tools/
   make_device_models.py    # generates CPU/NPU/GPU/AUTO device sample models
   make_multi_io_model.py   # generates models/multi_io_model (2-in/2-out array syntax)
   make_batched_model.py    # generates models/batched_model (Triton max_batch_size)
+  make_dynamic_batch_model.py # generates models/dynamic_batch_model / priority_batch_model
+  make_sequence_model.py   # generates models/sequence_model (Triton sequence batching)
   make_manifest.py         # generates models/manifest.json with SHA-256 hashes
   examples/                # reference configs (kind: KIND_NPU / KIND_GPU_INTEL / KIND_AUTO)
   sample_plugin/           # example CPU plugin source (sample_plugin.dll)
@@ -300,11 +410,16 @@ Options:
 | `--max-input-size-bytes=<n>` | `52428800` | Input size limit |
 | `--max-output-size-bytes=<n>` | `52428800` | Output size limit |
 | `--max-inference-time-ms=<n>` | `5000` | Per-request inference time limit |
-| `--tls-cert=<path>` / `--tls-key=<path>` | – | TLS cert/key (validated deployments front the server with a TLS 1.2+ reverse proxy) |
+| `--tls-cert=<path>` / `--tls-key=<path>` | – | Accepted but **not used** — the server does not terminate TLS; validated deployments must front it with a TLS 1.2+ reverse proxy |
 | `--software-version=<s>` | `InferLite 2.0.0` | Reported software version |
 | `--max-gpu-memory-mb=<n>` | `2048` | Per-model GPU memory cap (TensorRT) |
 | `--max-concurrent-gpu-instances=<n>` | `4` | Max concurrent GPU instances |
 | `--gpu-device=<n>` | `0` | CUDA device index (single GPU only) |
+| `--model-control-mode=<m>` | `none` | Triton model-control mode: `none` \| `poll` \| `explicit` (see “Model management”) |
+| `--rate-limit` | off | Enable the Triton-style cross-model rate limiter (serializes executions of models that oversubscribe a shared resource) |
+| `--rate-limit-resource=<n>` | – | Override a rate-limiter pool capacity as `<name>:<count>` (repeatable; default = largest requirement declared by a loaded model) |
+| `--repository-poll-secs=<n>` | `15` | Repository poll interval (seconds; `poll` mode only) |
+| `--load-model=<name>` | – | Model(s) to load at startup in `explicit` mode; repeatable; `*` loads all |
 | `--install-service` | – | Register this exe as a Windows service (admin) |
 | `--uninstall-service` | – | Remove the registered Windows service (admin) |
 | `--service` | – | Run under the Windows Service Control Manager (falls back to console if launched manually) |
@@ -367,9 +482,12 @@ or with the standard `sc.exe` tool (`sc start InferLite`, `sc stop InferLite`,
 
 ## Interface
 
-### Readiness
+### Readiness & liveness
 ```
-GET /v2/health/ready      -> 200 {"status":"READY"}  (only if self-tests passed)
+GET /v2/health/live       -> 200 {"status":"LIVE"}   (pure process-liveness probe;
+                             independent of model/self-test readiness)
+GET /v2/health/ready      -> 200 {"status":"READY"}  (only if self-tests passed;
+                             503 NOT_READY otherwise)
 GET /v2/health/detailed   -> per-model status + hashes + versions
 GET /v2/versions          -> software + OpenVINO + model versions
 ```
@@ -398,10 +516,66 @@ string. The response contains `outputs` (base64 `data`) and a `trace_id`.
 prepended to the per-request config `dims`. With `max_batch_size: 1`, a model
 declaring `dims: [4]` is queried with `shape: [1, 4]`.
 
+When the model config also declares a Triton `dynamic_batching {}` block, the
+scheduler may combine several concurrently queued requests into one backend
+execution whose total batch is the sum of their leading batch dimensions
+(never exceeding `max_batch_size`). Each response still carries only the slice
+that belongs to its request, so callers are unaffected. `/v2/metrics` reports
+`nv_inference_exec_count` (merged executions) and `nv_inference_count`
+(samples served) per batched model — average batch size is their ratio, as in
+Triton; `/v2/models/<name>/config` reflects the `dynamic_batching` policy.
+
 ### Metrics
 ```
-GET /v2/metrics    -> requests counts, average latency, queue depth, config hash
+GET /v2/metrics    -> Prometheus text exposition (NVIDIA Triton format)
 ```
+
+### Model management (Triton model-control modes)
+
+InferLite follows NVIDIA Triton’s model management model. The repository layout,
+startup behavior, and runtime load/unload policy are selected with
+`--model-control-mode`:
+
+| Mode | Startup | Runtime repository changes | Control API (load/unload) |
+|------|---------|---------------------------|---------------------------|
+| `none` (default) | load **all** models; any invalid model aborts startup (fail-fast, legacy behavior) | ignored | disabled (rejected with `400`) |
+| `poll` | attempt to load **all** models; a model that fails is reported `UNAVAILABLE`, not fatal | polled every `--repository-poll-secs`; **new** models are loaded, **changed** models reloaded, **removed** models unloaded | disabled (rejected with `400`) |
+| `explicit` | load only `--load-model` names (`*` = all; none if omitted) | ignored until driven through the API | **enabled** — the intended operating mode |
+
+Modes `poll` and `explicit` never abort the server because one model is broken:
+failures mark that model `UNAVAILABLE` (with a `reason`) in the index while the
+rest keep serving. A model is reported `READY` only after it loads **and** passes
+its configured golden-input self-test. When a model that ensembles depend on is
+reloaded or removed, the referencing ensembles are reloaded/unloaded with it
+(`unload_dependents`).
+
+Repository-control endpoints (only `POST`):
+
+```
+POST /v2/repository/index                                      # list models + state
+  body (optional): {"ready": true|false}                       # filter to READY only
+  -> 200 [ {"name":..., "version":..., "state":"READY|UNAVAILABLE", "reason":...}, ... ]
+
+POST /v2/repository/models/<model_name>/load
+  body (optional): {"parameters": {"config": "<proto-text config.pbtxt override>"}}
+  -> 200 (empty) | 400 invalid | 404 not found
+
+POST /v2/repository/models/<model_name>/unload
+  body (optional): {"parameters": {"unload_dependents": true|false}}
+  -> 200 (empty) | 404 not found | 409 referenced by loaded ensembles
+```
+
+The same operations are exposed over gRPC as `RepositoryIndex`,
+`RepositoryModelLoad`, and `RepositoryModelUnload` (the server advertises the
+`model_repository` extension). Notes:
+
+- The load `config` parameter is a **proto-text** document in the same format as
+  `config.pbtxt` (InferLite’s config schema is proto-text, not Triton’s JSON).
+  When omitted, the on-disk `config.pbtxt` is used.
+- Triton’s inline `file:<version>/<file>` override directories are **not**
+  supported (the model directory must exist on disk).
+- In `none` mode the `/v2/models/<name>/config` endpoint and inference continue
+  to serve every model loaded at startup, exactly as in earlier releases.
 
 ## Testing
 
@@ -414,23 +588,81 @@ GET /v2/metrics    -> requests counts, average latency, queue depth, config hash
 - `tools/make_batched_model.py` generates the `batched_model`
   (`max_batch_size: 1`) that exercises Triton-style batch-dimension shapes:
   config `dims: [4]` while clients send/receive `[1, 4]`.
+- `tools/make_dynamic_batch_model.py` generates the `dynamic_batch_model`
+  (`max_batch_size: 8` with a dynamic-batch IR and a Triton `dynamic_batching {}`
+  policy: `preferred_batch_size: [8]`, 150 ms queue delay).
 - `tools/make_manifest.py` generates `models\manifest.json` with SHA-256 hashes.
 - `test_batch.ps1` verifies Triton-style batching: valid `[1, 4]` inference
   returns `[3, 5, 7, 9]`, a shape missing the batch dim (`[4]`) and a batch
   exceeding `max_batch_size` (`[2, 4]`) are both rejected with `INVALID_INPUT`.
+- `test_dynamic_batch.ps1` verifies dynamic batching: a single full-batch
+  request, a `B > max_batch_size` rejection, and two concurrency cases where
+  the scheduler merges requests (8 × `[1,4]`, and 2 × `[4,4]`) into a single
+  backend execution (`nv_inference_exec_count` +1, `nv_inference_count` +8)
+  while each response is the correct per-request slice.
+- `test_priority_ordering.ps1` verifies Triton priority scheduling and
+  preserve_ordering on `priority_batch_model`: config validation rejects an
+  out-of-range `default_priority_level`; explicit `priority` request parameters
+  are honored (`priority_completed` metrics attribution: default-level requests
+  fall back to `default_priority_level`); an out-of-range request priority is
+  rejected; and responses are delivered in arrival order under
+  `preserve_ordering`.
+- `test_batch_validated.ps1` verifies the FDA validated-mode posture of the
+  default batch-size-1 model (`batched_model`, see `docs/COMPLIANCE.md`):
+  manifest-verified startup + golden self-test readiness, deterministic
+  outputs for identical requests, exact input byte-length enforcement (a short
+  payload never reaches the backend), the `max_batch_size` bound, and
+  fail-fast refusal to start after the IR is tampered with.
+- `test_sequence_batch.ps1` verifies sequence batching on `sequence_model`
+  (`output = input + state`): START initializes hidden state to zero, in-order
+  steps accumulate state (10 -> 21 -> 7), END closes the sequence so a new
+  corrid starts fresh, an idle sequence is aborted after the configured
+  timeout, and malformed/missing control tensors are rejected with
+  `INVALID_INPUT`.
+- `test_warmup.ps1` verifies `model_warmup`: a model with a valid
+  zero-filled warmup request loads and becomes READY (the diag log records
+  `warmup model 'warm_model' request 'warmup' ok`), `/config` reflects the
+  warmup block, and a warmup spec whose `data_type` does not match the model
+  input aborts startup fail-fast with a precise config error.
 - `test_human_pose_estimation.py` runs the `human-pose-estimation-0001` model
   end-to-end (keypoint detection + skeleton/heatmap rendering) over **HTTP**
   by default; pass `--grpc` (with `--grpc-server 127.0.0.1:8101`) to run the
   identical test over the gRPC `ModelInfer` RPC — a large-tensor (1×3×256×456
-  FP32) request that exercises the binary tensor path over both protocols.
-  `test_grpc_server.ps1` includes the gRPC variant as part of the gRPC suite.
+  FP32) request that exercises the tensor payload path over both protocols
+  (base64 in the HTTP JSON body, typed `InferTensorContents` over gRPC).
+  `test_grpc_server.ps1` includes the gRPC variant as part of the gRPC suite
+  and additionally exercises the binary-tensor `raw_input_contents` /
+  `raw_output_contents` extension.
 - `test_server_phase2.ps1` starts the server in validated mode and exercises
   integrity, validation, ensemble, plugin, audit log, and metrics.
 - `test_server_phase4.ps1` starts the server and exercises the
   multi-device models (CPU, NPU, AUTO), verifying device reporting, config
   `kind`, inference, and metrics.
+- `test_model_control.ps1` starts the server in each model-control mode and
+  verifies the Triton repository-control flow: index state reporting, explicit
+  load/unload (including config overrides), poll hot-add/hot-remove, and mode
+  gating of the load/unload API.
+- `test_version_policy.ps1` exercises Triton version policies (absent/latest/all
+  select the highest version; a `specific` load-time pin is the API-driven
+  rollback; a pin to a missing version fails the load) plus client-requested
+  versions over HTTP (`/v2/models/<name>/versions/<v>/...`) and gRPC
+  (`model_version` / `version`): the loaded version serves 200/OK, any other
+  version is rejected (404/`NOT_FOUND`), malformed versions are 400/
+  `INVALID_ARGUMENT`.
 - `load_test.ps1 -Concurrency <n> -PerWorker <m>` runs a sustained concurrent
   load test.
+- `profile.ps1 -BaseUrl http://127.0.0.1:8000` is the latency/throughput
+  profiling tool: it attaches to a running server, auto-discovers every READY
+  model via `/v2/health/detailed`, and reports per-model latency percentiles
+  (min/avg/p50/p90/p95/p99/max), throughput (req/s), and a server-side
+  execution-latency cross-check derived from the `/v2/metrics` cumulative
+  counters — console `key=value` output suitable as V&V latency evidence.
+- Additional suites not detailed above: `test_server.ps1` (base HTTP
+  regression), `test_server_phase3.ps1` and `test_gpu_server.ps1` (GPU phase /
+  TensorRT GPU server), `test_service.ps1` (Windows service install/run
+  regression). `make_trt_engine.ps1` builds a TensorRT engine (`model.plan`)
+  via `trtexec`, and `make_release.ps1` packages the self-contained release
+  under `dist/` (see `dist/v0.2`).
 
 ### Plugin & ensemble testing
 

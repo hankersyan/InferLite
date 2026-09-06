@@ -5,9 +5,10 @@
 // grpc_service.proto - KServe / Triton Inference Server v2 protocol (gRPC).
 //
 // A compatible SUBSET of the reference GRPCInferenceService exposed by the
-// inference server. Only synchronous unary RPCs are implemented (streaming,
-// model repository management, shared memory, classification, tracing and
-// statistics are intentionally out of scope for InferLite; see docs/PRD-all.md).
+// inference server. Synchronous unary RPCs are implemented for health,
+// metadata, inference and the model-repository control extension (index / load /
+// unload). Streaming, shared memory, classification, tracing and statistics are
+// intentionally out of scope for InferLite; see docs/PRD-all.md.
 //
 // The messages mirror the KServe v2 "ModelInfer" wire format so standard
 // clients (e.g. tritonclient / grpc client libraries) can talk to the server.
@@ -105,6 +106,30 @@ class GRPCInferenceService final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::inference::ModelInferResponse>> PrepareAsyncModelInfer(::grpc::ClientContext* context, const ::inference::ModelInferRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::inference::ModelInferResponse>>(PrepareAsyncModelInferRaw(context, request, cq));
     }
+    // Get the index of model repository contents.
+    virtual ::grpc::Status RepositoryIndex(::grpc::ClientContext* context, const ::inference::RepositoryIndexRequest& request, ::inference::RepositoryIndexResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::inference::RepositoryIndexResponse>> AsyncRepositoryIndex(::grpc::ClientContext* context, const ::inference::RepositoryIndexRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::inference::RepositoryIndexResponse>>(AsyncRepositoryIndexRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::inference::RepositoryIndexResponse>> PrepareAsyncRepositoryIndex(::grpc::ClientContext* context, const ::inference::RepositoryIndexRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::inference::RepositoryIndexResponse>>(PrepareAsyncRepositoryIndexRaw(context, request, cq));
+    }
+    // Load or reload a model from a repository.
+    virtual ::grpc::Status RepositoryModelLoad(::grpc::ClientContext* context, const ::inference::RepositoryModelLoadRequest& request, ::inference::RepositoryModelLoadResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::inference::RepositoryModelLoadResponse>> AsyncRepositoryModelLoad(::grpc::ClientContext* context, const ::inference::RepositoryModelLoadRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::inference::RepositoryModelLoadResponse>>(AsyncRepositoryModelLoadRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::inference::RepositoryModelLoadResponse>> PrepareAsyncRepositoryModelLoad(::grpc::ClientContext* context, const ::inference::RepositoryModelLoadRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::inference::RepositoryModelLoadResponse>>(PrepareAsyncRepositoryModelLoadRaw(context, request, cq));
+    }
+    // Unload a model from a repository.
+    virtual ::grpc::Status RepositoryModelUnload(::grpc::ClientContext* context, const ::inference::RepositoryModelUnloadRequest& request, ::inference::RepositoryModelUnloadResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::inference::RepositoryModelUnloadResponse>> AsyncRepositoryModelUnload(::grpc::ClientContext* context, const ::inference::RepositoryModelUnloadRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::inference::RepositoryModelUnloadResponse>>(AsyncRepositoryModelUnloadRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::inference::RepositoryModelUnloadResponse>> PrepareAsyncRepositoryModelUnload(::grpc::ClientContext* context, const ::inference::RepositoryModelUnloadRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::inference::RepositoryModelUnloadResponse>>(PrepareAsyncRepositoryModelUnloadRaw(context, request, cq));
+    }
     class async_interface {
      public:
       virtual ~async_interface() {}
@@ -129,6 +154,15 @@ class GRPCInferenceService final {
       // Perform inference.
       virtual void ModelInfer(::grpc::ClientContext* context, const ::inference::ModelInferRequest* request, ::inference::ModelInferResponse* response, std::function<void(::grpc::Status)>) = 0;
       virtual void ModelInfer(::grpc::ClientContext* context, const ::inference::ModelInferRequest* request, ::inference::ModelInferResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      // Get the index of model repository contents.
+      virtual void RepositoryIndex(::grpc::ClientContext* context, const ::inference::RepositoryIndexRequest* request, ::inference::RepositoryIndexResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void RepositoryIndex(::grpc::ClientContext* context, const ::inference::RepositoryIndexRequest* request, ::inference::RepositoryIndexResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      // Load or reload a model from a repository.
+      virtual void RepositoryModelLoad(::grpc::ClientContext* context, const ::inference::RepositoryModelLoadRequest* request, ::inference::RepositoryModelLoadResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void RepositoryModelLoad(::grpc::ClientContext* context, const ::inference::RepositoryModelLoadRequest* request, ::inference::RepositoryModelLoadResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      // Unload a model from a repository.
+      virtual void RepositoryModelUnload(::grpc::ClientContext* context, const ::inference::RepositoryModelUnloadRequest* request, ::inference::RepositoryModelUnloadResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void RepositoryModelUnload(::grpc::ClientContext* context, const ::inference::RepositoryModelUnloadRequest* request, ::inference::RepositoryModelUnloadResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
     };
     typedef class async_interface experimental_async_interface;
     virtual class async_interface* async() { return nullptr; }
@@ -148,6 +182,12 @@ class GRPCInferenceService final {
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::inference::ModelConfigResponse>* PrepareAsyncModelConfigRaw(::grpc::ClientContext* context, const ::inference::ModelConfigRequest& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::inference::ModelInferResponse>* AsyncModelInferRaw(::grpc::ClientContext* context, const ::inference::ModelInferRequest& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::inference::ModelInferResponse>* PrepareAsyncModelInferRaw(::grpc::ClientContext* context, const ::inference::ModelInferRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::inference::RepositoryIndexResponse>* AsyncRepositoryIndexRaw(::grpc::ClientContext* context, const ::inference::RepositoryIndexRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::inference::RepositoryIndexResponse>* PrepareAsyncRepositoryIndexRaw(::grpc::ClientContext* context, const ::inference::RepositoryIndexRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::inference::RepositoryModelLoadResponse>* AsyncRepositoryModelLoadRaw(::grpc::ClientContext* context, const ::inference::RepositoryModelLoadRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::inference::RepositoryModelLoadResponse>* PrepareAsyncRepositoryModelLoadRaw(::grpc::ClientContext* context, const ::inference::RepositoryModelLoadRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::inference::RepositoryModelUnloadResponse>* AsyncRepositoryModelUnloadRaw(::grpc::ClientContext* context, const ::inference::RepositoryModelUnloadRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::inference::RepositoryModelUnloadResponse>* PrepareAsyncRepositoryModelUnloadRaw(::grpc::ClientContext* context, const ::inference::RepositoryModelUnloadRequest& request, ::grpc::CompletionQueue* cq) = 0;
   };
   class Stub final : public StubInterface {
    public:
@@ -201,6 +241,27 @@ class GRPCInferenceService final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::inference::ModelInferResponse>> PrepareAsyncModelInfer(::grpc::ClientContext* context, const ::inference::ModelInferRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::inference::ModelInferResponse>>(PrepareAsyncModelInferRaw(context, request, cq));
     }
+    ::grpc::Status RepositoryIndex(::grpc::ClientContext* context, const ::inference::RepositoryIndexRequest& request, ::inference::RepositoryIndexResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::inference::RepositoryIndexResponse>> AsyncRepositoryIndex(::grpc::ClientContext* context, const ::inference::RepositoryIndexRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::inference::RepositoryIndexResponse>>(AsyncRepositoryIndexRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::inference::RepositoryIndexResponse>> PrepareAsyncRepositoryIndex(::grpc::ClientContext* context, const ::inference::RepositoryIndexRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::inference::RepositoryIndexResponse>>(PrepareAsyncRepositoryIndexRaw(context, request, cq));
+    }
+    ::grpc::Status RepositoryModelLoad(::grpc::ClientContext* context, const ::inference::RepositoryModelLoadRequest& request, ::inference::RepositoryModelLoadResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::inference::RepositoryModelLoadResponse>> AsyncRepositoryModelLoad(::grpc::ClientContext* context, const ::inference::RepositoryModelLoadRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::inference::RepositoryModelLoadResponse>>(AsyncRepositoryModelLoadRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::inference::RepositoryModelLoadResponse>> PrepareAsyncRepositoryModelLoad(::grpc::ClientContext* context, const ::inference::RepositoryModelLoadRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::inference::RepositoryModelLoadResponse>>(PrepareAsyncRepositoryModelLoadRaw(context, request, cq));
+    }
+    ::grpc::Status RepositoryModelUnload(::grpc::ClientContext* context, const ::inference::RepositoryModelUnloadRequest& request, ::inference::RepositoryModelUnloadResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::inference::RepositoryModelUnloadResponse>> AsyncRepositoryModelUnload(::grpc::ClientContext* context, const ::inference::RepositoryModelUnloadRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::inference::RepositoryModelUnloadResponse>>(AsyncRepositoryModelUnloadRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::inference::RepositoryModelUnloadResponse>> PrepareAsyncRepositoryModelUnload(::grpc::ClientContext* context, const ::inference::RepositoryModelUnloadRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::inference::RepositoryModelUnloadResponse>>(PrepareAsyncRepositoryModelUnloadRaw(context, request, cq));
+    }
     class async final :
       public StubInterface::async_interface {
      public:
@@ -218,6 +279,12 @@ class GRPCInferenceService final {
       void ModelConfig(::grpc::ClientContext* context, const ::inference::ModelConfigRequest* request, ::inference::ModelConfigResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
       void ModelInfer(::grpc::ClientContext* context, const ::inference::ModelInferRequest* request, ::inference::ModelInferResponse* response, std::function<void(::grpc::Status)>) override;
       void ModelInfer(::grpc::ClientContext* context, const ::inference::ModelInferRequest* request, ::inference::ModelInferResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void RepositoryIndex(::grpc::ClientContext* context, const ::inference::RepositoryIndexRequest* request, ::inference::RepositoryIndexResponse* response, std::function<void(::grpc::Status)>) override;
+      void RepositoryIndex(::grpc::ClientContext* context, const ::inference::RepositoryIndexRequest* request, ::inference::RepositoryIndexResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void RepositoryModelLoad(::grpc::ClientContext* context, const ::inference::RepositoryModelLoadRequest* request, ::inference::RepositoryModelLoadResponse* response, std::function<void(::grpc::Status)>) override;
+      void RepositoryModelLoad(::grpc::ClientContext* context, const ::inference::RepositoryModelLoadRequest* request, ::inference::RepositoryModelLoadResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void RepositoryModelUnload(::grpc::ClientContext* context, const ::inference::RepositoryModelUnloadRequest* request, ::inference::RepositoryModelUnloadResponse* response, std::function<void(::grpc::Status)>) override;
+      void RepositoryModelUnload(::grpc::ClientContext* context, const ::inference::RepositoryModelUnloadRequest* request, ::inference::RepositoryModelUnloadResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
      private:
       friend class Stub;
       explicit async(Stub* stub): stub_(stub) { }
@@ -243,6 +310,12 @@ class GRPCInferenceService final {
     ::grpc::ClientAsyncResponseReader< ::inference::ModelConfigResponse>* PrepareAsyncModelConfigRaw(::grpc::ClientContext* context, const ::inference::ModelConfigRequest& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::inference::ModelInferResponse>* AsyncModelInferRaw(::grpc::ClientContext* context, const ::inference::ModelInferRequest& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::inference::ModelInferResponse>* PrepareAsyncModelInferRaw(::grpc::ClientContext* context, const ::inference::ModelInferRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::inference::RepositoryIndexResponse>* AsyncRepositoryIndexRaw(::grpc::ClientContext* context, const ::inference::RepositoryIndexRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::inference::RepositoryIndexResponse>* PrepareAsyncRepositoryIndexRaw(::grpc::ClientContext* context, const ::inference::RepositoryIndexRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::inference::RepositoryModelLoadResponse>* AsyncRepositoryModelLoadRaw(::grpc::ClientContext* context, const ::inference::RepositoryModelLoadRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::inference::RepositoryModelLoadResponse>* PrepareAsyncRepositoryModelLoadRaw(::grpc::ClientContext* context, const ::inference::RepositoryModelLoadRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::inference::RepositoryModelUnloadResponse>* AsyncRepositoryModelUnloadRaw(::grpc::ClientContext* context, const ::inference::RepositoryModelUnloadRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::inference::RepositoryModelUnloadResponse>* PrepareAsyncRepositoryModelUnloadRaw(::grpc::ClientContext* context, const ::inference::RepositoryModelUnloadRequest& request, ::grpc::CompletionQueue* cq) override;
     const ::grpc::internal::RpcMethod rpcmethod_ServerLive_;
     const ::grpc::internal::RpcMethod rpcmethod_ServerReady_;
     const ::grpc::internal::RpcMethod rpcmethod_ServerMetadata_;
@@ -250,6 +323,9 @@ class GRPCInferenceService final {
     const ::grpc::internal::RpcMethod rpcmethod_ModelMetadata_;
     const ::grpc::internal::RpcMethod rpcmethod_ModelConfig_;
     const ::grpc::internal::RpcMethod rpcmethod_ModelInfer_;
+    const ::grpc::internal::RpcMethod rpcmethod_RepositoryIndex_;
+    const ::grpc::internal::RpcMethod rpcmethod_RepositoryModelLoad_;
+    const ::grpc::internal::RpcMethod rpcmethod_RepositoryModelUnload_;
   };
   static std::unique_ptr<Stub> NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
 
@@ -271,6 +347,12 @@ class GRPCInferenceService final {
     virtual ::grpc::Status ModelConfig(::grpc::ServerContext* context, const ::inference::ModelConfigRequest* request, ::inference::ModelConfigResponse* response);
     // Perform inference.
     virtual ::grpc::Status ModelInfer(::grpc::ServerContext* context, const ::inference::ModelInferRequest* request, ::inference::ModelInferResponse* response);
+    // Get the index of model repository contents.
+    virtual ::grpc::Status RepositoryIndex(::grpc::ServerContext* context, const ::inference::RepositoryIndexRequest* request, ::inference::RepositoryIndexResponse* response);
+    // Load or reload a model from a repository.
+    virtual ::grpc::Status RepositoryModelLoad(::grpc::ServerContext* context, const ::inference::RepositoryModelLoadRequest* request, ::inference::RepositoryModelLoadResponse* response);
+    // Unload a model from a repository.
+    virtual ::grpc::Status RepositoryModelUnload(::grpc::ServerContext* context, const ::inference::RepositoryModelUnloadRequest* request, ::inference::RepositoryModelUnloadResponse* response);
   };
   template <class BaseClass>
   class WithAsyncMethod_ServerLive : public BaseClass {
@@ -412,7 +494,67 @@ class GRPCInferenceService final {
       ::grpc::Service::RequestAsyncUnary(6, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
-  typedef WithAsyncMethod_ServerLive<WithAsyncMethod_ServerReady<WithAsyncMethod_ServerMetadata<WithAsyncMethod_ModelReady<WithAsyncMethod_ModelMetadata<WithAsyncMethod_ModelConfig<WithAsyncMethod_ModelInfer<Service > > > > > > > AsyncService;
+  template <class BaseClass>
+  class WithAsyncMethod_RepositoryIndex : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_RepositoryIndex() {
+      ::grpc::Service::MarkMethodAsync(7);
+    }
+    ~WithAsyncMethod_RepositoryIndex() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RepositoryIndex(::grpc::ServerContext* /*context*/, const ::inference::RepositoryIndexRequest* /*request*/, ::inference::RepositoryIndexResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestRepositoryIndex(::grpc::ServerContext* context, ::inference::RepositoryIndexRequest* request, ::grpc::ServerAsyncResponseWriter< ::inference::RepositoryIndexResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(7, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_RepositoryModelLoad : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_RepositoryModelLoad() {
+      ::grpc::Service::MarkMethodAsync(8);
+    }
+    ~WithAsyncMethod_RepositoryModelLoad() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RepositoryModelLoad(::grpc::ServerContext* /*context*/, const ::inference::RepositoryModelLoadRequest* /*request*/, ::inference::RepositoryModelLoadResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestRepositoryModelLoad(::grpc::ServerContext* context, ::inference::RepositoryModelLoadRequest* request, ::grpc::ServerAsyncResponseWriter< ::inference::RepositoryModelLoadResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(8, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_RepositoryModelUnload : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_RepositoryModelUnload() {
+      ::grpc::Service::MarkMethodAsync(9);
+    }
+    ~WithAsyncMethod_RepositoryModelUnload() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RepositoryModelUnload(::grpc::ServerContext* /*context*/, const ::inference::RepositoryModelUnloadRequest* /*request*/, ::inference::RepositoryModelUnloadResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestRepositoryModelUnload(::grpc::ServerContext* context, ::inference::RepositoryModelUnloadRequest* request, ::grpc::ServerAsyncResponseWriter< ::inference::RepositoryModelUnloadResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(9, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  typedef WithAsyncMethod_ServerLive<WithAsyncMethod_ServerReady<WithAsyncMethod_ServerMetadata<WithAsyncMethod_ModelReady<WithAsyncMethod_ModelMetadata<WithAsyncMethod_ModelConfig<WithAsyncMethod_ModelInfer<WithAsyncMethod_RepositoryIndex<WithAsyncMethod_RepositoryModelLoad<WithAsyncMethod_RepositoryModelUnload<Service > > > > > > > > > > AsyncService;
   template <class BaseClass>
   class WithCallbackMethod_ServerLive : public BaseClass {
    private:
@@ -602,7 +744,88 @@ class GRPCInferenceService final {
     virtual ::grpc::ServerUnaryReactor* ModelInfer(
       ::grpc::CallbackServerContext* /*context*/, const ::inference::ModelInferRequest* /*request*/, ::inference::ModelInferResponse* /*response*/)  { return nullptr; }
   };
-  typedef WithCallbackMethod_ServerLive<WithCallbackMethod_ServerReady<WithCallbackMethod_ServerMetadata<WithCallbackMethod_ModelReady<WithCallbackMethod_ModelMetadata<WithCallbackMethod_ModelConfig<WithCallbackMethod_ModelInfer<Service > > > > > > > CallbackService;
+  template <class BaseClass>
+  class WithCallbackMethod_RepositoryIndex : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_RepositoryIndex() {
+      ::grpc::Service::MarkMethodCallback(7,
+          new ::grpc::internal::CallbackUnaryHandler< ::inference::RepositoryIndexRequest, ::inference::RepositoryIndexResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::inference::RepositoryIndexRequest* request, ::inference::RepositoryIndexResponse* response) { return this->RepositoryIndex(context, request, response); }));}
+    void SetMessageAllocatorFor_RepositoryIndex(
+        ::grpc::MessageAllocator< ::inference::RepositoryIndexRequest, ::inference::RepositoryIndexResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(7);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::inference::RepositoryIndexRequest, ::inference::RepositoryIndexResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_RepositoryIndex() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RepositoryIndex(::grpc::ServerContext* /*context*/, const ::inference::RepositoryIndexRequest* /*request*/, ::inference::RepositoryIndexResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* RepositoryIndex(
+      ::grpc::CallbackServerContext* /*context*/, const ::inference::RepositoryIndexRequest* /*request*/, ::inference::RepositoryIndexResponse* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_RepositoryModelLoad : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_RepositoryModelLoad() {
+      ::grpc::Service::MarkMethodCallback(8,
+          new ::grpc::internal::CallbackUnaryHandler< ::inference::RepositoryModelLoadRequest, ::inference::RepositoryModelLoadResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::inference::RepositoryModelLoadRequest* request, ::inference::RepositoryModelLoadResponse* response) { return this->RepositoryModelLoad(context, request, response); }));}
+    void SetMessageAllocatorFor_RepositoryModelLoad(
+        ::grpc::MessageAllocator< ::inference::RepositoryModelLoadRequest, ::inference::RepositoryModelLoadResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(8);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::inference::RepositoryModelLoadRequest, ::inference::RepositoryModelLoadResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_RepositoryModelLoad() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RepositoryModelLoad(::grpc::ServerContext* /*context*/, const ::inference::RepositoryModelLoadRequest* /*request*/, ::inference::RepositoryModelLoadResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* RepositoryModelLoad(
+      ::grpc::CallbackServerContext* /*context*/, const ::inference::RepositoryModelLoadRequest* /*request*/, ::inference::RepositoryModelLoadResponse* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_RepositoryModelUnload : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_RepositoryModelUnload() {
+      ::grpc::Service::MarkMethodCallback(9,
+          new ::grpc::internal::CallbackUnaryHandler< ::inference::RepositoryModelUnloadRequest, ::inference::RepositoryModelUnloadResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::inference::RepositoryModelUnloadRequest* request, ::inference::RepositoryModelUnloadResponse* response) { return this->RepositoryModelUnload(context, request, response); }));}
+    void SetMessageAllocatorFor_RepositoryModelUnload(
+        ::grpc::MessageAllocator< ::inference::RepositoryModelUnloadRequest, ::inference::RepositoryModelUnloadResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(9);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::inference::RepositoryModelUnloadRequest, ::inference::RepositoryModelUnloadResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_RepositoryModelUnload() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RepositoryModelUnload(::grpc::ServerContext* /*context*/, const ::inference::RepositoryModelUnloadRequest* /*request*/, ::inference::RepositoryModelUnloadResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* RepositoryModelUnload(
+      ::grpc::CallbackServerContext* /*context*/, const ::inference::RepositoryModelUnloadRequest* /*request*/, ::inference::RepositoryModelUnloadResponse* /*response*/)  { return nullptr; }
+  };
+  typedef WithCallbackMethod_ServerLive<WithCallbackMethod_ServerReady<WithCallbackMethod_ServerMetadata<WithCallbackMethod_ModelReady<WithCallbackMethod_ModelMetadata<WithCallbackMethod_ModelConfig<WithCallbackMethod_ModelInfer<WithCallbackMethod_RepositoryIndex<WithCallbackMethod_RepositoryModelLoad<WithCallbackMethod_RepositoryModelUnload<Service > > > > > > > > > > CallbackService;
   typedef CallbackService ExperimentalCallbackService;
   template <class BaseClass>
   class WithGenericMethod_ServerLive : public BaseClass {
@@ -719,6 +942,57 @@ class GRPCInferenceService final {
     }
     // disable synchronous version of this method
     ::grpc::Status ModelInfer(::grpc::ServerContext* /*context*/, const ::inference::ModelInferRequest* /*request*/, ::inference::ModelInferResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_RepositoryIndex : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_RepositoryIndex() {
+      ::grpc::Service::MarkMethodGeneric(7);
+    }
+    ~WithGenericMethod_RepositoryIndex() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RepositoryIndex(::grpc::ServerContext* /*context*/, const ::inference::RepositoryIndexRequest* /*request*/, ::inference::RepositoryIndexResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_RepositoryModelLoad : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_RepositoryModelLoad() {
+      ::grpc::Service::MarkMethodGeneric(8);
+    }
+    ~WithGenericMethod_RepositoryModelLoad() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RepositoryModelLoad(::grpc::ServerContext* /*context*/, const ::inference::RepositoryModelLoadRequest* /*request*/, ::inference::RepositoryModelLoadResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_RepositoryModelUnload : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_RepositoryModelUnload() {
+      ::grpc::Service::MarkMethodGeneric(9);
+    }
+    ~WithGenericMethod_RepositoryModelUnload() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RepositoryModelUnload(::grpc::ServerContext* /*context*/, const ::inference::RepositoryModelUnloadRequest* /*request*/, ::inference::RepositoryModelUnloadResponse* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -861,6 +1135,66 @@ class GRPCInferenceService final {
     }
     void RequestModelInfer(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
       ::grpc::Service::RequestAsyncUnary(6, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_RepositoryIndex : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_RepositoryIndex() {
+      ::grpc::Service::MarkMethodRaw(7);
+    }
+    ~WithRawMethod_RepositoryIndex() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RepositoryIndex(::grpc::ServerContext* /*context*/, const ::inference::RepositoryIndexRequest* /*request*/, ::inference::RepositoryIndexResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestRepositoryIndex(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(7, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_RepositoryModelLoad : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_RepositoryModelLoad() {
+      ::grpc::Service::MarkMethodRaw(8);
+    }
+    ~WithRawMethod_RepositoryModelLoad() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RepositoryModelLoad(::grpc::ServerContext* /*context*/, const ::inference::RepositoryModelLoadRequest* /*request*/, ::inference::RepositoryModelLoadResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestRepositoryModelLoad(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(8, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_RepositoryModelUnload : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_RepositoryModelUnload() {
+      ::grpc::Service::MarkMethodRaw(9);
+    }
+    ~WithRawMethod_RepositoryModelUnload() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RepositoryModelUnload(::grpc::ServerContext* /*context*/, const ::inference::RepositoryModelUnloadRequest* /*request*/, ::inference::RepositoryModelUnloadResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestRepositoryModelUnload(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(9, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
   template <class BaseClass>
@@ -1015,6 +1349,72 @@ class GRPCInferenceService final {
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     virtual ::grpc::ServerUnaryReactor* ModelInfer(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_RepositoryIndex : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_RepositoryIndex() {
+      ::grpc::Service::MarkMethodRawCallback(7,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->RepositoryIndex(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_RepositoryIndex() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RepositoryIndex(::grpc::ServerContext* /*context*/, const ::inference::RepositoryIndexRequest* /*request*/, ::inference::RepositoryIndexResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* RepositoryIndex(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_RepositoryModelLoad : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_RepositoryModelLoad() {
+      ::grpc::Service::MarkMethodRawCallback(8,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->RepositoryModelLoad(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_RepositoryModelLoad() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RepositoryModelLoad(::grpc::ServerContext* /*context*/, const ::inference::RepositoryModelLoadRequest* /*request*/, ::inference::RepositoryModelLoadResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* RepositoryModelLoad(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_RepositoryModelUnload : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_RepositoryModelUnload() {
+      ::grpc::Service::MarkMethodRawCallback(9,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->RepositoryModelUnload(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_RepositoryModelUnload() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RepositoryModelUnload(::grpc::ServerContext* /*context*/, const ::inference::RepositoryModelUnloadRequest* /*request*/, ::inference::RepositoryModelUnloadResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* RepositoryModelUnload(
       ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
@@ -1206,9 +1606,90 @@ class GRPCInferenceService final {
     // replace default version of method with streamed unary
     virtual ::grpc::Status StreamedModelInfer(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::inference::ModelInferRequest,::inference::ModelInferResponse>* server_unary_streamer) = 0;
   };
-  typedef WithStreamedUnaryMethod_ServerLive<WithStreamedUnaryMethod_ServerReady<WithStreamedUnaryMethod_ServerMetadata<WithStreamedUnaryMethod_ModelReady<WithStreamedUnaryMethod_ModelMetadata<WithStreamedUnaryMethod_ModelConfig<WithStreamedUnaryMethod_ModelInfer<Service > > > > > > > StreamedUnaryService;
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_RepositoryIndex : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_RepositoryIndex() {
+      ::grpc::Service::MarkMethodStreamed(7,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::inference::RepositoryIndexRequest, ::inference::RepositoryIndexResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::inference::RepositoryIndexRequest, ::inference::RepositoryIndexResponse>* streamer) {
+                       return this->StreamedRepositoryIndex(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_RepositoryIndex() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status RepositoryIndex(::grpc::ServerContext* /*context*/, const ::inference::RepositoryIndexRequest* /*request*/, ::inference::RepositoryIndexResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedRepositoryIndex(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::inference::RepositoryIndexRequest,::inference::RepositoryIndexResponse>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_RepositoryModelLoad : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_RepositoryModelLoad() {
+      ::grpc::Service::MarkMethodStreamed(8,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::inference::RepositoryModelLoadRequest, ::inference::RepositoryModelLoadResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::inference::RepositoryModelLoadRequest, ::inference::RepositoryModelLoadResponse>* streamer) {
+                       return this->StreamedRepositoryModelLoad(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_RepositoryModelLoad() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status RepositoryModelLoad(::grpc::ServerContext* /*context*/, const ::inference::RepositoryModelLoadRequest* /*request*/, ::inference::RepositoryModelLoadResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedRepositoryModelLoad(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::inference::RepositoryModelLoadRequest,::inference::RepositoryModelLoadResponse>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_RepositoryModelUnload : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_RepositoryModelUnload() {
+      ::grpc::Service::MarkMethodStreamed(9,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::inference::RepositoryModelUnloadRequest, ::inference::RepositoryModelUnloadResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::inference::RepositoryModelUnloadRequest, ::inference::RepositoryModelUnloadResponse>* streamer) {
+                       return this->StreamedRepositoryModelUnload(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_RepositoryModelUnload() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status RepositoryModelUnload(::grpc::ServerContext* /*context*/, const ::inference::RepositoryModelUnloadRequest* /*request*/, ::inference::RepositoryModelUnloadResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedRepositoryModelUnload(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::inference::RepositoryModelUnloadRequest,::inference::RepositoryModelUnloadResponse>* server_unary_streamer) = 0;
+  };
+  typedef WithStreamedUnaryMethod_ServerLive<WithStreamedUnaryMethod_ServerReady<WithStreamedUnaryMethod_ServerMetadata<WithStreamedUnaryMethod_ModelReady<WithStreamedUnaryMethod_ModelMetadata<WithStreamedUnaryMethod_ModelConfig<WithStreamedUnaryMethod_ModelInfer<WithStreamedUnaryMethod_RepositoryIndex<WithStreamedUnaryMethod_RepositoryModelLoad<WithStreamedUnaryMethod_RepositoryModelUnload<Service > > > > > > > > > > StreamedUnaryService;
   typedef Service SplitStreamedService;
-  typedef WithStreamedUnaryMethod_ServerLive<WithStreamedUnaryMethod_ServerReady<WithStreamedUnaryMethod_ServerMetadata<WithStreamedUnaryMethod_ModelReady<WithStreamedUnaryMethod_ModelMetadata<WithStreamedUnaryMethod_ModelConfig<WithStreamedUnaryMethod_ModelInfer<Service > > > > > > > StreamedService;
+  typedef WithStreamedUnaryMethod_ServerLive<WithStreamedUnaryMethod_ServerReady<WithStreamedUnaryMethod_ServerMetadata<WithStreamedUnaryMethod_ModelReady<WithStreamedUnaryMethod_ModelMetadata<WithStreamedUnaryMethod_ModelConfig<WithStreamedUnaryMethod_ModelInfer<WithStreamedUnaryMethod_RepositoryIndex<WithStreamedUnaryMethod_RepositoryModelLoad<WithStreamedUnaryMethod_RepositoryModelUnload<Service > > > > > > > > > > StreamedService;
 };
 
 }  // namespace inference

@@ -2,9 +2,25 @@
 
 #include <cmath>
 #include <cstring>
+#include <set>
 #include <sstream>
 
 namespace inferlite {
+
+namespace {
+// "[1,4,3]" for diagnostics (declared in the anonymous namespace so it does not
+// leak into the public validation API).
+std::string shapeToString(const std::vector<int64_t>& shape) {
+    std::ostringstream ss;
+    ss << '[';
+    for (size_t i = 0; i < shape.size(); ++i) {
+        if (i) ss << ',';
+        ss << shape[i];
+    }
+    ss << ']';
+    return ss.str();
+}
+}  // namespace
 
 bool dimsConform(const std::vector<int64_t>& spec_dims, const std::vector<int64_t>& actual) {
     if (spec_dims.size() != actual.size()) return false;
@@ -77,6 +93,18 @@ bool validateInputTensor(const TensorSpec& spec, const Tensor& input, size_t max
         err_msg = ss.str();
         return false;
     }
+    // Deterministic input validation: the payload byte length must exactly match
+    // the declared shape and data type (ISO 14971 risk control). A short or
+    // oversized payload must never reach the backend -- a truncated buffer could
+    // otherwise be read out of bounds inside the runtime.
+    const size_t expected_bytes = tensorByteSize(input.shape, input.type);
+    if (input.data.size() != expected_bytes) {
+        err_msg = "input '" + input.name + "' data length " +
+                  std::to_string(input.data.size()) + " bytes does not match shape [" +
+                  shapeToString(input.shape) + "] " + dataTypeToString(input.type) +
+                  " (expected " + std::to_string(expected_bytes) + " bytes)";
+        return false;
+    }
     // Enforce deterministic input-size limit.
     if (input.data.size() > max_input_bytes) {
         err_msg = "input '" + input.name + "' size " + std::to_string(input.data.size()) +
@@ -117,6 +145,89 @@ bool validateInputs(const ModelConfig& cfg, const std::vector<Tensor>& inputs,
         if (!known) {
             err_code = ErrorCode::kInvalidInput;
             err_msg = "unexpected input tensor '" + in.name + "' for model '" + cfg.name + "'";
+            return false;
+        }
+    }
+    err_code = ErrorCode::kNone;
+    return true;
+}
+
+bool validateClientInputs(const ModelConfig& cfg, const std::vector<Tensor>& inputs,
+                          size_t max_input_bytes, ErrorCode& err_code,
+                          std::string& err_msg) {
+    if (!cfg.sequence.enabled) {
+        return validateInputs(cfg, inputs, max_input_bytes, err_code, err_msg);
+    }
+    std::set<std::string> state_in, controls;
+    for (const auto& st : cfg.sequence.states) state_in.insert(st.input_name);
+    for (const auto& ci : cfg.sequence.control_input) controls.insert(ci.name);
+
+    // Every declared non-state input must be present and valid.
+    for (const auto& spec : cfg.inputs) {
+        if (state_in.count(spec.name)) continue;  // scheduler-owned state
+        bool found = false;
+        for (const auto& in : inputs) {
+            if (in.name == spec.name) {
+                if (!validateInputTensor(spec, in, max_input_bytes, cfg.max_batch_size,
+                                         err_code, err_msg)) {
+                    return false;
+                }
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            err_code = ErrorCode::kInvalidInput;
+            err_msg = "missing required input '" + spec.name + "' for model '" + cfg.name + "'";
+            return false;
+        }
+    }
+    // Reject unknown tensors; accept control tensors (validated below) only.
+    for (const auto& in : inputs) {
+        if (controls.count(in.name)) continue;
+        bool declared = false;
+        for (const auto& spec : cfg.inputs) {
+            if (in.name == spec.name) { declared = true; break; }
+        }
+        if (state_in.count(in.name)) {
+            err_code = ErrorCode::kInvalidInput;
+            err_msg = "client must not send the sequence state tensor '" + in.name +
+                      "' for model '" + cfg.name + "' (the scheduler owns it)";
+            return false;
+        }
+        if (!declared) {
+            err_code = ErrorCode::kInvalidInput;
+            err_msg = "unexpected input tensor '" + in.name + "' for model '" + cfg.name + "'";
+            return false;
+        }
+    }
+    // Basic control tensor checks: declared type, at least one scalar, size cap.
+    for (const auto& ci : cfg.sequence.control_input) {
+        const Tensor* t = nullptr;
+        for (const auto& in : inputs) {
+            if (in.name == ci.name) { t = &in; break; }
+        }
+        if (t == nullptr || ci.controls.empty()) {
+            err_code = ErrorCode::kInvalidInput;
+            err_msg = "missing sequence control input '" + ci.name + "' for model '" +
+                      cfg.name + "'";
+            return false;
+        }
+        if (t->type != ci.controls[0].data_type) {
+            err_code = ErrorCode::kInvalidInput;
+            err_msg = "sequence control input '" + ci.name + "' has datatype " +
+                      std::string(dataTypeToString(t->type)) + ", expected " +
+                      dataTypeToString(ci.controls[0].data_type);
+            return false;
+        }
+        if (t->data.size() < dataTypeSize(t->type)) {
+            err_code = ErrorCode::kInvalidInput;
+            err_msg = "sequence control input '" + ci.name + "' is empty";
+            return false;
+        }
+        if (t->data.size() > max_input_bytes) {
+            err_code = ErrorCode::kInvalidInput;
+            err_msg = "sequence control input '" + ci.name + "' exceeds the input size limit";
             return false;
         }
     }
@@ -234,6 +345,16 @@ bool validateOutput(const TensorSpec& spec, const OutputValidation& rules, const
             err_msg = ss.str();
             return false;
         }
+    }
+    // Deterministic output validation: the produced byte length must exactly
+    // match the declared shape/type before any element is inspected or returned.
+    if (output.data.size() != tensorByteSize(output.shape, output.type)) {
+        err_msg = "output '" + output.name + "' data length " +
+                  std::to_string(output.data.size()) + " bytes does not match shape [" +
+                  shapeToString(output.shape) + "] " + dataTypeToString(output.type) +
+                  " (expected " +
+                  std::to_string(tensorByteSize(output.shape, output.type)) + " bytes)";
+        return false;
     }
     // Scan every element for NaN / Inf and range.
     size_t count = static_cast<size_t>(shapeElementCount(output.shape));

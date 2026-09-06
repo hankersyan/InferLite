@@ -65,7 +65,7 @@ foreach ($m in @("intel_cpu_model","intel_npu_model","intel_auto_model","sample_
 }
 
 Write-Output ""
-Write-Output "== metrics (device field) =="
+Write-Output "== metrics (Prometheus text) =="
 Write-Output (Call-Server "GET" "http://127.0.0.1:8000/v2/metrics")
 
 Write-Output ""

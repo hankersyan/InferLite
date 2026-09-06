@@ -1,6 +1,7 @@
 // grpc_server.cpp - KServe / Triton v2-compatible gRPC interface.
 #include "grpc_server.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
@@ -26,6 +27,37 @@ namespace {
         case ErrorCode::kSelfTestFailed: return ::grpc::StatusCode::UNAVAILABLE;
         default: return ::grpc::StatusCode::INTERNAL;
     }
+}
+
+// Map a repository-control result to a gRPC status (kept parallel to the HTTP
+// status mapping in infer_lite.cpp so both protocols agree on error taxonomy).
+::grpc::Status controlStatusToGrpc(const ControlStatus& st) {
+    if (st.ok) return ::grpc::Status::OK;
+    switch (st.http_status) {
+        case 404: return ::grpc::Status(::grpc::StatusCode::NOT_FOUND, st.error);
+        case 409: return ::grpc::Status(::grpc::StatusCode::FAILED_PRECONDITION, st.error);
+        case 500: return ::grpc::Status(::grpc::StatusCode::INTERNAL, st.error);
+        default: return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, st.error);
+    }
+}
+
+// Parse a Triton model-version string carried by a gRPC request. An empty
+// string means "no version requested" and yields -1 (the server then serves the
+// version selected by the model's version_policy (the loaded one). Returns
+// false when the value is present but is not a positive integer.
+bool parseRequestedVersion(const std::string& s, int64_t& version) {
+    version = -1;
+    if (s.empty()) return true;
+    size_t idx = 0;
+    long long v = 0;
+    try {
+        v = std::stoll(s, &idx);
+    } catch (...) {
+        idx = std::string::npos;
+    }
+    if (idx != s.size() || v <= 0) return false;
+    version = static_cast<int64_t>(v);
+    return true;
 }
 
 // Convert the typed `contents` of a KServe InferInputTensor into a raw
@@ -178,6 +210,30 @@ void bytesToContents(const Tensor& t, inference::InferTensorContents& c) {
     }
 }
 
+// True when no typed `contents` field is populated. KServe's binary-tensor
+// extension requires this for every input when `raw_input_contents` is used.
+bool contentsEmpty(const inference::InferTensorContents& c) {
+    return c.bool_contents_size() == 0 && c.int_contents_size() == 0 &&
+           c.int64_contents_size() == 0 && c.uint_contents_size() == 0 &&
+           c.uint64_contents_size() == 0 && c.fp32_contents_size() == 0 &&
+           c.fp64_contents_size() == 0 && c.bytes_contents_size() == 0;
+}
+
+// Byte count a raw binary payload must have for the declared shape/datatype
+// (an empty shape is a scalar == 1 element). Returns false when the datatype
+// has no fixed width or a shape dimension is not a positive integer.
+bool expectedRawSize(const std::vector<int64_t>& shape, DataType dt, size_t& bytes) {
+    const size_t elem = dataTypeSize(dt);
+    if (elem == 0) return false;
+    int64_t n = 1;
+    for (int64_t d : shape) {
+        if (d <= 0) return false;
+        n *= d;
+    }
+    bytes = static_cast<size_t>(n) * elem;
+    return true;
+}
+
 }  // namespace
 
 GrpcServer::GrpcServer(InferLite* owner, std::string host, int port)
@@ -237,6 +293,8 @@ int GrpcServer::port() const {
     response->set_version(owner_->options().software_version);
     // Advertised protocol extensions this build supports.
     response->add_extensions("binary_tensor_data");
+    response->add_extensions("model_repository");
+    response->add_extensions("model_repository(unload_dependents)");
     return ::grpc::Status::OK;
 }
 
@@ -244,15 +302,31 @@ int GrpcServer::port() const {
                                       const inference::ModelReadyRequest* request,
                                       inference::ModelReadyResponse* response) {
     const std::string& name = request->name();
-    if (!owner_->modelExists(name)) {
-        return ::grpc::Status(::grpc::StatusCode::NOT_FOUND,
-                              "model '" + name + "' is not loaded");
+    int64_t requested_version = -1;
+    if (!parseRequestedVersion(request->version(), requested_version)) {
+        return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
+                              "model version must be a positive integer, got '" +
+                                  request->version() + "'");
     }
-    // Readiness follows the server-wide startup self-test: fail-fast loading
-    // means every loaded model passed its own golden-input self-test, and the
-    // README documents READY as "all self-tests pass", so the server-wide flag
-    // applies uniformly to every loaded model.
-    response->set_ready(owner_->ready());
+    // A version-specific readiness query is answered for the loaded version
+    // only (InferLite serves one version per model name). Requesting any other
+    // version reports ready=false, like Triton does for a version that exists
+    // in the repository but is not loaded.
+    bool name_known = false;
+    bool version_ready = false;
+    for (const auto& mi : owner_->modelInfo()) {
+        if (mi.name != name) continue;
+        name_known = true;
+        if (requested_version < 0 || mi.version == requested_version) {
+            version_ready = mi.ready;
+            break;
+        }
+    }
+    if (!name_known) {
+        return ::grpc::Status(::grpc::StatusCode::NOT_FOUND,
+                              "model '" + name + "' not found in the repository");
+    }
+    response->set_ready(version_ready);
     return ::grpc::Status::OK;
 }
 
@@ -260,10 +334,26 @@ int GrpcServer::port() const {
                                          const inference::ModelMetadataRequest* request,
                                          inference::ModelMetadataResponse* response) {
     const std::string& name = request->name();
-    const auto& models = owner_->models();
-    for (const auto& m : models) {
-        if (m.name != name) continue;
-        const auto& cfg = *m.config;
+    int64_t requested_version = -1;
+    if (!parseRequestedVersion(request->version(), requested_version)) {
+        return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
+                              "model version must be a positive integer, got '" +
+                                  request->version() + "'");
+    }
+    for (const auto& mi : owner_->modelInfo()) {
+        if (mi.name != name) continue;
+        if (requested_version >= 1 && mi.version != requested_version) {
+            return ::grpc::Status(::grpc::StatusCode::NOT_FOUND,
+                                  "model '" + name + "' version " +
+                                      std::to_string(requested_version) +
+                                      " is not loaded (loaded version: " +
+                                      std::to_string(mi.version) + ")");
+        }
+        if (!mi.ready || !mi.config) {
+            return ::grpc::Status(::grpc::StatusCode::NOT_FOUND,
+                                  "model '" + name + "' is not loaded");
+        }
+        const auto& cfg = *mi.config;
         response->set_name(name);
         response->set_versions(cfg.metadata.version.empty() ? "unknown" : cfg.metadata.version);
         response->set_platform(cfg.backend);
@@ -286,10 +376,26 @@ int GrpcServer::port() const {
                                        const inference::ModelConfigRequest* request,
                                        inference::ModelConfigResponse* response) {
     const std::string& name = request->name();
-    const auto& models = owner_->models();
-    for (const auto& m : models) {
-        if (m.name != name) continue;
-        const auto& cfg = *m.config;
+    int64_t requested_version = -1;
+    if (!parseRequestedVersion(request->version(), requested_version)) {
+        return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
+                              "model version must be a positive integer, got '" +
+                                  request->version() + "'");
+    }
+    for (const auto& mi : owner_->modelInfo()) {
+        if (mi.name != name) continue;
+        if (requested_version >= 1 && mi.version != requested_version) {
+            return ::grpc::Status(::grpc::StatusCode::NOT_FOUND,
+                                  "model '" + name + "' version " +
+                                      std::to_string(requested_version) +
+                                      " is not loaded (loaded version: " +
+                                      std::to_string(mi.version) + ")");
+        }
+        if (!mi.ready || !mi.config) {
+            return ::grpc::Status(::grpc::StatusCode::NOT_FOUND,
+                                  "model '" + name + "' is not loaded");
+        }
+        const auto& cfg = *mi.config;
         response->set_name(name);
         response->set_version(cfg.metadata.version.empty() ? "unknown" : cfg.metadata.version);
         // A compact human-readable summary of the model configuration.
@@ -298,6 +404,25 @@ int GrpcServer::port() const {
                         "\ninstance_group: { count: " +
                         std::to_string(cfg.instance_group.count) +
                         ", kind: " + cfg.instance_group.kind + " }\n";
+        // Report the applied version_policy so clients can confirm the pinned
+        // version policy (specific pins an exact version; latest/all select the
+        // newest) of the config that was actually loaded.
+        const auto& vp = cfg.version_policy;
+        if (vp.configured) {
+            s += "version_policy: { ";
+            if (vp.kind == VersionPolicyKind::kSpecific) {
+                s += "specific { versions: ";
+                for (size_t i = 0; i < vp.versions.size(); ++i) {
+                    if (i) s += ", ";
+                    s += std::to_string(vp.versions[i]);
+                }
+                s += " } }\n";
+            } else if (vp.kind == VersionPolicyKind::kAll) {
+                s += "all { } }\n";
+            } else {
+                s += "latest { num_versions: " + std::to_string(vp.num_versions) + " } }\n";
+            }
+        }
         for (const auto& in : cfg.inputs) {
             s += "input: { name: " + in.name + ", datatype: " +
                  dataTypeToString(in.data_type) + " }\n";
@@ -319,15 +444,50 @@ int GrpcServer::port() const {
                                       const inference::ModelInferRequest* request,
                                       inference::ModelInferResponse* response) {
     const std::string& model_name = request->model_name();
-    if (!owner_->modelExists(model_name)) {
+    // Client-requested model version (Triton ModelInferRequest.model_version).
+    // When empty the server serves the version selected by the model's
+    // version_policy (the loaded one); a pinned version must equal the loaded
+    // version or the request is rejected (never silently served from another
+    // version).
+    int64_t requested_version = -1;
+    if (!parseRequestedVersion(request->model_version(), requested_version)) {
+        return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
+                              "model_version must be a positive integer, got '" +
+                                  request->model_version() + "'");
+    }
+    if (!owner_->modelExists(model_name, requested_version)) {
+        if (requested_version >= 1) {
+            return ::grpc::Status(::grpc::StatusCode::NOT_FOUND,
+                                  "model '" + model_name + "' version " +
+                                      std::to_string(requested_version) +
+                                      " is not loaded");
+        }
         return ::grpc::Status(::grpc::StatusCode::NOT_FOUND,
                               "model '" + model_name + "' is not loaded");
+    }
+
+    // Binary-tensor-data extension: when raw_input_contents is present every
+    // input travels as a raw little-endian byte payload (index-aligned with
+    // `inputs`) and typed `contents` must be empty. When it is absent the
+    // typed `InferTensorContents` path below is used. The server mirrors the
+    // request format on the output side (raw in => raw out, typed in => typed
+    // out), matching the Triton/KServe clients that switch format per request.
+    const bool binary_input = request->raw_input_contents_size() > 0;
+    if (binary_input &&
+        request->raw_input_contents_size() != request->inputs_size()) {
+        return ::grpc::Status(
+            ::grpc::StatusCode::INVALID_ARGUMENT,
+            "binary_tensor_data raw_input_contents must carry exactly one "
+            "payload per input (have " +
+                std::to_string(request->raw_input_contents_size()) +
+                " for " + std::to_string(request->inputs_size()) + " inputs)");
     }
 
     // Convert KServe InferInputTensor -> internal Tensor (raw byte payload).
     std::vector<Tensor> inputs;
     inputs.reserve(request->inputs_size());
-    for (const auto& in : request->inputs()) {
+    for (int i = 0; i < request->inputs_size(); ++i) {
+        const auto& in = request->inputs(i);
         Tensor t;
         t.name = in.name();
         t.type = dataTypeFromString(in.datatype());
@@ -337,17 +497,65 @@ int GrpcServer::port() const {
                                       in.datatype());
         }
         for (int64_t d : in.shape()) t.shape.push_back(d);
-        std::string err;
-        if (!contentsToBytes(in.contents(), t.type, t.data, err)) {
-            return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
-                                  "input '" + in.name() + "': " + err);
+        if (binary_input) {
+            // Raw path: byte-exact, little-endian payload, no typed contents.
+            if (!contentsEmpty(in.contents())) {
+                return ::grpc::Status(
+                    ::grpc::StatusCode::INVALID_ARGUMENT,
+                    "input '" + in.name() +
+                        "': typed contents must be empty when raw_input_contents "
+                        "is used (binary_tensor_data)");
+            }
+            size_t expected = 0;
+            if (!expectedRawSize(t.shape, t.type, expected)) {
+                return ::grpc::Status(
+                    ::grpc::StatusCode::INVALID_ARGUMENT,
+                    "input '" + in.name() +
+                        "': cannot compute raw payload size from datatype/shape");
+            }
+            const std::string& raw = request->raw_input_contents(i);
+            if (raw.size() != expected) {
+                return ::grpc::Status(
+                    ::grpc::StatusCode::INVALID_ARGUMENT,
+                    "input '" + in.name() + "': raw_input_contents has " +
+                        std::to_string(raw.size()) +
+                        " bytes but shape/datatype require " +
+                        std::to_string(expected));
+            }
+            t.data.assign(raw.begin(), raw.end());
+        } else {
+            std::string err;
+            if (!contentsToBytes(in.contents(), t.type, t.data, err)) {
+                return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
+                                      "input '" + in.name() + "': " + err);
+            }
         }
         inputs.push_back(std::move(t));
     }
 
+    // Triton request parameter "priority" (dynamic batching). This protocol
+    // carries request parameters as strings, so a numeric priority is given as
+    // e.g. "priority": "2".
+    int64_t req_priority = 0;
+    for (const auto& kv : request->parameters()) {
+        if (kv.first != "priority") continue;  // unknown parameters are ignored
+        try {
+            size_t idx = 0;
+            req_priority = std::stoll(kv.second, &idx, 10);
+            if (idx != kv.second.size()) {
+                return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
+                                      "parameter 'priority' must be an integer");
+            }
+        } catch (...) {
+            return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
+                                  "parameter 'priority' must be an integer");
+        }
+    }
+
     // Shared core: validation + scheduling + audit + outputs.
     InferenceOutcome outcome =
-        owner_->runInference(model_name, std::move(inputs), request->id());
+        owner_->runInference(model_name, std::move(inputs), request->id(), req_priority,
+                             requested_version);
 
     if (!outcome.ok) {
         return ::grpc::Status(errorCodeToGrpc(outcome.error_code), outcome.error);
@@ -355,15 +563,94 @@ int GrpcServer::port() const {
 
     // Serialize outputs into KServe InferOutputTensor.
     response->set_model_name(model_name);
+    // Echo the version actually served (KServe ModelInferResponse.model_version).
+    // InferLite serves one version per model name, so this is the loaded one.
+    for (const auto& mi : owner_->modelInfo()) {
+        if (mi.name == model_name && mi.ready && mi.version >= 1) {
+            response->set_model_version(std::to_string(mi.version));
+            break;
+        }
+    }
     response->set_id(outcome.trace_id);
+    // Serialize outputs. When the request used the binary_tensor_data format,
+    // mirror it: one raw byte payload per output in `raw_output_contents`, with
+    // typed `contents` left empty (and vice versa for typed requests).
+    const bool binary_output = binary_input;
     for (const auto& out : outcome.outputs) {
         inference::ModelInferResponse_InferOutputTensor* o = response->add_outputs();
         o->set_name(out.name);
         o->set_datatype(dataTypeToString(out.type));
         for (int64_t d : out.shape) o->add_shape(d);
-        bytesToContents(out, *o->mutable_contents());
+        if (binary_output) {
+            response->add_raw_output_contents()->assign(
+                reinterpret_cast<const char*>(out.data.data()), out.data.size());
+        } else {
+            bytesToContents(out, *o->mutable_contents());
+        }
     }
     return ::grpc::Status::OK;
+}
+
+::grpc::Status GrpcServer::RepositoryIndex(::grpc::ServerContext*,
+                                           const inference::RepositoryIndexRequest* request,
+                                           inference::RepositoryIndexResponse* response) {
+    (void)request->repository_name();  // single-repository server
+    for (const auto& e : owner_->repositoryIndex(request->ready())) {
+        auto* mi = response->add_models();
+        mi->set_name(e.name);
+        mi->set_version(e.version);
+        mi->set_state(e.state);
+        mi->set_reason(e.reason);
+    }
+    return ::grpc::Status::OK;
+}
+
+::grpc::Status GrpcServer::RepositoryModelLoad(::grpc::ServerContext*,
+                                               const inference::RepositoryModelLoadRequest* request,
+                                               inference::RepositoryModelLoadResponse*) {
+    const std::string& name = request->model_name();
+    if (name.empty()) {
+        return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
+                              "model name must not be empty");
+    }
+    std::string config_override;
+    for (const auto& kv : request->parameters()) {
+        if (kv.first == "config") {
+            if (!kv.second.has_string_param()) {
+                return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
+                                      "parameter 'config' must be a string");
+            }
+            config_override = kv.second.string_param();
+        } else if (kv.first.rfind("file:", 0) == 0) {
+            return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED,
+                                  "inline file overrides ('" + kv.first +
+                                      "') are not supported by InferLite");
+        }
+        // Unknown parameters are ignored (matches Triton's forward-compatible
+        // handling of unsupported load parameters).
+    }
+    return controlStatusToGrpc(owner_->repositoryLoad(name, config_override));
+}
+
+::grpc::Status GrpcServer::RepositoryModelUnload(::grpc::ServerContext*,
+                                                 const inference::RepositoryModelUnloadRequest* request,
+                                                 inference::RepositoryModelUnloadResponse*) {
+    const std::string& name = request->model_name();
+    if (name.empty()) {
+        return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
+                              "model name must not be empty");
+    }
+    bool unload_dependents = false;
+    for (const auto& kv : request->parameters()) {
+        if (kv.first == "unload_dependents") {
+            if (!kv.second.has_bool_param()) {
+                return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
+                                      "parameter 'unload_dependents' must be a boolean");
+            }
+            unload_dependents = kv.second.bool_param();
+        }
+    }
+    return controlStatusToGrpc(owner_->repositoryUnload(name, unload_dependents));
 }
 
 }  // namespace inferlite
