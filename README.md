@@ -192,12 +192,17 @@ security/privacy notes — live in **[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)*
   in the manifest, outputs are validated after the device→host copy, the audit
   log records `device: "GPU"`, and `MAX_GPU_MEMORY_MB` /
   `MAX_INFERENCE_TIME_MS` bound GPU execution.
+- **Cross-model rate limiter (Triton-style)** — a model declares the shared
+  resources one execution consumes (`instance_group { rate_limiter { ... } }`,
+  e.g. GPU memory / device copies); with `--rate-limit` the server serializes
+  executions of models that would over-subscribe the same resource, protecting
+  the one GPU from OOM/memory contention when several models are loaded
+  concurrently. `--rate-limit-resource=<name>:<count>` raises a pool's
+  capacity. See `docs/RATE_LIMITER.md`.
 
 ### Not yet implemented
 
 - **Response cache** — returning cached outputs for identical requests.
-- **Cross-model rate limiter** — coordinating execution across models through
-  shared logical resources.
 - **Ragged batching** — batching variable-sized inputs without padding.
 - **gRPC streaming** — unary RPCs only; no decoupled/streaming responses.
 - **Request cancellation** — clients cannot abort an in-flight request.
@@ -271,6 +276,7 @@ src/
   plugin_api.hpp           # plugin ABI (inferlite_plugin_*)
   ensemble_executor.*      # CPU ensemble DAG executor (zero-copy host memory)
   scheduler.*              # bounded FIFO scheduler (with inference time limit)
+  rate_limiter.*           # Triton-style cross-model resource rate limiter
   memory_manager.*         # host + pinned + device-buffer memory pools
   audit_log.*              # tamper-evident hash-chained audit log
   config_store.*           # manifest/metadata/self-test/hash management
@@ -394,6 +400,8 @@ Options:
 | `--max-concurrent-gpu-instances=<n>` | `4` | Max concurrent GPU instances |
 | `--gpu-device=<n>` | `0` | CUDA device index (single GPU only) |
 | `--model-control-mode=<m>` | `none` | Triton model-control mode: `none` \| `poll` \| `explicit` (see “Model management”) |
+| `--rate-limit` | off | Enable the Triton-style cross-model rate limiter (serializes executions of models that oversubscribe a shared resource) |
+| `--rate-limit-resource=<n>` | – | Override a rate-limiter pool capacity as `<name>:<count>` (repeatable; default = largest requirement declared by a loaded model) |
 | `--repository-poll-secs=<n>` | `15` | Repository poll interval (seconds; `poll` mode only) |
 | `--load-model=<name>` | – | Model(s) to load at startup in `explicit` mode; repeatable; `*` loads all |
 | `--install-service` | – | Register this exe as a Windows service (admin) |

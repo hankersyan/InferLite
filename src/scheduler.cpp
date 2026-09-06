@@ -1,10 +1,12 @@
 #include "scheduler.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <set>
 
 #include "pbtxt.hpp"
+#include "rate_limiter.hpp"
 #include "validation.hpp"
 
 namespace inferlite {
@@ -18,16 +20,22 @@ struct BatchMember {
     std::shared_ptr<InferenceRequest> req;
     int64_t batch = 1;
 };
+
+// Process-wide sequence used to build unique rate-limiter owner tokens so two
+// overlapping scheduler instances of a reloaded model never alias.
+std::atomic<uint64_t> g_scheduler_seq{0};
 }  // namespace
 
 Scheduler::Scheduler(BackendPtr backend, std::shared_ptr<const ModelConfig> config,
                      size_t instance_count, size_t max_queue_size,
                      int64_t default_timeout_ms, int64_t max_inference_time_ms,
-                     std::shared_ptr<MemoryManager> memory, std::string device_kind)
+                     std::shared_ptr<MemoryManager> memory, std::string device_kind,
+                     std::shared_ptr<RateLimiter> rate_limiter)
     : backend_(std::move(backend)),
       config_(std::move(config)),
       memory_(std::move(memory)),
       device_kind_(std::move(device_kind)),
+      rate_limiter_(std::move(rate_limiter)),
       max_queue_size_(max_queue_size),
       default_timeout_ms_(default_timeout_ms),
       max_inference_time_ms_(max_inference_time_ms > 0 ? max_inference_time_ms : 5000) {
@@ -59,6 +67,17 @@ Scheduler::Scheduler(BackendPtr backend, std::shared_ptr<const ModelConfig> conf
     sequence_idle_us_ =
         sequence_mode_ ? config_->sequence.max_sequence_idle_us : 0;
 
+    // Cross-model rate limiter (Triton-style): declare this model's shared
+    // resources. The owner token is unique per scheduler instance so reloads
+    // never alias; the destructor unregisters and cancels blocked workers.
+    if (rate_limiter_ && config_) {
+        rate_token_ = (config_ && !config_->name.empty() ? config_->name
+                                                         : std::string("model")) +
+                      "#" + std::to_string(g_scheduler_seq.fetch_add(1));
+        const auto& rl = config_->instance_group.rate_limiter;
+        rate_limiter_->registerModel(rate_token_, rl.priority, rl.resources, device_kind_);
+    }
+
     worker_count_ = instance_count;
     // Spawn one worker thread per instance. For GPU instances the backend
     // executes on its own CUDA stream; workers simply drive the blocking
@@ -74,8 +93,14 @@ Scheduler::~Scheduler() {
         std::lock_guard<std::mutex> lock(queue_mu_);
         stop_ = true;
     }
+    stopping_.store(true, std::memory_order_release);
     queue_cv_.notify_all();
     inflight_cv_.notify_all();
+    // Unregister now (before joining) so any worker blocked in the rate
+    // limiter is woken/canceled and can exit promptly.
+    if (rate_limiter_ && !rate_token_.empty()) {
+        rate_limiter_->unregisterModel(rate_token_);
+    }
     for (auto& t : workers_) {
         if (t.joinable()) t.join();
     }
@@ -266,6 +291,31 @@ void Scheduler::processOne(std::shared_ptr<InferenceRequest> req) {
     {
         std::lock_guard<std::mutex> lock(req->m);
         if (req->done) return;  // timed out while queued
+    }
+
+    // Cross-model rate limiter: reserve this model's shared resources for the
+    // execution. The lease is held for the whole execution and returned when
+    // this scope ends. A not-granted lease means shutdown was requested.
+    RateLimiter::Lease rate_lease;
+    if (rate_limiter_) {
+        rate_lease = rate_limiter_->acquire(rate_token_, &stopping_);
+        if (!rate_lease.granted()) {
+            std::lock_guard<std::mutex> lock(req->m);
+            if (!req->done) {
+                req->result.ok = false;
+                req->result.error_code = ErrorCode::kInternalError;
+                req->result.error = "server is shutting down (rate limiter aborted the wait)";
+                req->done = true;
+                req->cv.notify_all();
+            }
+            stats_.requests_failed.fetch_add(1, std::memory_order_relaxed);
+            return;
+        }
+        // The client may have given up while we waited for capacity.
+        {
+            std::lock_guard<std::mutex> lock(req->m);
+            if (req->done) return;
+        }
     }
 
     // Phase 3 fault isolation: a quarantined (CUDA-faulted) instance refuses
@@ -549,6 +599,20 @@ void Scheduler::executeBatch(std::vector<std::shared_ptr<InferenceRequest>>& gro
         return;
     }
 
+    // Cross-model rate limiter: one merged backend execution is one admission.
+    // The lease is held for the rest of this function and returned when the
+    // scope ends (releaseSlots() only frees the in-flight queue slot).
+    RateLimiter::Lease rate_lease;
+    if (rate_limiter_) {
+        rate_lease = rate_limiter_->acquire(rate_token_, &stopping_);
+        if (!rate_lease.granted()) {
+            failAll(ErrorCode::kInternalError,
+                    "server is shutting down (rate limiter aborted the wait)", 0);
+            releaseSlots();
+            return;
+        }
+    }
+
     // Merge every member's inputs into one batch: config declares the
     // per-request tensor specs (no batch dim), so the merged tensor shape is
     // [total] ++ spec.dims and its payload is the row-major concatenation.
@@ -812,6 +876,18 @@ bool Scheduler::processSequenceStep(const std::shared_ptr<InferenceRequest>& req
         finish(false, ErrorCode::kInternalError,
                "model instance is quarantined after a CUDA fault", {}, 0);
         return end;
+    }
+
+    // Cross-model rate limiter: reserve the model's shared resources for this
+    // sequence step. Held until the step completes (scope end).
+    RateLimiter::Lease rate_lease;
+    if (rate_limiter_) {
+        rate_lease = rate_limiter_->acquire(rate_token_, &stopping_);
+        if (!rate_lease.granted()) {
+            finish(false, ErrorCode::kInternalError,
+                   "server is shutting down (rate limiter aborted the wait)", {}, 0);
+            return end;
+        }
     }
 
     // Strip control tensors; the client never sends state tensors, but ignore

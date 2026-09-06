@@ -192,6 +192,30 @@ void validateConfig(const ModelConfig& cfg, const fs::path& model_dir) {
                               std::to_string(cfg.instance_group.count));
     }
 
+    // Cross-model rate limiter (instance_group.rate_limiter): every declared
+    // resource must have a name and a positive unit count, and resource names
+    // within one instance group must be unique (duplicate names would double
+    // book the same pool).
+    if (cfg.instance_group.rate_limiter.configured) {
+        const auto& rl = cfg.instance_group.rate_limiter;
+        std::set<std::string> seen;
+        for (const auto& r : rl.resources) {
+            if (r.name.empty()) {
+                throw RepositoryError("model '" + cfg.name +
+                                      "' rate_limiter declares a resource with an empty name");
+            }
+            if (r.count < 1) {
+                throw RepositoryError("model '" + cfg.name + "' rate_limiter resource '" +
+                                      r.name + "' has invalid count " +
+                                      std::to_string(r.count) + "; must be >= 1");
+            }
+            if (!seen.insert(r.name).second) {
+                throw RepositoryError("model '" + cfg.name + "' rate_limiter declares resource '" +
+                                      r.name + "' more than once");
+            }
+        }
+    }
+
     // Triton model_warmup: sample requests executed through the real scheduler
     // at load time (before the model is marked ready). Constraints validated
     // here so a bad config fails fast:

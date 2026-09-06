@@ -46,6 +46,27 @@ inline const char* deviceKindToString(DeviceKind k) {
     }
 }
 
+// One resource an instance execution must reserve (Triton
+// ModelInstanceGroup.RateLimiter.Resource). While a backend execution runs it
+// holds `count` units of the named resource; if the units are not available
+// the execution waits (see docs/RATE_LIMITER.md).
+struct RateLimiterResource {
+    std::string name;     // resource identifier, e.g. "GLOBAL_MEMORY"
+    int64_t count = 1;    // units consumed by one execution
+    bool global = true;   // true => system-wide pool; false => per-device pool
+};
+
+// Triton-style rate limiter policy for a model's instance group
+// (`instance_group { rate_limiter { ... } }`). Cross-model resource admission:
+// multiple models that share a resource (e.g. the one GPU) are serialized so
+// their executions never over-subscribe it. `priority` (higher wins) selects
+// which waiting model is admitted when capacity is contended.
+struct RateLimiterConfig {
+    bool configured = false;   // a `rate_limiter {}` block appeared
+    int64_t priority = 0;      // higher values are preferred; default 0
+    std::vector<RateLimiterResource> resources;
+};
+
 struct InstanceGroup {
     int count = 1;
     // Triton-style kind (KIND_CPU / KIND_GPU / KIND_NPU / KIND_GPU_INTEL /
@@ -56,6 +77,9 @@ struct InstanceGroup {
     // Resolved device kind used by the scheduler/backend. Derived from `kind`.
     // Defaults to CPU for OpenVINO.
     DeviceKind device_kind = DeviceKind::kCpu;
+    // Triton-style cross-model rate limiter policy (optional). Empty when the
+    // instance group does not declare one (executions are then unrestricted).
+    RateLimiterConfig rate_limiter;
 };
 
 // Triton `version_policy` control, parsed from the optional top-level block in

@@ -32,6 +32,7 @@ class OpenVinoBackend;
 class PluginBackend;
 class TensorRtBackend;
 class GrpcServer;  // implemented in grpc_server.hpp (only when gRPC is enabled)
+class RateLimiter;
 
 // Result of one model inference, returned by InferLite::runInference. Used by
 // both the HTTP handler and (when enabled) the gRPC service so every protocol
@@ -132,6 +133,17 @@ struct ServerOptions {
     size_t max_concurrent_gpu_instances = 4;
     // Optional absolute path to a TensorRT engine directory for GPU models.
     std::string gpu_device = "0";  // only device 0 supported (single GPU)
+
+    // --- Cross-model rate limiter (Triton-style) options ---
+    // Enables resource-based admission control across all loaded models
+    // (`--rate-limit`). Models declare the resources one execution consumes in
+    // config.pbtxt (`instance_group { rate_limiter { ... } }`); see
+    // docs/RATE_LIMITER.md. Default off (executions start immediately).
+    bool rate_limit_enabled = false;
+    // Pool-capacity overrides, resource name -> units (`--rate-limit-resource=
+    // <name>:<count>`, repeatable). Without an override a pool's capacity is
+    // the largest requirement any loaded model declares for it.
+    std::map<std::string, int64_t> rate_limit_resources;
 
     // --- Phase 6 (Triton model management) options ---
     // Model-control mode (default "none" preserves the legacy fail-fast
@@ -338,6 +350,9 @@ private:
 
     ServerOptions opts_;
     std::shared_ptr<MemoryManager> memory_;
+    // Triton-style cross-model rate limiter (server-wide). Passed to every
+    // scheduler; governs all backend executions regardless of device.
+    std::shared_ptr<RateLimiter> rate_limiter_;
 #ifdef INFERLITE_ENABLE_GPU
     std::shared_ptr<GpuMemoryManager> gpu_memory_;
 #endif

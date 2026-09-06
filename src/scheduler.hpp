@@ -49,6 +49,7 @@
 namespace inferlite {
 
 struct ModelConfig;
+class RateLimiter;
 
 struct InferenceResult {
     bool ok = false;
@@ -129,10 +130,15 @@ public:
     // `device_kind`: "CPU" spawns a worker thread per instance; "GPU" tracks a
     // pool of busy/free GPU instances (each mapped to a CUDA stream) driven by
     // the same worker threads, enabling concurrent execution across streams.
+    // `rate_limiter` is the server-wide Triton-style cross-model rate limiter
+    // (never null when built by InferLite). Each backend execution reserves the
+    // model's declared rate-limiter resources before running and returns them
+    // afterwards, so executions of models sharing a resource are coordinated.
     Scheduler(BackendPtr backend, std::shared_ptr<const ModelConfig> config,
               size_t instance_count, size_t max_queue_size, int64_t default_timeout_ms,
               int64_t max_inference_time_ms, std::shared_ptr<MemoryManager> memory,
-              std::string device_kind = "CPU");
+              std::string device_kind = "CPU",
+              std::shared_ptr<RateLimiter> rate_limiter = nullptr);
     ~Scheduler();
 
     Scheduler(const Scheduler&) = delete;
@@ -235,6 +241,13 @@ private:
     std::shared_ptr<const ModelConfig> config_;
     std::shared_ptr<MemoryManager> memory_;
     std::string device_kind_;
+    // Server-wide cross-model rate limiter (may be inert). Non-null when built
+    // by InferLite::attachScheduler.
+    std::shared_ptr<RateLimiter> rate_limiter_;
+    // Unique registration token for this scheduler in the rate limiter
+    // ("<model>#<seq>"), distinct across reloads of the same model so two
+    // overlapping scheduler instances never cancel each other's accounting.
+    std::string rate_token_;
 
     size_t max_queue_size_;
     int64_t default_timeout_ms_;
@@ -290,6 +303,11 @@ private:
     // Phase 3: true once a backend instance quarantines itself (CUDA fault).
     // A quarantined scheduler rejects further work with INTERNAL_ERROR.
     std::atomic<bool> quarantined_{false};
+
+    // Set true by the destructor before workers are joined. Passed to the rate
+    // limiter as the cancellation flag so workers blocked on a resource wake up
+    // and exit promptly at shutdown instead of waiting forever.
+    std::atomic<bool> stopping_{false};
 
     // Semaphore-like counter limiting the number of requests dequeued but not
     // yet completed. Bound = instance_count.

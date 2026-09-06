@@ -748,6 +748,49 @@ ModelConfig parseConfigPbtxt(const std::string& text) {
             cfg.outputs.insert(cfg.outputs.end(), specs.begin(), specs.end());
         } else if (field == "instance_group") {
             require("{", "instance_group");
+            // Parse one `rate_limiter { ... }` resource declaration. Shared with
+            // the top-level instance_group parser below via a lambda so both the
+            // message form (`resources { ... }`) and the repeated-message list
+            // form (`resources: [ { ... }, ... ]`) are accepted.
+            auto parseRateLimiterResource = [&]() -> RateLimiterResource {
+                RateLimiterResource r;
+                while (true) {
+                    std::string rf = lex.next();
+                    if (rf == "}") break;
+                    if (rf.empty()) throw PbtxtError("unexpected EOF in rate_limiter.resources{}");
+                    if (rf == "name") {
+                        require(":", "rate_limiter.resources.name");
+                        r.name = lex.next();
+                    } else if (rf == "count") {
+                        require(":", "rate_limiter.resources.count");
+                        r.count = parseInteger(lex.next());
+                    } else if (rf == "global") {
+                        require(":", "rate_limiter.resources.global");
+                        std::string bt = lex.next();
+                        if (bt == "true" || bt == "True" || bt == "1") {
+                            r.global = true;
+                        } else if (bt == "false" || bt == "False" || bt == "0") {
+                            r.global = false;
+                        } else {
+                            throw PbtxtError("rate_limiter.resources.global must be true/false");
+                        }
+                    } else {
+                        // Skip unknown scalar/message fields for forward
+                        // compatibility.
+                        std::string t = lex.next();
+                        if (t == "{") {
+                            int depth = 1;
+                            while (depth > 0) {
+                                std::string inner = lex.next();
+                                if (inner == "{") ++depth;
+                                else if (inner == "}") --depth;
+                                else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                            }
+                        }
+                    }
+                }
+                return r;
+            };
             while (true) {
                 std::string f = lex.next();
                 if (f == "}") break;
@@ -758,6 +801,62 @@ ModelConfig parseConfigPbtxt(const std::string& text) {
                 } else if (f == "kind") {
                     require(":", "instance_group.kind");
                     cfg.instance_group.kind = lex.next();
+                } else if (f == "rate_limiter") {
+                    // instance_group.rate_limiter { priority: N resources { ... } }
+                    std::string t = lex.next();
+                    if (t == ":") t = lex.next();
+                    if (t != "{") {
+                        throw PbtxtError("expected '{' for instance_group.rate_limiter, got '" +
+                                         t + "'");
+                    }
+                    cfg.instance_group.rate_limiter.configured = true;
+                    while (true) {
+                        std::string rf = lex.next();
+                        if (rf == "}") break;
+                        if (rf.empty()) {
+                            throw PbtxtError("unexpected EOF in instance_group.rate_limiter{}");
+                        }
+                        if (rf == "priority") {
+                            require(":", "instance_group.rate_limiter.priority");
+                            cfg.instance_group.rate_limiter.priority = parseInteger(lex.next());
+                        } else if (rf == "resources") {
+                            std::string t2 = lex.next();
+                            if (t2 == ":") t2 = lex.next();
+                            if (t2 == "[") {
+                                while (true) {
+                                    std::string t3 = lex.next();
+                                    if (t3 == "]") break;
+                                    if (t3 == ",") continue;
+                                    if (t3 != "{") {
+                                        throw PbtxtError(
+                                            "expected '{' in rate_limiter.resources list, got '" +
+                                            t3 + "'");
+                                    }
+                                    cfg.instance_group.rate_limiter.resources.push_back(
+                                        parseRateLimiterResource());
+                                }
+                            } else if (t2 == "{") {
+                                cfg.instance_group.rate_limiter.resources.push_back(
+                                    parseRateLimiterResource());
+                            } else {
+                                throw PbtxtError("expected '{' for rate_limiter.resources, got '" +
+                                                 t2 + "'");
+                            }
+                        } else {
+                            // Skip unknown scalar/message fields for forward
+                            // compatibility.
+                            std::string t = lex.next();
+                            if (t == "{") {
+                                int depth = 1;
+                                while (depth > 0) {
+                                    std::string inner = lex.next();
+                                    if (inner == "{") ++depth;
+                                    else if (inner == "}") --depth;
+                                    else if (inner.empty()) throw PbtxtError("unbalanced braces");
+                                }
+                            }
+                        }
+                    }
                 } else {
                     std::string t = lex.next();
                     if (t == "{") {

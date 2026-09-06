@@ -157,6 +157,7 @@ add_executable(inferlite
     src/openvino_backend.cpp
     src/pbtxt.cpp
     src/plugin_backend.cpp
+    src/rate_limiter.cpp
     src/scheduler.cpp
     src/sha256.cpp
     src/validation.cpp

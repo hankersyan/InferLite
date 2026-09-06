@@ -66,6 +66,12 @@ void printUsage(const char* prog) {
         << "  --max-gpu-memory-mb=<n>     Per-model GPU memory cap in MiB (default: 2048)\n"
         << "  --max-concurrent-gpu-instances=<n>  Max concurrent GPU instances (default: 4)\n"
         << "  --gpu-device=<n>            CUDA device index (default: 0, single GPU only)\n"
+        << "  --rate-limit                Enable the Triton-style cross-model rate limiter\n"
+        << "                              (default off). Models declare shared resources in\n"
+        << "                              config.pbtxt (instance_group.rate_limiter); executions\n"
+        << "                              of models that oversubscribe a resource are serialized\n"
+        << "  --rate-limit-resource=<x>   Override a rate-limiter pool capacity as <name>:<count>\n"
+        << "                              (repeatable; default capacity = max requirement declared)\n"
         << "  --model-control-mode=<m>    Triton model control mode: none|poll|explicit\n"
         << "                              (default: none; load/unload API usable only in explicit)\n"
         << "  --repository-poll-secs=<n>  Repository poll interval in seconds (poll mode; default 15)\n"
@@ -137,6 +143,27 @@ inferlite::ServerOptions inferlite::parseServerOptions(const std::vector<std::st
                 std::max(1, std::stoi(requireValue(arg, "--max-concurrent-gpu-instances"))));
         } else if (arg.rfind("--gpu-device=", 0) == 0) {
             opts.gpu_device = requireValue(arg, "--gpu-device");
+        } else if (arg == "--rate-limit") {
+            opts.rate_limit_enabled = true;
+        } else if (arg.rfind("--rate-limit-resource=", 0) == 0) {
+            // --rate-limit-resource=<name>:<count> (repeatable).
+            const std::string v = requireValue(arg, "--rate-limit-resource");
+            const size_t colon = v.find(':');
+            if (colon == std::string::npos || colon == 0 || colon + 1 >= v.size()) {
+                throw std::runtime_error("--rate-limit-resource expects <name>:<count>, got '" +
+                                         v + "'");
+            }
+            const std::string name = v.substr(0, colon);
+            try {
+                size_t idx = 0;
+                const long long count = std::stoll(v.substr(colon + 1), &idx, 10);
+                if (idx != v.substr(colon + 1).size() || count < 1) throw std::invalid_argument("");
+                opts.rate_limit_resources[name] = count;
+            } catch (...) {
+                throw std::runtime_error("--rate-limit-resource count must be a positive "
+                                         "integer, got '" +
+                                         v.substr(colon + 1) + "'");
+            }
         } else if (arg.rfind("--model-control-mode=", 0) == 0) {
             opts.model_control_mode =
                 modelControlModeFromString(requireValue(arg, "--model-control-mode"));

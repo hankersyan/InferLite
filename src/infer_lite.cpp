@@ -22,6 +22,7 @@
 #include "openvino_backend.hpp"
 #include "pbtxt.hpp"
 #include "plugin_backend.hpp"
+#include "rate_limiter.hpp"
 #include "sha256.hpp"
 #include "tensorrt_backend.hpp"
 #include "validation.hpp"
@@ -214,6 +215,10 @@ ModelControlMode modelControlModeFromString(const std::string& s) {
 
 InferLite::InferLite(const ServerOptions& opts) : opts_(opts) {
     memory_ = std::make_shared<MemoryManager>();
+    rate_limiter_ = std::make_shared<RateLimiter>(opts_.rate_limit_enabled);
+    for (const auto& kv : opts_.rate_limit_resources) {
+        rate_limiter_->overrideResourceCapacity(kv.first, kv.second);
+    }
 #ifdef INFERLITE_ENABLE_GPU
     gpu_memory_ = std::make_shared<GpuMemoryManager>();
 #endif
@@ -426,7 +431,7 @@ void InferLite::attachScheduler(const std::shared_ptr<ModelEntry>& e) {
     e->scheduler = std::make_shared<Scheduler>(e->backend, e->config, instance_count,
                                                opts_.max_queue_size, per_req_timeout,
                                                limits_.max_inference_time_ms, memory_,
-                                               e->device_label);
+                                               e->device_label, rate_limiter_);
 }
 
 BackendPtr InferLite::makeBackend(const LoadedModel& lm) {
@@ -1616,6 +1621,24 @@ HttpResponse InferLite::handleHealthDetailed() {
     o.asObject()["model_control_mode"] = json::Value(modelControlModeName());
     o.asObject()["repository_poll_secs"] =
         json::Value(static_cast<int64_t>(opts_.repository_poll_secs));
+    // Cross-model rate limiter: enabled state + live resource-pool accounting.
+    {
+        json::Value rl = json::Value(json::Value::Object());
+        rl.asObject()["enabled"] = json::Value(rate_limiter_->enabled());
+        json::Value pools = json::Value(json::Value::Array());
+        for (const auto& p : rate_limiter_->pools()) {
+            json::Value po = json::Value::Object();
+            po.asObject()["resource"] = json::Value(p.resource_name);
+            po.asObject()["scope"] =
+                json::Value(p.global ? std::string("global")
+                                     : std::string("device:") + p.device);
+            po.asObject()["capacity"] = json::Value(p.capacity);
+            po.asObject()["used"] = json::Value(p.used);
+            pools.asArray().push_back(std::move(po));
+        }
+        rl.asObject()["pools"] = std::move(pools);
+        o.asObject()["rate_limiter"] = std::move(rl);
+    }
 #ifdef INFERLITE_ENABLE_GPU
     o.asObject()["gpu"] = json::Value(json::Value::Object());
     {
@@ -1796,6 +1819,21 @@ HttpResponse InferLite::handleConfig(const std::string& name, int64_t requested_
     json::Value ig = json::Value::Object();
     ig.asObject()["count"] = json::Value(static_cast<int64_t>(c.instance_group.count));
     ig.asObject()["kind"] = json::Value(c.instance_group.kind);
+    if (c.instance_group.rate_limiter.configured) {
+        json::Value rl = json::Value::Object();
+        rl.asObject()["priority"] =
+            json::Value(c.instance_group.rate_limiter.priority);
+        json::Value res = json::Value(json::Value::Array());
+        for (const auto& r : c.instance_group.rate_limiter.resources) {
+            json::Value rj = json::Value::Object();
+            rj.asObject()["name"] = json::Value(r.name);
+            rj.asObject()["count"] = json::Value(r.count);
+            rj.asObject()["global"] = json::Value(r.global);
+            res.asArray().push_back(std::move(rj));
+        }
+        rl.asObject()["resources"] = std::move(res);
+        ig.asObject()["rate_limiter"] = std::move(rl);
+    }
     obj.asObject()["instance_group"] = std::move(ig);
     obj.asObject()["inputs"] = json::Value(json::Value::Array());
     obj.asObject()["outputs"] = json::Value(json::Value::Array());
